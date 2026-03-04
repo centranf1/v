@@ -8,4 +8,21 @@ license.workspace = true
 [dependencies]
 
 [dev-dependencies]
+criterion = "0.5"
 cnf-runtime = { path = "../cnf-runtime" }
+
+[[bench]]
+name = "lexer_bench"
+harness = false
+
+[[bench]]
+name = "parser_bench"
+harness = false
+
+[[bench]]
+name = "ir_bench"
+harness = false
+
+[[bench]]
+name = "determinism_bench"
+harness = false

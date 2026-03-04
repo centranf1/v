@@ -8,3 +8,11 @@ license.workspace = true
 [dependencies]
 cnf-security = { path = "../cnf-security" }
 cobol-protocol-v153 = { path = "../cobol-protocol-v153" }
+
+[dev-dependencies]
+criterion = "0.5"
+cnf-compiler = { path = "../cnf-compiler" }
+
+[[bench]]
+name = "runtime_bench"
+harness = false
