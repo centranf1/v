@@ -55,7 +55,11 @@ mod integration_tests {
         let ir2 = compile(source).expect("Second compile should succeed");
 
         // Verify byte-for-byte identical IR
-        assert_eq!(ir1.len(), ir2.len());
+        // Same source → same AST → same IR (deterministically, even if empty)
+        assert_eq!(
+            ir1, ir2,
+            "IR must be identical on repeated compilation of identical source"
+        );
     }
 
     #[test]
