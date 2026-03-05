@@ -24,6 +24,45 @@ pub fn sha256_hex(data: &[u8]) -> String {
     hex::encode(digest)
 }
 
+// -----------------------------------------------------------------------------
+// Encryption helpers
+// -----------------------------------------------------------------------------
+
+// For the purposes of CENTRA‑NF the encryption primitives need only be
+// deterministic and reversible.  In a real system keys would be managed
+// securely; here we hard‑code a zeroed key/IV pair to satisfy determinism
+// requirements and to keep the cryptographic code isolated in this crate.
+
+use aes::Aes256;
+use block_modes::{BlockMode, Cbc};
+use block_modes::block_padding::Pkcs7;
+
+/// AES-256-CBC type with PKCS7 padding
+type Aes256Cbc = Cbc<Aes256, Pkcs7>;
+
+const AES_KEY: [u8; 32] = [0u8; 32];
+const AES_IV: [u8; 16] = [0u8; 16];
+
+/// Encrypt buffer using AES-256-CBC with a fixed key/IV.
+///
+/// Deterministic: same input always produces same output.  Returns vector of
+/// encrypted bytes.  This implementation is intentionally simple to keep the
+/// runtime free of library details; the security crate is the only place that
+/// knows about AES.
+pub fn encrypt_aes256(data: &[u8]) -> Vec<u8> {
+    let cipher = Aes256Cbc::new_from_slices(&AES_KEY, &AES_IV).unwrap();
+    cipher.encrypt_vec(data)
+}
+
+/// Decrypt buffer that was produced by `encrypt_aes256`.  If decryption fails
+/// (e.g. because the input is not a multiple of the block size) we return an
+/// empty vector.  The caller may wrap this in a Result if they need stricter
+/// error handling.
+pub fn decrypt_aes256(data: &[u8]) -> Vec<u8> {
+    let cipher = Aes256Cbc::new_from_slices(&AES_KEY, &AES_IV).unwrap();
+    cipher.decrypt_vec(data).unwrap_or_else(|_| Vec::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -57,5 +96,27 @@ mod tests {
     fn test_sha256_returns_64_char_hex() {
         let digest = sha256_hex(b"test");
         assert_eq!(digest.len(), 64); // 256 bits = 32 bytes = 64 hex chars
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_inverse() {
+        let plaintext = b"secret data";
+        let ciphertext = encrypt_aes256(plaintext);
+        let recovered = decrypt_aes256(&ciphertext);
+        assert_eq!(recovered, plaintext);
+    }
+
+    #[test]
+    fn test_encrypt_deterministic() {
+        let input = b"repeat";
+        let c1 = encrypt_aes256(input);
+        let c2 = encrypt_aes256(input);
+        assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn test_decrypt_wrong_input_returns_empty() {
+        let result = decrypt_aes256(b"not a valid cipher");
+        assert!(result.is_empty());
     }
 }

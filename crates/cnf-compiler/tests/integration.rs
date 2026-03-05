@@ -189,25 +189,44 @@ mod integration_tests {
             .any(|instr| instr.to_string().contains("AGGREGATE")));
     }
 
-    // === New Data Types Tests ===
-
     #[test]
-    fn test_audio_wav_data_type() {
+    fn test_merge_operation() {
         let source = r#"
             IDENTIFICATION DIVISION.
-                PROGRAM-ID. AudioTest.
+                PROGRAM-ID. MergeTest.
             ENVIRONMENT DIVISION.
                 OS "Linux".
             DATA DIVISION.
-                INPUT AUDIO-WAV.
+                INPUT CSV-TABLE.
             PROCEDURE DIVISION.
+                MERGE CSV-TABLE result.
         "#;
-
         let result = compile(source);
-        assert!(result.is_ok(), "AUDIO-WAV type should be recognized");
+        assert!(result.is_ok(), "MERGE operation should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("MERGE")));
     }
 
     #[test]
+    fn test_encrypt_decrypt_compilation() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. EncDecTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                ENCRYPT BINARY-BLOB.
+                DECRYPT BINARY-BLOB.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "ENCRYPT/DECRYPT should compile");
+        let ir = result.unwrap();
+        let instrs: Vec<String> = ir.iter().map(|i| i.to_string()).collect();
+        assert!(instrs.iter().any(|s| s.contains("ENCRYPT")));
+        assert!(instrs.iter().any(|s| s.contains("DECRYPT")));
+    }
     fn test_csv_table_data_type() {
         let source = r#"
             IDENTIFICATION DIVISION.

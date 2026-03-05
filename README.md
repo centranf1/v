@@ -508,7 +508,7 @@ fn test_invalid_transcode_missing_format_fails() { /* ... */ }
 
 ### Langkah 7 — Dokumentasi
 
-Tambahkan `TRANSCODE` ke tabel operasi di `docs/specification.md` dan buat contoh `.cnf` di `examples/`.
+Tambahkan `TRANSCODE` (atau operasi lain yang anda tambahkan, misalnya `ENCRYPT`/`DECRYPT`, `FILTER`, `MERGE`, dll.) ke tabel operasi di `docs/specification.md` dan buat contoh `.cnf` di `examples/.`.
 
 ---
 

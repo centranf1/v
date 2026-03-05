@@ -79,6 +79,12 @@ pub enum ProcedureStatement {
     VerifyIntegrity {
         target: String,
     },
+    Encrypt {
+        target: String,
+    },
+    Decrypt {
+        target: String,
+    },
     Transcode {
         target: String,
         output_type: DataType,

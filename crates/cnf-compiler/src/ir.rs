@@ -14,6 +14,12 @@ pub enum Instruction {
     VerifyIntegrity {
         target: String,
     },
+    Encrypt {
+        target: String,
+    },
+    Decrypt {
+        target: String,
+    },
     Transcode {
         target: String,
         output_type: String,
@@ -56,6 +62,12 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::VerifyIntegrity { target } => {
                 write!(f, "VERIFY-INTEGRITY({})", target)
+            }
+            Instruction::Encrypt { target } => {
+                write!(f, "ENCRYPT({})", target)
+            }
+            Instruction::Decrypt { target } => {
+                write!(f, "DECRYPT({})", target)
             }
             Instruction::Transcode {
                 target,
@@ -126,6 +138,28 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     ));
                 }
                 instructions.push(Instruction::VerifyIntegrity {
+                    target: target.clone(),
+                });
+            }
+            ProcedureStatement::Encrypt { target } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                instructions.push(Instruction::Encrypt {
+                    target: target.clone(),
+                });
+            }
+            ProcedureStatement::Decrypt { target } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                instructions.push(Instruction::Decrypt {
                     target: target.clone(),
                 });
             }
@@ -258,5 +292,22 @@ mod tests {
             target: "buf".to_string(),
         };
         assert_eq!(instr1, instr2);
+
+        // encryption/decryption should also behave predictably
+        let e1 = Instruction::Encrypt {
+            target: "x".to_string(),
+        };
+        let e2 = Instruction::Encrypt {
+            target: "x".to_string(),
+        };
+        assert_eq!(e1, e2);
+
+        let d1 = Instruction::Decrypt {
+            target: "x".to_string(),
+        };
+        let d2 = Instruction::Decrypt {
+            target: "x".to_string(),
+        };
+        assert_eq!(d1, d2);
     }
 }

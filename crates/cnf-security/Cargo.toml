@@ -8,3 +8,9 @@ license.workspace = true
 [dependencies]
 sha2 = "0.10"
 hex = "0.4"
+
+# Added for ENCRYPT/DECRYPT operations in security layer
+# We use AES-256-CBC with fixed key/iv for deterministic behavior.
+aes = "0.8"
+block-modes = "0.8"
+

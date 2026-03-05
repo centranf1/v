@@ -33,6 +33,8 @@ pub enum Token {
     Split,
     Validate,
     Extract,
+    Encrypt,
+    Decrypt,
 
     // Data types
     VideoMp4,
@@ -182,6 +184,8 @@ fn keyword_to_token(s: &str) -> Token {
         "SPLIT" => Token::Split,
         "VALIDATE" => Token::Validate,
         "EXTRACT" => Token::Extract,
+        "ENCRYPT" => Token::Encrypt,
+        "DECRYPT" => Token::Decrypt,
         "VIDEO-MP4" => Token::VideoMp4,
         "IMAGE-JPG" => Token::ImageJpg,
         "FINANCIAL-DECIMAL" => Token::FinancialDecimal,
@@ -227,5 +231,12 @@ mod tests {
         let tokens = tokenize("PROGRAM-ID MyApp").unwrap();
         assert_eq!(tokens[0], Token::ProgramId);
         assert_eq!(tokens[1], Token::Identifier("MyApp".to_string()));
+    }
+
+    #[test]
+    fn test_lexer_recognizes_encrypt_decrypt() {
+        let tokens = tokenize("ENCRYPT BUFFER. DECRYPT BUFFER.").unwrap();
+        assert_eq!(tokens[0], Token::Encrypt);
+        assert_eq!(tokens[2], Token::Decrypt);
     }
 }

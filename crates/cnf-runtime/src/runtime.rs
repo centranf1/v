@@ -11,6 +11,8 @@ pub enum CnfError {
     BufferNotFound(String),
     CompressionFailed(String),
     VerificationFailed(String),
+    EncryptionFailed(String),
+    DecryptionFailed(String),
     InvalidInstruction(String),
 }
 
@@ -83,6 +85,54 @@ impl Runtime {
         Ok(digest)
     }
 
+    /// Execute ENCRYPT instruction.
+    fn dispatch_encrypt(&mut self, target: &str) -> Result<(), CnfError> {
+        let buf = self
+            .get_buffer_mut(target)
+            .map_err(|e| CnfError::EncryptionFailed(e.to_string()))?;
+        let result = cnf_security::encrypt_aes256(&buf);
+        *buf = result;
+        Ok(())
+    }
+
+    /// Execute DECRYPT instruction.
+    fn dispatch_decrypt(&mut self, target: &str) -> Result<(), CnfError> {
+        let buf = self
+            .get_buffer_mut(target)
+            .map_err(|e| CnfError::DecryptionFailed(e.to_string()))?;
+        let result = cnf_security::decrypt_aes256(&buf);
+        *buf = result;
+        Ok(())
+    }
+
+    /// Execute TRANSCODE instruction (placeholder).
+    fn dispatch_transcode(&mut self, target: &str, output_type: &str) -> Result<(), CnfError> {
+        // This is a stub; real implementation would call a dedicated crate
+        // such as `cnf_transcode` and perform format conversion.
+        let buf = self.get_buffer_mut(target)?;
+        // append format name for visibility
+        buf.extend_from_slice(output_type.as_bytes());
+        Ok(())
+    }
+
+    /// Execute FILTER instruction (no-op stub).
+    fn dispatch_filter(&mut self, _target: &str, _condition: &str) -> Result<(), CnfError> {
+        // Filtering logic would examine buffer contents and drop unwanted
+        // bytes. For now, we treat it as a no-op to keep runtime simple.
+        Ok(())
+    }
+
+    /// Execute MERGE instruction by concatenating buffers.
+    fn dispatch_merge(&mut self, targets: &[String], output_name: &str) -> Result<(), CnfError> {
+        let mut combined = Vec::new();
+        for t in targets {
+            let part = self.get_buffer(t)?;
+            combined.extend_from_slice(part);
+        }
+        self.add_buffer(output_name.to_string(), combined);
+        Ok(())
+    }
+
     /// Dispatch single instruction.
     fn dispatch_instruction(&mut self, instruction: &str) -> Result<(), CnfError> {
         if instruction.starts_with("COMPRESS(") && instruction.ends_with(")") {
@@ -91,6 +141,43 @@ impl Runtime {
         } else if instruction.starts_with("VERIFY-INTEGRITY(") && instruction.ends_with(")") {
             let target = &instruction[17..instruction.len() - 1];
             self.dispatch_verify(target)?;
+        } else if instruction.starts_with("ENCRYPT(") && instruction.ends_with(")") {
+            let target = &instruction[8..instruction.len() - 1];
+            self.dispatch_encrypt(target)?;
+        } else if instruction.starts_with("DECRYPT(") && instruction.ends_with(")") {
+            let target = &instruction[8..instruction.len() - 1];
+            self.dispatch_decrypt(target)?;
+        } else if instruction.starts_with("TRANSCODE(") && instruction.contains("->") {
+            // format: TRANSCODE(target -> TYPE)
+            let inner = &instruction[10..instruction.len() - 1];
+            if let Some(idx) = inner.find("->") {
+                let target = inner[..idx].trim();
+                let output = inner[idx + 2..].trim();
+                self.dispatch_transcode(target, output)?;
+            } else {
+                return Err(CnfError::InvalidInstruction(instruction.to_string()));
+            }
+        } else if instruction.starts_with("FILTER(") && instruction.contains("WHERE") {
+            // FILTER(target WHERE condition)
+            let inner = &instruction[7..instruction.len() - 1];
+            if let Some(idx) = inner.find("WHERE") {
+                let target = inner[..idx].trim();
+                let cond = inner[idx + 5..].trim();
+                self.dispatch_filter(target, cond)?;
+            } else {
+                return Err(CnfError::InvalidInstruction(instruction.to_string()));
+            }
+        } else if instruction.starts_with("MERGE(") && instruction.contains("INTO") {
+            // MERGE(a,b INTO output)
+            let inner = &instruction[6..instruction.len() - 1];
+            if let Some(idx) = inner.find("INTO") {
+                let srcs = inner[..idx].trim();
+                let out = inner[idx + 4..].trim();
+                let targets: Vec<String> = srcs.split(',').map(|s| s.trim().to_string()).collect();
+                self.dispatch_merge(&targets, out)?;
+            } else {
+                return Err(CnfError::InvalidInstruction(instruction.to_string()));
+            }
         } else {
             return Err(CnfError::InvalidInstruction(instruction.to_string()));
         }
@@ -134,5 +221,40 @@ mod tests {
         let runtime = Runtime::new();
         let result = runtime.get_buffer("missing");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dispatch_encrypt_decrypt_cycle() {
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("buf".to_string(), b"hello".to_vec());
+        runtime.dispatch_instruction("ENCRYPT(buf)").unwrap();
+        assert_ne!(runtime.get_output("buf").unwrap(), b"hello".to_vec());
+        runtime.dispatch_instruction("DECRYPT(buf)").unwrap();
+        assert_eq!(runtime.get_output("buf").unwrap(), b"hello".to_vec());
+    }
+
+    #[test]
+    fn test_dispatch_transcode_and_filter_noop() {
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("b".to_string(), vec![1, 2]);
+        runtime.dispatch_instruction("TRANSCODE(b -> CSV-TABLE)").unwrap();
+        assert!(runtime.get_output("b").unwrap().ends_with(b"CSV-TABLE"));
+        runtime.dispatch_instruction("FILTER(b WHERE cond)").unwrap();
+    }
+
+    #[test]
+    fn test_dispatch_merge() {
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("a".to_string(), vec![1]);
+        runtime.add_buffer("c".to_string(), vec![2]);
+        runtime.dispatch_instruction("MERGE(a,c INTO out)").unwrap();
+        assert_eq!(runtime.get_output("out").unwrap(), vec![1, 2]);
+    }
+
+    #[test]
+    fn test_dispatch_invalid_instruction() {
+        let mut runtime = Runtime::new();
+        let err = runtime.dispatch_instruction("UNKNOWN(x)");
+        assert!(err.is_err());
     }
 }

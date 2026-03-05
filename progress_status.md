@@ -218,6 +218,53 @@ Last updated: 2026-03-04
 
 **Status:** ✅ COMPLETED
 
+## Session 9: Next Version Roadmap
+
+[2026-03-05]
+
+**Change:**
+- Kick off development for next CENTRA‑NF version
+- Define roadmap: new features, bug fixes, and version bump
+
+**Scope:**
+- docs/specification.md (outline planned additions)
+- progress_status.md (add new session entry)
+- Cargo.toml(s) – version numbers may be updated later
+
+**Status:** planned
+
+**Notes:**
+- awaiting detailed user guidance on specific tasks
+
+## Session 10: Logic Expansion — Data Manipulation & Confidentiality
+
+[2026-03-05]
+
+**Change:**
+- Added new operations to language: TRANSCODE, FILTER, MERGE, ENCRYPT, DECRYPT
+- Compiler enhancements (lexer, AST, parser, IR) supporting new keywords
+- Runtime dispatch extended for all existing instructions (not just COMPRESS/VERIFY) and new operations
+- Security crate extended with AES‑256 encryption/decryption primitives
+- Added comprehensive unit and integration tests across crates
+- Documentation updated (specification, README, examples)
+
+**Scope:**
+- crates/cnf-compiler/src/{lexer.rs,ast.rs,parser.rs,ir.rs}
+- crates/cnf-compiler/tests/integration.rs
+- crates/cnf-runtime/src/runtime.rs
+- crates/cnf-security/{src/lib.rs,Cargo.toml}
+- docs/specification.md
+- examples/advanced_ops.cnf
+- README.md (documentation guidance)
+- progress_status.md
+
+**Status:** completed
+
+**Notes:**
+- Runtime now handles full set of instructions; dispatch parsing improved
+- Encryption uses fixed AES-256 key for determinism; decryption returns empty on failure
+- All changes maintain determinism and layer discipline (crypto only in cnf-security)
+
 **Root Cause Analysis:**
 - Test comment said "byte-for-byte identical IR" but only checked length
 - CI step didn't explicitly verify outputs

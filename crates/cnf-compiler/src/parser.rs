@@ -356,6 +356,18 @@ impl Parser {
                     self.expect(Token::Period)?;
                     ProcedureStatement::VerifyIntegrity { target }
                 }
+                Token::Encrypt => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Encrypt { target }
+                }
+                Token::Decrypt => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Decrypt { target }
+                }
                 Token::Transcode => {
                     self.advance();
                     let target = self.expect_variable_or_type()?;
@@ -531,5 +543,32 @@ mod tests {
         let error = result.unwrap_err();
         // Error should explain the required order
         assert!(error.contains("IDENTIFICATION → ENVIRONMENT → DATA → PROCEDURE"));
+    }
+
+    #[test]
+    fn test_parser_handles_encrypt_decrypt() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. EncDec.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                ENCRYPT BINARY-BLOB.
+                DECRYPT BINARY-BLOB.
+        "#;
+        let tokens = tokenize(source).unwrap();
+        let prog = parse(tokens).expect("should parse encrypt/decrypt");
+        let stmts = &prog.procedure.statements;
+        assert_eq!(stmts.len(), 2);
+        match &stmts[0] {
+            ProcedureStatement::Encrypt { target } => assert_eq!(target, "BINARY-BLOB"),
+            _ => panic!("first statement should be Encrypt"),
+        }
+        match &stmts[1] {
+            ProcedureStatement::Decrypt { target } => assert_eq!(target, "BINARY-BLOB"),
+            _ => panic!("second statement should be Decrypt"),
+        }
     }
 }

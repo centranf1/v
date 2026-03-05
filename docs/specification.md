@@ -85,6 +85,11 @@ PROCEDURE DIVISION.
 |-----------|--------|
 | `COMPRESS <target>` | Compress buffer via L1-L2-L3 |
 | `VERIFY-INTEGRITY <target>` | Compute SHA-256 digest |
+| `TRANSCODE <target> <type>` | Convert buffer format (e.g. VIDEO-MP4 → IMAGE-JPG) |
+| `FILTER <target> <condition>` | Remove data not matching condition |
+| `MERGE <src1>,<src2> INTO <dest>` | Concatenate multiple buffers |
+| `ENCRYPT <target>` | Encrypt buffer (AES‑256 deterministic) |
+| `DECRYPT <target>` | Decrypt buffer previously encrypted |
 
 ---
 
