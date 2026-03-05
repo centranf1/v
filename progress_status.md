@@ -100,6 +100,83 @@ Last updated: 2026-03-05
 
 ---
 
+## Session 3: BINARY-BLOB Data Type Integration
+
+[2026-03-05]
+Change:
+- Add BINARY-BLOB data type to CENTRA-NF language
+- Integrate across all 4 crates: compiler, runtime, security, protocol
+- Support zero-copy Vec<u8> handling with move semantics
+- Add error handling for invalid operations (CNF-P007)
+
+Scope:
+- crates/cnf-compiler/src/lexer.rs
+- crates/cnf-compiler/src/parser.rs
+- crates/cnf-compiler/src/ast.rs
+- crates/cnf-compiler/src/ir.rs
+- crates/cnf-runtime/src/runtime.rs
+- crates/cnf-security/src/lib.rs
+- crates/cobol-protocol-v153/src/lib.rs
+
+Status: completed
+
+Notes:
+- Lexer: BINARY-BLOB already recognized as token
+- Parser: DATA DIVISION already supports BINARY-BLOB declarations
+- AST/IR: BinaryBlob variant exists; added type checking for TRANSCODE
+- Runtime: Treats as Vec<u8> for COMPRESS/VERIFY-INTEGRITY
+- Error: CNF-P007 added for TRANSCODE on BINARY-BLOB
+- Security/Protocol: No changes needed (frozen/compatible)
+
+---
+
+## Session 4: CLI Runtime Execution
+
+[2026-03-05]
+Change:
+- Add 'run' subcommand to centra-nf-cli for executing CNF programs
+- Integrate compiler IR output with runtime execution
+- Support buffer initialization from command-line arguments
+- Output execution results (e.g., integrity digests)
+
+Scope:
+- crates/centra-nf-cli/src/main.rs: Add Run subcommand
+- crates/cnf-runtime/src/lib.rs: Add public execute function
+- crates/cnf-runtime/src/runtime.rs: Implement instruction dispatch loop
+
+Status: completed
+
+Notes:
+- Deterministic execution: same IR + same inputs → same outputs
+- Fail-fast on runtime errors
+- Zero-copy buffer handling
+
+---
+
+## Session 5: Control Flow Implementation
+
+[2026-03-05]
+Change:
+- Add control flow statements: IF-ELSE, FOR, WHILE
+- Implement conditional execution and loops in PROCEDURE DIVISION
+- Support variable-based conditions and iteration
+
+Scope:
+- crates/cnf-compiler/src/lexer.rs: Add control flow keywords
+- crates/cnf-compiler/src/parser.rs: Parse IF/ELSE/THEN/END-IF, FOR/END-FOR, WHILE/END-WHILE
+- crates/cnf-compiler/src/ast.rs: Add control flow nodes
+- crates/cnf-compiler/src/ir.rs: Lower to control flow instructions
+- crates/cnf-runtime/src/runtime.rs: Dispatch control flow with nested execution
+
+Status: completed
+
+Notes:
+- Deterministic: no randomness in conditions
+- Fail-fast: invalid conditions or loops
+- Layer discipline: compiler only parsing, runtime only execution
+
+---
+
 ## Session 3: Governance Formalization
 
 [2026-03-04]

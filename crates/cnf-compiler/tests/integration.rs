@@ -304,6 +304,66 @@ mod integration_tests {
         assert!(result.is_ok(), "BINARY-BLOB type should be recognized");
     }
 
+    #[test]
+    fn test_binary_blob_compress() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. BlobCompress.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                COMPRESS BINARY-BLOB.
+        "#;
+
+        let result = compile(source);
+        assert!(result.is_ok(), "COMPRESS on BINARY-BLOB should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("COMPRESS")));
+    }
+
+    #[test]
+    fn test_binary_blob_verify_integrity() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. BlobVerify.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                VERIFY-INTEGRITY BINARY-BLOB.
+        "#;
+
+        let result = compile(source);
+        assert!(result.is_ok(), "VERIFY-INTEGRITY on BINARY-BLOB should compile");
+        let ir = result.unwrap();
+        assert!(ir
+            .iter()
+            .any(|instr| instr.to_string().contains("VERIFY-INTEGRITY")));
+    }
+
+    #[test]
+    fn test_binary_blob_transcode_error() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. BlobTranscodeError.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                TRANSCODE BINARY-BLOB IMAGE-JPG.
+        "#;
+
+        let result = compile(source);
+        assert!(result.is_err(), "TRANSCODE on BINARY-BLOB should fail");
+        let error = result.unwrap_err();
+        assert!(error.contains("CNF-P007"));
+        assert!(error.contains("TRANSCODE operation not supported on BINARY-BLOB"));
+    }
+
     // === Negative Tests (Type Mismatches & Invalid Operations) ===
 
     #[test]

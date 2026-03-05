@@ -9,6 +9,7 @@ license.workspace = true
 cnf-compiler = { path = "../cnf-compiler" }
 cnf-runtime = { path = "../cnf-runtime" }
 clap = { version = "4.4", features = ["derive"] }
+hex = "0.4"
 
 [[bin]]
 name = "centra-nf"

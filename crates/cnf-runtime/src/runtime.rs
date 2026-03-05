@@ -175,6 +175,59 @@ impl Runtime {
         Ok(())
     }
 
+    /// Execute IF statement (simplified: always execute then branch).
+    fn dispatch_if(&mut self, condition: &str, then_instrs: &[Instruction], else_instrs: Option<&[Instruction]>) -> Result<(), CnfError> {
+        // Simplified: assume condition is always true for now
+        for instr in then_instrs {
+            self.dispatch_instruction_enum(instr)?;
+        }
+        // Else not executed
+        Ok(())
+    }
+
+    /// Execute FOR loop (simplified: execute once).
+    fn dispatch_for(&mut self, _variable: &str, _in_list: &str, instrs: &[Instruction]) -> Result<(), CnfError> {
+        // Simplified: execute loop body once
+        for instr in instrs {
+            self.dispatch_instruction_enum(instr)?;
+        }
+        Ok(())
+    }
+
+    /// Execute WHILE loop (simplified: execute once if condition non-empty).
+    fn dispatch_while(&mut self, condition: &str, instrs: &[Instruction]) -> Result<(), CnfError> {
+        // Simplified: execute once if condition is not empty
+        if !condition.is_empty() {
+            for instr in instrs {
+                self.dispatch_instruction_enum(instr)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Dispatch single instruction enum (for nested execution).
+    fn dispatch_instruction_enum(&mut self, instruction: &Instruction) -> Result<(), CnfError> {
+        match instruction {
+            Instruction::Compress { target } => self.dispatch_compress(target),
+            Instruction::VerifyIntegrity { target } => self.dispatch_verify(target).map(|_| ()),
+            Instruction::Encrypt { target } => self.dispatch_encrypt(target),
+            Instruction::Decrypt { target } => self.dispatch_decrypt(target),
+            Instruction::Transcode { target, output_type } => self.dispatch_transcode(target, output_type),
+            Instruction::Filter { target, condition } => self.dispatch_filter(target, condition),
+            Instruction::Aggregate { targets, operation } => self.dispatch_aggregate(targets, operation),
+            Instruction::Convert { target, output_type } => self.dispatch_convert(target, output_type),
+            Instruction::Merge { targets, output_name } => self.dispatch_merge(targets, output_name),
+            Instruction::Split { target, parts } => self.dispatch_split(target, parts),
+            Instruction::Validate { target, schema } => self.dispatch_validate(target, schema),
+            Instruction::Extract { target, path } => self.dispatch_extract(target, path),
+            Instruction::IfStatement { condition, then_instrs, else_instrs } => {
+                self.dispatch_if(condition, then_instrs, else_instrs.as_deref())
+            }
+            Instruction::ForLoop { variable, in_list, instrs } => self.dispatch_for(variable, in_list, instrs),
+            Instruction::WhileLoop { condition, instrs } => self.dispatch_while(condition, instrs),
+        }
+    }
+
     /// Dispatch single instruction.
     fn dispatch_instruction(&mut self, instruction: &str) -> Result<(), CnfError> {
         if instruction.starts_with("COMPRESS(") && instruction.ends_with(")") {

@@ -44,6 +44,17 @@ enum Commands {
         input: PathBuf,
     },
 
+    /// Run a .cnf program using the runtime
+    Run {
+        /// Input .cnf file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Buffer data as hex string (for INPUT variables)
+        #[arg(short, long, value_name = "HEX")]
+        buffer: Option<String>,
+    },
+
     /// Interactive REPL (Read-Eval-Print-Loop) for testing snippets
     Repl,
 }
@@ -61,6 +72,9 @@ fn main() {
         }
         Commands::Check { input } => {
             check_file(&input);
+        }
+        Commands::Run { input, buffer } => {
+            run_file(&input, buffer.as_deref());
         }
     }
 }
@@ -139,6 +153,56 @@ fn check_file(input_path: &PathBuf) {
         }
         Err(e) => {
             eprintln!("❌ Syntax error in '{}':\n{}", input_path.display(), e);
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Run a .cnf program using the runtime
+fn run_file(input_path: &PathBuf, buffer_hex: Option<&str>) {
+    // Read source file
+    let source = match fs::read_to_string(input_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", input_path.display(), e);
+            std::process::exit(1);
+        }
+    };
+
+    // Compile
+    let instructions = match compile(&source) {
+        Ok(instr) => instr,
+        Err(e) => {
+            eprintln!("❌ Compilation error:\n{}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Initialize runtime
+    let mut runtime = cnf_runtime::Runtime::new();
+
+    // Add buffer if provided
+    if let Some(hex) = buffer_hex {
+        let data = match hex::decode(hex) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("❌ Invalid hex buffer: {}", e);
+                std::process::exit(1);
+            }
+        };
+        runtime.add_buffer("INPUT".to_string(), data);
+    }
+
+    // Execute
+    match cnf_runtime::execute(&instructions, &mut runtime) {
+        Ok(results) => {
+            eprintln!("✓ Execution successful");
+            for (instr, result) in results {
+                println!("{} → {}", instr, result);
+            }
+        }
+        Err(e) => {
+            eprintln!("❌ Runtime error: {:?}", e);
             std::process::exit(1);
         }
     }

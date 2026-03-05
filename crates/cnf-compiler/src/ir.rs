@@ -54,17 +54,17 @@ pub enum Instruction {
     },
     IfStatement {
         condition: String,
-        then_instrs: Vec<String>,
-        else_instrs: Option<Vec<String>>,
+        then_instrs: Vec<Instruction>,
+        else_instrs: Option<Vec<Instruction>>,
     },
     ForLoop {
         variable: String,
         in_list: String,
-        instrs: Vec<String>,
+        instrs: Vec<Instruction>,
     },
     WhileLoop {
         condition: String,
-        instrs: Vec<String>,
+        instrs: Vec<Instruction>,
     },
 }
 
@@ -149,6 +149,14 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
         .map(|v| v.name.clone())
         .collect();
 
+    // Map variable names to their data types for type checking
+    let var_types: std::collections::HashMap<String, crate::ast::DataType> = program
+        .data
+        .variables
+        .iter()
+        .map(|v| (v.name.clone(), v.data_type.clone()))
+        .collect();
+
     for stmt in &program.procedure.statements {
         match stmt {
             ProcedureStatement::Compress { target } => {
@@ -204,6 +212,10 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                         "Variable '{}' not declared in DATA DIVISION",
                         target
                     ));
+                }
+                // Check if target is BINARY-BLOB - TRANSCODE not allowed
+                if let Some(&crate::ast::DataType::BinaryBlob) = var_types.get(target) {
+                    return Err("CNF-P007: TRANSCODE operation not supported on BINARY-BLOB type. BINARY-BLOB is raw unstructured data and cannot be transcoded.".to_string());
                 }
                 instructions.push(Instruction::Transcode {
                     target: target.clone(),
@@ -309,18 +321,22 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 then_statements,
                 else_statements,
             } => {
-                // For now, flatten nested statements into the then/else blocks
+                // Recursively lower nested statements
                 let mut then_instrs = Vec::new();
                 for stmt in then_statements {
-                    // Recursively lower nested statements (placeholder)
-                    then_instrs.push(format!("STMT({})", std::any::type_name_of_val(stmt)));
+                    let nested_instr = lower_single_statement(&*stmt, &declared_vars)?;
+                    then_instrs.push(nested_instr);
                 }
-                let else_instrs = else_statements.as_ref().map(|stmts| {
-                    stmts
-                        .iter()
-                        .map(|_| "STMT".to_string())
-                        .collect::<Vec<_>>()
-                });
+                let else_instrs = if let Some(stmts) = else_statements {
+                    let mut instrs = Vec::new();
+                    for stmt in stmts {
+                        let nested_instr = lower_single_statement(&*stmt, &declared_vars)?;
+                        instrs.push(nested_instr);
+                    }
+                    Some(instrs)
+                } else {
+                    None
+                };
                 instructions.push(Instruction::IfStatement {
                     condition: condition.clone(),
                     then_instrs,
@@ -334,7 +350,8 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
             } => {
                 let mut loop_instrs = Vec::new();
                 for stmt in statements {
-                    loop_instrs.push(format!("STMT({})", std::any::type_name_of_val(stmt)));
+                    let nested_instr = lower_single_statement(&*stmt, &declared_vars)?;
+                    loop_instrs.push(nested_instr);
                 }
                 instructions.push(Instruction::ForLoop {
                     variable: variable.clone(),
@@ -342,10 +359,14 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     instrs: loop_instrs,
                 });
             }
-            ProcedureStatement::While { condition, statements } => {
+            ProcedureStatement::While {
+                condition,
+                statements,
+            } => {
                 let mut loop_instrs = Vec::new();
                 for stmt in statements {
-                    loop_instrs.push(format!("STMT({})", std::any::type_name_of_val(stmt)));
+                    let nested_instr = lower_single_statement(&*stmt, &declared_vars)?;
+                    loop_instrs.push(nested_instr);
                 }
                 instructions.push(Instruction::WhileLoop {
                     condition: condition.clone(),
@@ -356,6 +377,29 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
     }
 
     Ok(instructions)
+}
+
+/// Helper to lower a single procedure statement to instruction
+fn lower_single_statement(
+    stmt: &ProcedureStatement,
+    declared_vars: &std::collections::HashSet<String>,
+) -> Result<Instruction, String> {
+    match stmt {
+        ProcedureStatement::Compress { target } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::Compress { target: target.clone() })
+        }
+        ProcedureStatement::VerifyIntegrity { target } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::VerifyIntegrity { target: target.clone() })
+        }
+        // Add more as needed
+        _ => Err("Unsupported nested statement".to_string()),
+    }
 }
 
 #[cfg(test)]
