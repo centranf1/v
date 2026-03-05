@@ -1,461 +1,509 @@
-use clap::{Parser, ValueEnum};
-use itertools::Itertools;
-use std::collections::HashSet;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
+use std::process::Command;
 
 // ============================================================================
-// CLI Arguments
+// Data Structures
 // ============================================================================
 
-#[derive(Parser, Debug)]
-#[command(name = "gen_errors")]
-#[command(about = "Generate CENTRA-NF error codes, test files, and documentation")]
-#[command(version = "0.1.0")]
-struct Args {
-    /// Layer designation (1-8: Lexer, Parser, IR, Runtime, Security, Protocol, CLI, LSP)
-    #[arg(short, long, default_value = "1")]
-    layer: u8,
-
-    /// Error category: Syntax, Semantic, or Runtime
-    #[arg(short, long, value_enum, default_value = "syntax")]
-    category: ErrorCategory,
-
-    /// Number of errors to generate
-    #[arg(short = 'n', long, default_value = "100")]
-    count: usize,
-
-    /// Output directory for test files (relative to workspace root)
-    #[arg(short, long, default_value = "tests/ui/fail")]
-    test_dir: PathBuf,
-
-    /// Documentation file to update
-    #[arg(short, long, default_value = "docs/error-codes.md")]
-    doc_file: PathBuf,
-
-    /// Generate dry-run only (no file writes)
-    #[arg(long)]
-    dry_run: bool,
+/// Single error registry database
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorRegistry {
+    pub metadata: RegistryMetadata,
+    pub errors: HashMap<String, ErrorEntry>,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
-enum ErrorCategory {
-    Syntax,
-    Semantic,
-    Runtime,
+/// Metadata for the registry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryMetadata {
+    pub format_version: String,
+    pub last_updated: String,
+    pub total_count: u32,
+    pub layers: HashMap<String, String>,
 }
 
-// ============================================================================
-// Error Code Generator
-// ============================================================================
-
-const LAYER_NAMES: &[&str] = &["Lexer", "Parser", "IR", "Runtime", "Security", "Protocol", "CLI", "LSP"];
-
-const KEYWORDS: &[&str] = &[
-    "Invalid",
-    "Missing",
-    "Overflow",
-    "Underflow",
-    "Unexpected",
-    "Illegal",
-    "Malformed",
-    "Unterminated",
-    "Undefined",
-    "Duplicate",
-    "Mismatch",
-    "Type",
-    "Constraint",
-    "Boundary",
-    "State",
-    "Order",
-    "Syntax",
-    "Semantic",
-    "Unmatched",
-    "Expected",
-];
-
-const DATA_TYPES: &[&str] = &[
-    "BINARY-BLOB",
-    "VIDEO-MP4",
-    "IMAGE-JPG",
-    "FINANCIAL-DECIMAL",
-    "AUDIO-WAV",
-    "TEXT-UTF8",
-    "DOCUMENT-PDF",
-    "DATA-CSV",
-];
-
-const SUPPLEMENTARY: &[&str] = &[
-    "in division structure",
-    "in instruction sequence",
-    "in variable declaration",
-    "in expression",
-    "in control flow",
-    "in type annotation",
-    "in indentation",
-    "in encoding",
-];
-
-struct ErrorGenerator {
-    layer: u8,
-    category: ErrorCategory,
-    count: usize,
-    test_dir: PathBuf,
-    doc_file: PathBuf,
-    dry_run: bool,
-    generated_codes: HashSet<String>,
+/// Individual error entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorEntry {
+    pub code: String,
+    pub layer: u32,
+    pub layer_name: String,
+    pub category: String,
+    pub title: String,
+    pub description: String,
+    pub trigger_code: String,
+    pub expected_error: String,
+    pub fix: String,
 }
 
-impl ErrorGenerator {
-    fn new(args: Args) -> Self {
+
+// ============================================================================
+// Permutation Engine for Unique Error Variations
+// ============================================================================
+
+struct PermutationEngine {
+    keywords: Vec<&'static str>,
+    data_types: Vec<&'static str>,
+    contexts: Vec<&'static str>,
+    layers: HashMap<u32, LayerConfig>,
+}
+
+#[derive(Clone)]
+struct LayerConfig {
+    name: String,
+    code_range: (u32, u32),
+    base_error_type: String,
+}
+
+impl PermutationEngine {
+    fn new() -> Self {
+        let mut layers = HashMap::new();
+
+        layers.insert(
+            1,
+            LayerConfig {
+                name: "Lexer".to_string(),
+                code_range: (1001, 1999),
+                base_error_type: "TokenError".to_string(),
+            },
+        );
+        layers.insert(
+            2,
+            LayerConfig {
+                name: "Parser".to_string(),
+                code_range: (2001, 2999),
+                base_error_type: "SyntaxError".to_string(),
+            },
+        );
+        layers.insert(
+            3,
+            LayerConfig {
+                name: "IR".to_string(),
+                code_range: (3001, 3999),
+                base_error_type: "TypeError".to_string(),
+            },
+        );
+        layers.insert(
+            4,
+            LayerConfig {
+                name: "Runtime".to_string(),
+                code_range: (4001, 4999),
+                base_error_type: "RuntimeError".to_string(),
+            },
+        );
+        layers.insert(
+            5,
+            LayerConfig {
+                name: "Security".to_string(),
+                code_range: (5001, 5999),
+                base_error_type: "SecurityError".to_string(),
+            },
+        );
+
         Self {
-            layer: args.layer,
-            category: args.category,
-            count: args.count,
-            test_dir: args.test_dir,
-            doc_file: args.doc_file,
-            dry_run: args.dry_run,
-            generated_codes: HashSet::new(),
+            keywords: vec![
+                "IDENTIFICATION", "ENVIRONMENT", "DATA", "PROCEDURE", "DIVISION",
+                "COMPRESS", "VERIFY", "ENCRYPT", "DECRYPT", "TRANSCODE",
+                "FILTER", "AGGREGATE", "MERGE", "SPLIT", "VALIDATE",
+                "EXTRACT", "CONVERT", "OS", "ARCH", "INVALID_KEYWORD",
+            ],
+            data_types: vec![
+                "VIDEO-MP4", "IMAGE-JPG", "AUDIO-WAV", "CSV-TABLE",
+                "JSON-OBJECT", "XML-DOCUMENT", "PARQUET-TABLE", "BINARY-BLOB",
+            ],
+            contexts: vec![
+                "in IDENTIFICATION DIVISION",
+                "in ENVIRONMENT DIVISION",
+                "in DATA DIVISION",
+                "in PROCEDURE DIVISION",
+                "in declaration",
+                "in assignment",
+                "in operation",
+                "in expression",
+            ],
+            layers,
         }
     }
 
-    fn layer_prefix(&self) -> char {
-        match self.layer {
-            1 => 'L',
-            2 => 'P',
-            3 => 'I',
-            4 => 'R',
-            5 => 'S',
-            6 => 'O', // prOtocol
-            7 => 'C',
-            8 => 'X', // lsP (X untuk LSP)
-            _ => '?',
-        }
-    }
+    /// Generate errors for a specific layer using permutation logic
+    fn generate_for_layer(&self, layer: u32, count: u32) -> Vec<ErrorEntry> {
+        let config = match self.layers.get(&layer) {
+            Some(c) => c.clone(),
+            None => return vec![],
+        };
 
-    fn layer_name(&self) -> &'static str {
-        LAYER_NAMES.get((self.layer - 1) as usize).unwrap_or(&"Unknown")
-    }
-
-    /// Generate all unique error codes dan metadata
-    fn generate_errors(&mut self) -> Vec<ErrorMetadata> {
         let mut errors = Vec::new();
-        let mut code_counter = 1;
+        let (start_code, _end_code) = config.code_range;
 
-        // Create permutation list dari keywords dan data types
-        let all_terms: Vec<&str> = KEYWORDS.iter().chain(DATA_TYPES.iter()).copied().collect();
+        for idx in 0..count {
+            let code_num = start_code + idx;
+            let code = format!("L{}", code_num);
 
-        // Generate permutasi: ambil 2 terms berbeda dari all_terms
-        for combo in all_terms.iter().combinations(2).unique().take(self.count) {
-            if errors.len() >= self.count {
-                break;
-            }
+            let keyword_idx = (idx as usize) % self.keywords.len();
+            let type_idx = ((idx / self.keywords.len() as u32) as usize) % self.data_types.len();
+            let context_idx =
+                ((idx / (self.keywords.len() as u32 * self.data_types.len() as u32)) as usize)
+                    % self.contexts.len();
 
-            let kw1 = combo[0];
-            let kw2 = combo[1];
-            let supplement = SUPPLEMENTARY[code_counter % SUPPLEMENTARY.len()];
-            let error_code = format!("{}{}{:03}", self.layer_prefix(), self.layer, code_counter);
-            let message = self.generate_message(kw1, kw2, supplement);
+            let keyword = self.keywords[keyword_idx];
+            let data_type = self.data_types[type_idx];
+            let context = self.contexts[context_idx];
 
-            errors.push(ErrorMetadata {
-                code: error_code,
-                message,
-                example: self.generate_example(kw1, kw2),
-                fix: self.generate_fix(kw1, kw2),
-                layer_num: self.layer,
-                category: format!("{:?}", self.category),
+            let (title, description, trigger_code, expected_error, fix) =
+                self.generate_error_content(layer, keyword, data_type, context);
+
+            errors.push(ErrorEntry {
+                code: code.clone(),
+                layer,
+                layer_name: config.name.clone(),
+                category: config.base_error_type.clone(),
+                title,
+                description,
+                trigger_code,
+                expected_error,
+                fix,
             });
-
-            code_counter += 1;
-        }
-
-        // Fill remaining count with generated errors dari kombinasi lain
-        while errors.len() < self.count {
-            let kw = KEYWORDS[errors.len() % KEYWORDS.len()];
-            let dt = DATA_TYPES[errors.len() / KEYWORDS.len() % DATA_TYPES.len()];
-            let supplement = SUPPLEMENTARY[errors.len() % SUPPLEMENTARY.len()];
-
-            let error_code = format!("{}{}{:03}", self.layer_prefix(), self.layer, code_counter);
-            let message = self.generate_message(&kw, &dt, supplement);
-
-            errors.push(ErrorMetadata {
-                code: error_code,
-                message,
-                example: self.generate_example(&kw, &dt),
-                fix: self.generate_fix(&kw, &dt),
-                layer_num: self.layer,
-                category: format!("{:?}", self.category),
-            });
-
-            code_counter += 1;
         }
 
         errors
     }
 
-    fn generate_message(&self, keyword1: &str, keyword2: &str, supplement: &str) -> String {
-        match self.layer {
-            1 => format!(
-                "{} {} character {} -- expected valid UTF-8 encoding",
-                keyword1, keyword2, supplement
-            ),
-            2 => format!(
-                "{} {} structure {} -- check division order",
-                keyword1, keyword2, supplement
-            ),
-            3 => format!(
-                "{} {} type conversion {} -- {} cannot be converted",
-                keyword1, keyword2, supplement, keyword2
-            ),
-            4 => format!(
-                "{} {} operation {} -- buffer mismatch",
-                keyword1, keyword2, supplement
-            ),
-            5 => format!(
-                "{} {} cryptographic {} -- determinism violation",
-                keyword1, keyword2, supplement
-            ),
-            6 => format!(
-                "{} {} protocol {} -- compression layer failed",
-                keyword1, keyword2, supplement
-            ),
-            7 => format!(
-                "{} {} command-line {} -- invalid argument format",
-                keyword1, keyword2, supplement
-            ),
-            8 => format!(
-                "{} {} language-server {} -- protocol mismatch",
-                keyword1, keyword2, supplement
-            ),
-            _ => format!("Unknown error: {} {} {}", keyword1, keyword2, supplement),
-        }
-    }
-
-    fn generate_example(&self, keyword1: &str, keyword2: &str) -> String {
-        match self.layer {
-            1 => format!(
-                "IDENTIFICATION DIVISION.\n    PROGRAM \"test-{}\".\nEVIRONMENT DIVISION.\n    OS \"invalid™utf8-chars\".",
-                keyword1.to_lowercase()
-            ),
-            2 => format!(
-                "DATA DIVISION.\n    VIDEO-MP4 {}.\nIDENTIFICATION DIVISION.\n    PROGRAM \"{}\".",
-                keyword2.to_uppercase(),
-                keyword1.to_lowercase()
-            ),
-            3 => format!(
-                "DATA DIVISION.\n    {} my_var.\nPROCEDURE DIVISION.\n    CONVERT my_var TO {}.",
-                keyword2, keyword1
-            ),
-            4 => format!(
-                "PROCEDURE DIVISION.\n    COMPRESS {} buffer.\n    VERIFY-INTEGRITY missing_buffer.",
-                keyword2.to_lowercase()
-            ),
-            5 => format!(
-                "PROCEDURE DIVISION.\n    ENCRYPT {{}} \"test-{}-data\".",
-                keyword1.to_lowercase()
-            ),
-            6 => format!(
-                "PROCEDURE DIVISION.\n    COMPRESS {}.\n    -- {} operation failed",
-                keyword2, keyword1
-            ),
-            7 => format!("gen_errors --layer {} --category {} --count abc", self.layer, keyword1.to_lowercase()),
-            _ => format!(
-                "PROCEDURE DIVISION.\n    -- {} {} example",
-                keyword1, keyword2
-            ),
-        }
-    }
-
-    fn generate_fix(&self, keyword1: &str, keyword2: &str) -> String {
-        match self.layer {
-            1 => format!(
-                "Ensure source file uses valid UTF-8 encoding. Remove non-ASCII characters or use proper escaping."
-            ),
-            2 => format!(
-                "Check division order: IDENTIFICATION → ENVIRONMENT → DATA → PROCEDURE. {} and {} must follow rules.",
-                keyword1, keyword2
-            ),
-            3 => format!(
-                "Type {} cannot be implicitly converted to {}. Use explicit type annotation or intermediate conversion.",
-                keyword2, keyword1
-            ),
-            4 => format!(
-                "Verify buffer '{}' is declared in DATA DIVISION before use in PROCEDURE DIVISION.",
-                keyword2.to_lowercase()
-            ),
-            5 => format!(
-                "Encryption operations must use deterministic keys/IVs. Check {} configuration.",
-                keyword1.to_lowercase()
-            ),
-            6 => format!(
-                "Compression {} failed with {}. Check protocol version compatibility.",
-                keyword2.to_lowercase(),
-                keyword1.to_lowercase()
-            ),
-            7 => format!(
-                "Verify command-line argument format. {} must be valid {}.",
-                keyword1, keyword2
-            ),
-            _ => format!(
-                "Check {} {} configuration and try again.",
-                keyword1.to_lowercase(),
-                keyword2.to_lowercase()
-            ),
-        }
-    }
-
-    /// Generate .cnf test file dengan expected-error header
-    fn generate_test_file(&self, error: &ErrorMetadata) -> String {
-        format!(
-            "// Test file for error code: {}\n// Expected error: {}\n// Category: {}\n// Layer: {} ({})\n\n{}\n",
-            error.code,
-            error.message,
-            error.category,
-            error.layer_num,
-            self.layer_name(),
-            error.example
-        )
-    }
-
-    /// Tambah entry ke docs/error-codes.md
-    fn generate_doc_entry(&self, error: &ErrorMetadata) -> String {
-        format!(
-            "| {} | {} | ```cnf\n{}\n``` | {} |",
-            error.code, error.message, error.example, error.fix
-        )
-    }
-
-    /// Write semua generated errors ke filesystem
-    fn write_files(&self, errors: &[ErrorMetadata]) -> Result<(), Box<dyn std::error::Error>> {
-        if self.dry_run {
-            println!("=== DRY RUN: {} errors would be generated ===\n", errors.len());
-            for error in errors.iter().take(5) {
-                println!("Code: {}", error.code);
-                println!("Message: {}", error.message);
-                println!("---");
+    /// Generate error content based on layer and parameters
+    fn generate_error_content(
+        &self,
+        layer: u32,
+        keyword: &str,
+        data_type: &str,
+        context: &str,
+    ) -> (String, String, String, String, String) {
+        match layer {
+            1 => {
+                // Lexer errors
+                let title = format!("Invalid token '{}' {}", keyword, context);
+                let description =
+                    format!("Lexer encountered invalid token when parsing {}", context);
+                let trigger_code = format!(
+                    "IDENTIFICATION DIVISION.\n    {} {}.",
+                    keyword, data_type
+                );
+                let expected_error = format!("Invalid token '{}'", keyword);
+                let fix = format!(
+                    "Use valid CENTRA-NF keywords only. '{}' is not recognized.",
+                    keyword
+                );
+                (title, description, trigger_code, expected_error, fix)
             }
-            if errors.len() > 5 {
-                println!("... and {} more errors\n", errors.len() - 5);
+            2 => {
+                // Parser errors
+                let title = format!("Invalid {} declaration {}", data_type, context);
+                let description = format!(
+                    "Parser found invalid {} declaration: expected valid syntax",
+                    data_type
+                );
+                let trigger_code = format!(
+                    "DATA DIVISION.\n    {} = {}.",
+                    keyword, data_type
+                );
+                let expected_error = format!("Expected PICTURE or PIC clause, found '{}'", keyword);
+                let fix = format!(
+                    "Use proper COBOL-style declaration: PICTURE or PIC with valid format"
+                );
+                (title, description, trigger_code, expected_error, fix)
             }
-            return Ok(());
+            3 => {
+                // IR errors
+                let title = format!("Type mismatch: {} vs {}", data_type, keyword);
+                let description =
+                    format!("IR lowering failed: incompatible types {} and {}", data_type, keyword);
+                let trigger_code = format!(
+                    "PROCEDURE DIVISION.\n    COMPRESS {} AS {}.",
+                    keyword, data_type
+                );
+                let expected_error = format!("Type error: cannot apply COMPRESS to {}", keyword);
+                let fix = format!("Ensure {} is compatible with COMPRESS operation", data_type);
+                (title, description, trigger_code, expected_error, fix)
+            }
+            4 => {
+                // Runtime errors
+                let title = format!("Runtime failure on {} with {}", keyword, data_type);
+                let description = format!("Runtime error occurred during {} operation", keyword);
+                let trigger_code = format!(
+                    "DATA DIVISION.\n        {} AS {}.\n    PROCEDURE DIVISION.\n        VERIFY-INTEGRITY {}.",
+                    keyword, data_type, keyword
+                );
+                let expected_error = format!("Runtime error: {} not initialized", keyword);
+                let fix = format!("Ensure {} is properly initialized before use", keyword);
+                (title, description, trigger_code, expected_error, fix)
+            }
+            5 => {
+                // Security errors
+                let title = format!("Encryption failure with {}", data_type);
+                let description = format!("Security operation failed on {} type", data_type);
+                let trigger_code = format!("PROCEDURE DIVISION.\n    ENCRYPT {} .", keyword);
+                let expected_error = format!("Encryption error: invalid {} for encryption", data_type);
+                let fix = format!("Use supported data types for encryption: VIDEO-MP4, IMAGE-JPG, AUDIO-WAV");
+                (title, description, trigger_code, expected_error, fix)
+            }
+            _ => (
+                "Unknown error".to_string(),
+                "Unknown error".to_string(),
+                "".to_string(),
+                "".to_string(),
+                "".to_string(),
+            ),
+        }
+    }
+}
+
+
+// ============================================================================
+// Error Registry Manager
+// ============================================================================
+
+pub struct ErrorManager {
+    registry_path: String,
+    docs_path: String,
+    registry: ErrorRegistry,
+}
+
+impl ErrorManager {
+    /// Load or create error registry
+    pub fn new(registry_path: &str, docs_path: &str) -> Result<Self, String> {
+        let registry = if Path::new(registry_path).exists() {
+            let content = fs::read_to_string(registry_path)
+                .map_err(|e| format!("Failed to read registry: {}", e))?;
+            serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse registry JSON: {}", e))?
+        } else {
+            ErrorRegistry {
+                metadata: RegistryMetadata {
+                    format_version: "1.0".to_string(),
+                    last_updated: "2026-03-05".to_string(),
+                    total_count: 0,
+                    layers: {
+                        let mut m = HashMap::new();
+                        m.insert("L1".to_string(), "Lexer (1001-1999)".to_string());
+                        m.insert("L2".to_string(), "Parser (2001-2999)".to_string());
+                        m.insert("L3".to_string(), "IR (3001-3999)".to_string());
+                        m.insert("L4".to_string(), "Runtime (4001-4999)".to_string());
+                        m.insert("L5".to_string(), "Security (5001-5999)".to_string());
+                        m
+                    },
+                },
+                errors: HashMap::new(),
+            }
+        };
+
+        Ok(Self {
+            registry_path: registry_path.to_string(),
+            docs_path: docs_path.to_string(),
+            registry,
+        })
+    }
+
+    /// Generate and add errors for a layer (idempotent)
+    pub fn generate_layer(&mut self, layer: u32, count: u32) -> Result<u32, String> {
+        let engine = PermutationEngine::new();
+        let new_errors = engine.generate_for_layer(layer, count);
+
+        let mut added = 0;
+        for error in new_errors {
+            if !self.registry.errors.contains_key(&error.code) {
+                self.registry.errors.insert(error.code.clone(), error);
+                added += 1;
+            }
         }
 
-        // Ensure test directory exists
-        fs::create_dir_all(&self.test_dir)?;
+        self.registry.metadata.total_count = self.registry.errors.len() as u32;
 
-        // Write test .cnf files
-        for error in errors {
-            let file_name = format!("{}.cnf", error.code.to_lowercase());
-            let file_path = self.test_dir.join(file_name);
-            let content = self.generate_test_file(error);
-            fs::write(&file_path, content)?;
-            println!("✓ Created test file: {}", file_path.display());
-        }
+        Ok(added)
+    }
 
-        // Update documentation
-        self.update_documentation(errors)?;
+    /// Save registry to JSON file
+    pub fn save_registry(&self) -> Result<(), String> {
+        let json = serde_json::to_string_pretty(&self.registry)
+            .map_err(|e| format!("Failed to serialize registry: {}", e))?;
 
+        fs::write(&self.registry_path, json)
+            .map_err(|e| format!("Failed to write registry: {}", e))?;
+
+        println!("✅ Registry saved to: {}", self.registry_path);
         Ok(())
     }
 
-    fn update_documentation(&self, errors: &[ErrorMetadata]) -> Result<(), Box<dyn std::error::Error>> {
-        // Read existing docs
-        let mut doc_content = fs::read_to_string(&self.doc_file)?;
-
-        // Find or create section for this layer
-        let section_header = format!(
-            "## Layer {}: {} Errors\n\n",
-            self.layer, self.layer_name()
+    /// Auto-sync documentation from registry
+    pub fn sync_docs(&self) -> Result<(), String> {
+        let mut doc_content = String::from(
+            "# CENTRA-NF Error Codes Reference\n\n\
+             **Auto-generated from errors_registry.json - Do not edit manually**\n\n",
         );
 
-        let table_header = "| Code | Message | Example | Fix |\n|------|---------|---------|-----|\n";
-
-        // Generate table entries
-        let entries: Vec<String> = errors.iter().map(|e| self.generate_doc_entry(e)).collect();
-        let new_section = format!("{}{}{}\n", section_header, table_header, entries.join("\n"));
-
-        // Check if section exists
-        if doc_content.contains(&section_header) {
-            // Find existing section and replace it
-            if let Some(start_pos) = doc_content.find(&section_header) {
-                // Find next section or end of file
-                let after_header = start_pos + section_header.len();
-                let next_section_pos = if let Some(pos) = doc_content[after_header..].find("\n## ")
-                {
-                    after_header + pos
-                } else {
-                    doc_content.len()
-                };
-
-                doc_content.replace_range(start_pos..next_section_pos, &new_section);
-            }
-        } else {
-            // Append new section before any final comments
-            doc_content.push('\n');
-            doc_content.push_str(&new_section);
+        // Group errors by layer
+        let mut layers: HashMap<u32, Vec<_>> = HashMap::new();
+        for error in self.registry.errors.values() {
+            layers.entry(error.layer).or_insert_with(Vec::new).push(error);
         }
 
-        fs::write(&self.doc_file, doc_content)?;
-        println!("✓ Updated documentation: {}", self.doc_file.display());
+        // Generate doc sections per layer
+        for layer in 1..=5 {
+            if let Some(mut errors) = layers.remove(&layer) {
+                errors.sort_by(|a, b| a.code.cmp(&b.code));
 
+                let layer_name = match layer {
+                    1 => "Lexer",
+                    2 => "Parser",
+                    3 => "IR",
+                    4 => "Runtime",
+                    5 => "Security",
+                    _ => "Unknown",
+                };
+
+                doc_content.push_str(&format!(
+                    "## Layer {}: {} ({} errors)\n\n",
+                    layer,
+                    layer_name,
+                    errors.len()
+                ));
+                doc_content.push_str("| Code | Title | Category | Description | Trigger | Fix |\n");
+                doc_content.push_str("|------|-------|----------|-------------|---------|-----|\n");
+
+                for error in errors {
+                    doc_content.push_str(&format!(
+                        "| {} | {} | {} | {} | `{}` | {} |\n",
+                        error.code,
+                        error.title,
+                        error.category,
+                        error.description,
+                        error.trigger_code.lines().next().unwrap_or(""),
+                        error.fix
+                    ));
+                }
+
+                doc_content.push_str("\n");
+            }
+        }
+
+        fs::write(&self.docs_path, doc_content)
+            .map_err(|e| format!("Failed to write docs: {}", e))?;
+
+        println!("✅ Documentation synced to: {}", self.docs_path);
         Ok(())
     }
+
+    /// Virtual test: run error in-memory without persistent files
+    pub fn test_error_virtual(&self, code: &str) -> Result<bool, String> {
+        let error = self
+            .registry
+            .errors
+            .get(code)
+            .ok_or_else(|| format!("Error code {} not found", code))?;
+
+        // Write to temp file
+        let temp_file = format!("/tmp/{}_test.cnf", code);
+        fs::write(&temp_file, &error.trigger_code)
+            .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+        // Run compiler on temp file
+        let output = Command::new("cargo")
+            .args(&["run", "--bin", "centra-nf", "--", "check", &temp_file])
+            .current_dir("/workspaces/v1")
+            .output()
+            .map_err(|e| format!("Failed to run compiler: {}", e))?;
+
+        // Clean up temp file immediately
+        let _ = fs::remove_file(&temp_file);
+
+        // Check if expected error appears in output
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let full_output = format!("{}\n{}", stdout, stderr);
+
+        let test_passed = full_output.contains(&error.expected_error);
+
+        Ok(test_passed)
+    }
+
+    /// Get registry statistics
+    pub fn get_stats(&self) -> (u32, HashMap<u32, u32>) {
+        let mut layer_counts: HashMap<u32, u32> = HashMap::new();
+        for error in self.registry.errors.values() {
+            *layer_counts.entry(error.layer).or_insert(0) += 1;
+        }
+        (self.registry.errors.len() as u32, layer_counts)
+    }
 }
 
 // ============================================================================
-// Error Metadata
+// Main Entry Point
 // ============================================================================
 
-#[derive(Clone, Debug)]
-struct ErrorMetadata {
-    code: String,
-    message: String,
-    example: String,
-    fix: String,
-    layer_num: u8,
-    category: String,
-}
+fn main() -> Result<(), String> {
+    let args: Vec<String> = std::env::args().collect();
 
-// ============================================================================
-// Main
-// ============================================================================
+    let registry_path = "/workspaces/v1/errors_registry.json";
+    let docs_path = "/workspaces/v1/docs/error-codes.md";
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
+    // Parse arguments: layer (default 1), count (default 100)
+    let layer = if args.len() > 1 {
+        args[1].parse::<u32>().unwrap_or(1)
+    } else {
+        1
+    };
 
-    // Validation
-    if args.layer < 1 || args.layer > 8 {
-        eprintln!("Error: Layer must be between 1 and 8");
-        std::process::exit(1);
+    let count = if args.len() > 2 {
+        args[2].parse::<u32>().unwrap_or(100)
+    } else {
+        100
+    };
+
+    println!("🔧 CENTRA-NF Error Code Generator");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("📋 Registry: {}", registry_path);
+    println!("📄 Docs: {}", docs_path);
+    println!("🎯 Generating {} errors for Layer {}\n", count, layer);
+
+    let mut manager = ErrorManager::new(registry_path, docs_path)?;
+
+    // Generate new errors
+    match manager.generate_layer(layer, count) {
+        Ok(added) => {
+            let (total, layer_counts) = manager.get_stats();
+
+            println!("✅ Added {} new error codes", added);
+            println!("📊 Total errors in registry: {}\n", total);
+
+            println!("Layer breakdown:");
+            for l in 1..=5 {
+                if let Some(c) = layer_counts.get(&l) {
+                    let layer_name = match l {
+                        1 => "Lexer",
+                        2 => "Parser",
+                        3 => "IR",
+                        4 => "Runtime",
+                        5 => "Security",
+                        _ => "Unknown",
+                    };
+                    println!("  Layer {}: {} errors", layer_name, c);
+                }
+            }
+
+            // Save and sync
+            println!("\n📦 Saving...");
+            manager.save_registry()?;
+
+            println!("🔄 Syncing documentation...");
+            manager.sync_docs()?;
+
+            println!("\n✨ Generation complete!");
+            println!("🎉 Ready to test errors with virtual test engine\n");
+
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("❌ Error: {}", e);
+            Err(e)
+        }
     }
-
-    if args.count == 0 {
-        eprintln!("Error: Count must be greater than 0");
-        std::process::exit(1);
-    }
-
-    println!("=== CENTRA-NF Error Code Generator ===");
-    println!("Layer: {} ({})", args.layer, LAYER_NAMES[(args.layer - 1) as usize]);
-    println!("Category: {:?}", args.category);
-    println!("Target count: {}", args.count);
-    println!();
-
-    let mut generator = ErrorGenerator::new(args);
-    let errors = generator.generate_errors();
-
-    println!("Generated {} error codes", errors.len());
-    let sample_codes: String = errors
-        .iter()
-        .take(3)
-        .map(|e| e.code.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
-    println!("Sample codes: {}", sample_codes);
-    println!();
-
-    generator.write_files(&errors)?;
-    println!();
-    println!("✓ Success! Errors generated and documentation updated.");
-
-    Ok(())
 }
