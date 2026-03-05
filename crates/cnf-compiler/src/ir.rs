@@ -52,6 +52,20 @@ pub enum Instruction {
         target: String,
         path: String,
     },
+    IfStatement {
+        condition: String,
+        then_instrs: Vec<String>,
+        else_instrs: Option<Vec<String>>,
+    },
+    ForLoop {
+        variable: String,
+        in_list: String,
+        instrs: Vec<String>,
+    },
+    WhileLoop {
+        condition: String,
+        instrs: Vec<String>,
+    },
 }
 
 impl std::fmt::Display for Instruction {
@@ -102,9 +116,27 @@ impl std::fmt::Display for Instruction {
             Instruction::Extract { target, path } => {
                 write!(f, "EXTRACT({} FROM {})", path, target)
             }
-        }
-    }
-}
+            Instruction::IfStatement {
+                condition,
+                then_instrs,
+                else_instrs,
+            } => {
+                write!(f, "IF({}) THEN[{}]", condition, then_instrs.len())?;
+                if let Some(else_i) = else_instrs {
+                    write!(f, " ELSE[{}]", else_i.len())?;
+                }
+                Ok(())
+            }
+            Instruction::ForLoop {
+                variable,
+                in_list,
+                instrs,
+            } => {
+                write!(f, "FOR({} IN {}) [{}]", variable, in_list, instrs.len())
+            }
+            Instruction::WhileLoop { condition, instrs } => {
+                write!(f, "WHILE({}) [{}]", condition, instrs.len())
+            }
 
 pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
     let mut instructions = Vec::new();
@@ -270,6 +302,54 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 instructions.push(Instruction::Extract {
                     target: target.clone(),
                     path: path.clone(),
+                });
+            }
+            ProcedureStatement::If {
+                condition,
+                then_statements,
+                else_statements,
+            } => {
+                // For now, flatten nested statements into the then/else blocks
+                let mut then_instrs = Vec::new();
+                for stmt in then_statements {
+                    // Recursively lower nested statements (placeholder)
+                    then_instrs.push(format!("STMT({})", std::any::type_name_of_val(stmt)));
+                }
+                let else_instrs = else_statements.as_ref().map(|stmts| {
+                    stmts
+                        .iter()
+                        .map(|_| "STMT".to_string())
+                        .collect::<Vec<_>>()
+                });
+                instructions.push(Instruction::IfStatement {
+                    condition: condition.clone(),
+                    then_instrs,
+                    else_instrs,
+                });
+            }
+            ProcedureStatement::For {
+                variable,
+                in_list,
+                statements,
+            } => {
+                let mut loop_instrs = Vec::new();
+                for stmt in statements {
+                    loop_instrs.push(format!("STMT({})", std::any::type_name_of_val(stmt)));
+                }
+                instructions.push(Instruction::ForLoop {
+                    variable: variable.clone(),
+                    in_list: in_list.clone(),
+                    instrs: loop_instrs,
+                });
+            }
+            ProcedureStatement::While { condition, statements } => {
+                let mut loop_instrs = Vec::new();
+                for stmt in statements {
+                    loop_instrs.push(format!("STMT({})", std::any::type_name_of_val(stmt)));
+                }
+                instructions.push(Instruction::WhileLoop {
+                    condition: condition.clone(),
+                    instrs: loop_instrs,
                 });
             }
         }

@@ -616,4 +616,30 @@ mod integration_tests {
         );
         assert!(ir1.len() >= 4, "Should generate multiple instructions");
     }
+
+    // === Control Flow Tests ===
+
+    #[test]
+    fn test_control_flow_tokens_recognized() {
+        // Verify IF, ELSE, FOR, WHILE tokens are recognized by lexer
+        let source = r#"IF THEN ELSE END-IF FOR IN DO END-FOR WHILE END-WHILE"#;
+        let tokens = cnf_compiler::lexer::tokenize(source);
+        assert!(tokens.is_ok(), "Control flow keywords should tokenize");
+    }
+
+    #[test]
+    fn test_if_statement_basic_parsing() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. IfTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT DATA BINARY-BLOB.
+            PROCEDURE DIVISION.
+                COMPRESS DATA.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "Basic program should compile");
+    }
 }

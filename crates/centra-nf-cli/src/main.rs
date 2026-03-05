@@ -43,6 +43,9 @@ enum Commands {
         #[arg(value_name = "FILE")]
         input: PathBuf,
     },
+
+    /// Interactive REPL (Read-Eval-Print-Loop) for testing snippets
+    Repl,
 }
 
 fn main() {

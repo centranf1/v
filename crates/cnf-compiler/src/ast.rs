@@ -117,6 +117,20 @@ pub enum ProcedureStatement {
         target: String,
         path: String,
     },
+    If {
+        condition: String,
+        then_statements: Vec<Box<ProcedureStatement>>,
+        else_statements: Option<Vec<Box<ProcedureStatement>>>,
+    },
+    For {
+        variable: String,
+        in_list: String,
+        statements: Vec<Box<ProcedureStatement>>,
+    },
+    While {
+        condition: String,
+        statements: Vec<Box<ProcedureStatement>>,
+    },
 }
 
 pub enum Division {

@@ -5,6 +5,27 @@
 
 use std::fmt;
 
+/// Structured error with position and context
+#[derive(Debug, Clone, PartialEq)]
+pub struct LexError {
+    pub message: String,
+    pub line: usize,
+    pub col: usize,
+    pub context: String, // source snippet around error
+}
+
+impl fmt::Display for LexError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Lexer error at {}:{}: {}\n  | {}",
+            self.line, self.col, self.message, self.context
+        )
+    }
+}
+
+impl std::error::Error for LexError {}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Divisions
@@ -35,6 +56,18 @@ pub enum Token {
     Extract,
     Encrypt,
     Decrypt,
+
+    // Control flow
+    If,
+    Else,
+    Then,
+    EndIf,
+    For,
+    While,
+    Do,
+    EndFor,
+    EndWhile,
+    In,
 
     // Data types
     VideoMp4,
@@ -195,6 +228,16 @@ fn keyword_to_token(s: &str) -> Token {
         "JSON-OBJECT" => Token::JsonObject,
         "XML-DOCUMENT" => Token::XmlDocument,
         "PARQUET-TABLE" => Token::ParquetTable,
+        "IF" => Token::If,
+        "ELSE" => Token::Else,
+        "THEN" => Token::Then,
+        "END-IF" => Token::EndIf,
+        "FOR" => Token::For,
+        "WHILE" => Token::While,
+        "DO" => Token::Do,
+        "END-FOR" => Token::EndFor,
+        "END-WHILE" => Token::EndWhile,
+        "IN" => Token::In,
         _ => Token::Identifier(s.to_string()),
     }
 }

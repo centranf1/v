@@ -166,6 +166,38 @@ impl Parser {
         }
     }
 
+    /// Parse statements until one of the stop tokens is encountered
+    fn parse_block_until(
+        &mut self,
+        stop_tokens: &[Token],
+    ) -> Result<Vec<ProcedureStatement>, String> {
+        let mut statements = Vec::new();
+        while !stop_tokens.contains(self.current()) && self.current() != &Token::Eof {
+            let stmt = self.parse_single_statement()?;
+            statements.push(stmt);
+        }
+        Ok(statements)
+    }
+
+    /// Parse a single statement (helper used by parse_block_until)
+    fn parse_single_statement(&mut self) -> Result<ProcedureStatement, String> {
+        match self.current() {
+            Token::Compress => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Compress { target })
+            }
+            Token::VerifyIntegrity => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::VerifyIntegrity { target })
+            }
+            _ => Err(format!("Unexpected token in block: {}", self.current())),
+        }
+    }
+
     fn parse_identification(&mut self) -> Result<IdentificationDivision, String> {
         self.expect_division(Token::IdentificationDiv, "IDENTIFICATION DIVISION")?;
         self.expect(Token::Division)?;
@@ -432,6 +464,57 @@ impl Parser {
                     let target = self.expect_variable_or_type()?;
                     self.expect(Token::Period)?;
                     ProcedureStatement::Extract { target, path }
+                }
+                Token::If => {
+                    self.advance();
+                    let condition = self.expect_identifier()?;
+                    self.expect(Token::Then)?;
+                    let then_statements = self.parse_block_until(&[Token::Else, Token::EndIf])?;
+                    let else_statements = if self.current() == &Token::Else {
+                        self.advance();
+                        Some(self.parse_block_until(&[Token::EndIf])?)
+                    } else {
+                        None
+                    };
+                    self.expect(Token::EndIf)?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::If {
+                        condition,
+                        then_statements: then_statements
+                            .into_iter()
+                            .map(Box::new)
+                            .collect(),
+                        else_statements: else_statements.map(|stmts| {
+                            stmts.into_iter().map(Box::new).collect()
+                        }),
+                    }
+                }
+                Token::For => {
+                    self.advance();
+                    let variable = self.expect_identifier()?;
+                    self.expect(Token::In)?;
+                    let in_list = self.expect_identifier()?;
+                    self.expect(Token::Do)?;
+                    let statements = self.parse_block_until(&[Token::EndFor])?;
+                    self.expect(Token::EndFor)?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::For {
+                        variable,
+                        in_list,
+                        statements: statements.into_iter().map(Box::new).collect(),
+                    }
+                }
+                Token::While => {
+                    self.advance();
+                    let condition = self.expect_identifier()?;
+                    self.expect(Token::Do)?;
+                    let statements = self.parse_block_until(&[Token::EndWhile])?;
+                    self.expect(Token::EndWhile)?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::While {
+                        condition,
+                        statements: statements.into_iter().map(Box::new).collect(),
+                    }
                 }
                 Token::Eof => break,
                 _ => {
