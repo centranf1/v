@@ -19,6 +19,10 @@ path = "src/doc_gen.rs"
 name = "test_engine"
 path = "src/test_engine.rs"
 
+[[bin]]
+name = "master_orchestrator"
+path = "src/master_orchestrator.rs"
+
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
 regex = "1.10"
