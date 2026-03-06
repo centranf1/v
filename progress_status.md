@@ -3643,6 +3643,50 @@ v0.3.0 represents a production-ready Language Server implementation of CENTRA-NF
 
 All work is documented, tested, and committed.
 
+---
+
+## Session 22: v0.4.0 Development Roadmap Creation
+
+[2026-03-06]
+
+**Change:**
+- Create comprehensive v0.4.0 development roadmap focusing on runtime execution of control flow and I/O operations
+- Define 7-phase development plan with specific tasks and success criteria
+- Establish timeline and risk mitigation strategies
+- Document current status (parsing exists, execution stubbed)
+
+**Scope:**
+- CENTRA-NF-v0.4.0-ROADMAP.md: NEW comprehensive roadmap document (7 phases, 200+ lines)
+- progress_status.md: Add this session entry
+
+**Status:** ✅ COMPLETED
+
+**Roadmap Overview:**
+- **Phase 1**: Control Flow Runtime Implementation (dispatch_if, dispatch_for, dispatch_while)
+- **Phase 2**: I/O Operations Implementation (DISPLAY, PRINT, READ)
+- **Phase 3**: Variable Assignment & Arithmetic (SET, ADD, SUBTRACT, etc.)
+- **Phase 4**: Enhanced Data Types & Operations (TEXT-STRING, NUMBER-INTEGER, etc.)
+- **Phase 5**: CLI Tooling Enhancement (format, lint, test, run commands)
+- **Phase 6**: Performance & Optimization (buffer management, DAG scheduling)
+- **Phase 7**: Documentation & Testing (spec updates, integration tests)
+
+**Success Criteria:**
+- Control flow executes correctly (IF/ELSE, loops)
+- I/O operations work (DISPLAY, PRINT, READ)
+- Variable assignment and arithmetic functional
+- 5+ new data types supported
+- CLI tools enhanced
+- 200+ tests passing
+- Performance maintained or improved
+- Documentation updated
+
+**Notes:**
+- Control flow parsing already exists (from v0.3.0)
+- Runtime dispatch methods exist but are stubbed
+- I/O operations (DISPLAY token) partially parsed
+- Roadmap prioritizes runtime execution over new parsing
+- Maintains determinism and layer discipline principles
+
 
 
 
