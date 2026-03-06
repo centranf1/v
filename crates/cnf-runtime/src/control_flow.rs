@@ -248,9 +248,7 @@ impl Default for CallStack {
 impl CallStack {
     /// Create new call stack
     pub fn new() -> Self {
-        CallStack {
-            frames: Vec::new(),
-        }
+        CallStack { frames: Vec::new() }
     }
 
     /// Push new frame onto stack
@@ -416,7 +414,10 @@ mod tests {
 
         // Current frame should be inner
         assert_eq!(stack.current_frame().unwrap().function_name, "inner");
-        assert_eq!(stack.current_frame().unwrap().get("x"), Some("42".to_string()));
+        assert_eq!(
+            stack.current_frame().unwrap().get("x"),
+            Some("42".to_string())
+        );
 
         // Pop inner
         stack.pop_frame().unwrap();
@@ -429,4 +430,3 @@ mod tests {
         );
     }
 }
-

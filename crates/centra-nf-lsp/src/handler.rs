@@ -49,6 +49,7 @@ impl MessageHandler {
             "textDocument/didClose" => self.handle_did_close(&req),
             "textDocument/hover" => self.handle_hover(&req),
             "textDocument/completion" => self.handle_completion(&req),
+            "textDocument/signatureHelp" => self.handle_signature_help(&req),
             "textDocument/definition" => self.handle_definition(&req),
             "textDocument/references" => self.handle_references(&req),
             "textDocument/rename" => self.handle_rename(&req),
@@ -93,6 +94,9 @@ impl MessageHandler {
             "textDocumentSync": 1,
             "diagnosticProvider": true,
             "hoverProvider": true,
+            "signatureHelpProvider": {
+                "triggerCharacters": ["(", ","]
+            },
             "completionProvider": {
                 "resolveProvider": false,
                 "triggerCharacters": []
@@ -185,6 +189,7 @@ impl MessageHandler {
 
     /// LSP: textDocument/hover request
     fn handle_hover(&self, req: &Request) -> Result<Response, String> {
+        use regex::Regex;
         let params = req.params.as_ref().ok_or("Missing params")?;
         let uri = params["textDocument"]["uri"]
             .as_str()
@@ -201,44 +206,208 @@ impl MessageHandler {
 
         eprintln!("🔍 Hover at {}:{}:{}", uri, line, character);
 
-        // For now, provide hover info based on document content
-        let lines: Vec<&str> = document.lines().collect();
-        let hover_text = if line < lines.len() {
-            let content = lines[line];
-            if character <= content.len() {
-                format!(
-                    "Line {}: `{}`\n\n**CENTRA-NF Language**\nHover support available.",
-                    line + 1,
-                    content
-                )
+        // Helper: token under cursor
+        fn token_at(doc: &str, line: usize, character: usize) -> Option<String> {
+            let lines: Vec<&str> = doc.lines().collect();
+            if line >= lines.len() {
+                return None;
+            }
+            let text = lines[line];
+            if character > text.len() {
+                return None;
+            }
+            // split on non-alphanumeric/- characters
+            let re = Regex::new(r"[A-Z][-A-Z0-9]*").unwrap();
+            for cap in re.captures_iter(text) {
+                let m = cap.get(0).unwrap();
+                if m.start() <= character && character <= m.end() {
+                    return Some(m.as_str().to_string());
+                }
+            }
+            None
+        }
+
+        // Build variable/type maps
+        fn parse_variable_types(doc: &str) -> std::collections::HashMap<String, String> {
+            let mut map = std::collections::HashMap::new();
+            let re = Regex::new(
+                r"(?i)\b(INPUT|OUTPUT)\s+([A-Z][-A-Z0-9]*)\s*(?:AS\s+([A-Z][-A-Z0-9]*))?\.",
+            )
+            .unwrap();
+            for cap in re.captures_iter(doc) {
+                let dtype = cap[2].to_string();
+                if let Some(varm) = cap.get(3) {
+                    map.insert(varm.as_str().to_string(), dtype.clone());
+                } else {
+                    map.insert(dtype.clone(), dtype.clone());
+                }
+            }
+            map
+        }
+
+        fn parse_function_signatures(
+            doc: &str,
+        ) -> std::collections::HashMap<String, (Vec<String>, Option<String>)> {
+            let mut map = std::collections::HashMap::new();
+            let re = Regex::new(r"(?i)DEFINE\s+FUNCTION\s+([A-Z][-A-Z0-9]*)\s*(?:PARAMETERS\s+([A-Z][-A-Z0-9]*(?:\s+[A-Z][-A-Z0-9]*)*))?\s*(?:RETURNS\s+([A-Z][-A-Z0-9]*))?").unwrap();
+            for cap in re.captures_iter(doc) {
+                let name = cap[1].to_string();
+                let params = cap
+                    .get(2)
+                    .map(|m| {
+                        m.as_str()
+                            .split_whitespace()
+                            .map(|s| s.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_else(Vec::new);
+                let ret = cap.get(3).map(|m| m.as_str().to_string());
+                map.insert(name, (params, ret));
+            }
+            map
+        }
+
+        let hover_text = if let Some(token) = token_at(&document, line, character) {
+            // data-type descriptions
+            let dtype_desc = match token.as_str() {
+                "VIDEO-MP4" => "MP4 video files",
+                "IMAGE-JPG" => "JPEG image files",
+                "AUDIO-WAV" => "WAV audio files",
+                "CSV-TABLE" => "CSV data tables",
+                "JSON-OBJECT" => "JSON structured data",
+                "XML-DOCUMENT" => "XML documents",
+                "PARQUET-TABLE" => "Parquet columnar data",
+                "BINARY-BLOB" => "Generic binary data",
+                "FINANCIAL-DECIMAL" => "High-precision decimals",
+                _ => "",
+            };
+            if !dtype_desc.is_empty() {
+                format!("**Type**: `{}` – {}", token, dtype_desc)
             } else {
-                "Position out of bounds".to_string()
+                let vars = parse_variable_types(&document);
+                if let Some(t) = vars.get(&token) {
+                    format!("**Variable** `{}` has type `{}`", token, t)
+                } else {
+                    let sigs = parse_function_signatures(&document);
+                    if let Some((params, ret)) = sigs.get(&token) {
+                        let ret_str = ret
+                            .as_ref()
+                            .map(|r| format!(" -> {}", r))
+                            .unwrap_or_default();
+                        format!("**Function** `{}`({}){}", token, params.join(", "), ret_str)
+                    } else {
+                        format!("`{}`", token)
+                    }
+                }
             }
         } else {
-            "Line not found".to_string()
+            "No symbol under cursor".to_string()
         };
 
         let hover_response = json!({
-            "contents": {
-                "kind": "markdown",
-                "value": hover_text
-            }
+            "contents": {"kind": "markdown", "value": hover_text}
         });
 
         Ok(Response::success(req.id, hover_response))
     }
 
     /// LSP: textDocument/completion request
-    fn handle_completion(&self, req: &Request) -> Result<Response, String> {
+    fn handle_signature_help(&self, req: &Request) -> Result<Response, String> {
+        use regex::Regex;
+
         let params = req.params.as_ref().ok_or("Missing params")?;
-        let _uri = params["textDocument"]["uri"]
+        let uri = params["textDocument"]["uri"]
+            .as_str()
+            .ok_or("Missing uri")?;
+        let line = params["position"]["line"].as_u64().ok_or("Missing line")? as usize;
+        let character = params["position"]["character"]
+            .as_u64()
+            .ok_or("Missing character")? as usize;
+
+        let backend = self.backend.lock().map_err(|e| e.to_string())?;
+        let document = backend.get_document(uri).ok_or("Document not found")?;
+
+        // get the current line text
+        let lines: Vec<&str> = document.lines().collect();
+        if line >= lines.len() {
+            return Ok(Response::success(req.id, json!(null)));
+        }
+        let text = lines[line];
+        if character > text.len() {
+            return Ok(Response::success(req.id, json!(null)));
+        }
+        let before = &text[..character];
+
+        // look for last function call before cursor
+        // function name may be lowercase or mixed; accept letters and digits
+        let call_re = Regex::new(r"([A-Za-z][-A-Za-z0-9]*)\s*\([^)]*$").unwrap();
+        if let Some(cap) = call_re.captures(before) {
+            let fname = cap[1].to_string();
+            // count commas to know which argument index
+            let arg_index = before.matches(',').count() as u64;
+
+            // parse signatures from whole document
+            fn parse_function_signatures(
+                doc: &str,
+            ) -> std::collections::HashMap<String, (Vec<String>, Option<String>)> {
+                let mut map = std::collections::HashMap::new();
+                let re = Regex::new(r"(?i)DEFINE\s+FUNCTION\s+([A-Z][-A-Z0-9]*)\s*(?:PARAMETERS\s+([A-Z][-A-Z0-9]*(?:\s+[A-Z][-A-Z0-9]*)*))?\s*(?:RETURNS\s+([A-Z][-A-Z0-9]*))?").unwrap();
+                for cap in re.captures_iter(doc) {
+                    let name = cap[1].to_string();
+                    let params = cap
+                        .get(2)
+                        .map(|m| {
+                            m.as_str()
+                                .split_whitespace()
+                                .map(|s| s.to_string())
+                                .collect()
+                        })
+                        .unwrap_or_else(Vec::new);
+                    let ret = cap.get(3).map(|m| m.as_str().to_string());
+                    map.insert(name, (params, ret));
+                }
+                map
+            }
+
+            let sigs = parse_function_signatures(&document);
+            if let Some((params_list, ret)) = sigs.get(&fname) {
+                let ret_str = ret
+                    .as_ref()
+                    .map(|r| format!(" -> {}", r))
+                    .unwrap_or_default();
+                let label = format!("{}({}){}", fname, params_list.join(", "), ret_str);
+                let signatures = json!([{
+                    "label": label,
+                    "parameters": params_list.iter().map(|p| json!({"label": p})).collect::<Vec<_>>()
+                }]);
+                let result = json!({
+                    "signatures": signatures,
+                    "activeSignature": 0,
+                    "activeParameter": arg_index,
+                });
+                return Ok(Response::success(req.id, result));
+            }
+        }
+
+        Ok(Response::success(req.id, json!(null)))
+    }
+
+    fn handle_completion(&self, req: &Request) -> Result<Response, String> {
+        use regex::Regex;
+
+        let params = req.params.as_ref().ok_or("Missing params")?;
+        let uri = params["textDocument"]["uri"]
             .as_str()
             .ok_or("Missing uri")?;
 
-        eprintln!("📝 Completion requested");
+        eprintln!("📝 Completion requested for {}", uri);
+
+        // Grab current document text (may be empty if not yet opened)
+        let backend = self.backend.lock().map_err(|e| e.to_string())?;
+        let document = backend.get_document(uri).unwrap_or_default();
 
         // Provide basic CENTRA-NF keywords as completions
-        let completions = vec![
+        let mut completions = vec![
             json!({
                 "label": "IDENTIFICATION DIVISION",
                 "kind": 14,
@@ -276,6 +445,39 @@ impl MessageHandler {
                 "documentation": "Verify data integrity with SHA-256"
             }),
         ];
+
+        // Parse document for declared variables and functions to include
+        // in completion results. This is intentionally light-weight and
+        // uses the same regex rules as hover/signature help above.
+        {
+            // variables: INPUT/OUTPUT declarations with optional AS name
+            let var_re = Regex::new(
+                r"(?i)\b(INPUT|OUTPUT)\s+([A-Z][-A-Z0-9]*)\s*(?:AS\s+([A-Z][-A-Z0-9]*))?\.",
+            )
+            .unwrap();
+            for cap in var_re.captures_iter(&document) {
+                let name = if let Some(m) = cap.get(3) {
+                    m.as_str().to_string()
+                } else {
+                    cap.get(2).unwrap().as_str().to_string()
+                };
+                completions.push(json!({
+                    "label": name,
+                    "kind": 5,
+                    "detail": "variable"
+                }));
+            }
+            // functions: find DEFINE FUNCTION <name>
+            let fn_re = Regex::new(r"(?i)DEFINE\s+FUNCTION\s+([A-Z][-A-Z0-9]*)").unwrap();
+            for cap in fn_re.captures_iter(&document) {
+                let fname = cap[1].to_string();
+                completions.push(json!({
+                    "label": fname,
+                    "kind": 3,
+                    "detail": "function"
+                }));
+            }
+        }
 
         Ok(Response::success(
             req.id,
@@ -607,12 +809,12 @@ mod tests {
             let mut backend = handler.backend.lock().unwrap();
             backend.set_document(
                 "file:///test.cnf".to_string(),
-                "IDENTIFICATION DIVISION.\n    PROGRAM-ID test.".to_string(),
+                "IDENTIFICATION DIVISION.\n    PROGRAM-ID TestProgram.\n    INPUT CSV-TABLE AS DATA1.".to_string(),
             );
         }
 
-        // Create hover request
-        let req = Request::new(
+        // Hover over keyword IDENTIFICATION
+        let req1 = Request::new(
             1,
             "textDocument/hover",
             Some(json!({
@@ -620,14 +822,73 @@ mod tests {
                 "position": { "line": 0, "character": 5 }
             })),
         );
+        let resp1 = handler.handle_request(req1, &mut JsonRpcIO::new()).unwrap();
+        let result1 = resp1.result.unwrap();
+        assert!(result1["contents"]["value"]
+            .as_str()
+            .unwrap()
+            .contains("IDENTIFICATION"));
 
-        let response = handler.handle_request(req, &mut JsonRpcIO::new());
-        assert!(response.is_ok());
+        // Hover over variable name DATA1 should show its type (just check CSV-TABLE present)
+        let req2 = Request::new(
+            2,
+            "textDocument/hover",
+            Some(json!({
+                "textDocument": { "uri": "file:///test.cnf" },
+                "position": { "line": 2, "character": 14 }
+            })),
+        );
+        let resp2 = handler.handle_request(req2, &mut JsonRpcIO::new()).unwrap();
+        let result2 = resp2.result.unwrap();
+        assert!(result2["contents"]["value"]
+            .as_str()
+            .unwrap()
+            .contains("CSV-TABLE"));
+    }
+
+    #[test]
+    fn test_signature_help_request() {
+        let handler = MessageHandler::new();
+        // prepare function definition and call
+        {
+            let mut backend = handler.backend.lock().unwrap();
+            backend.set_document(
+                "file:///test.cnf".to_string(),
+                "IDENTIFICATION DIVISION.\n    PROGRAM-ID SigTest.\n    PROCEDURE DIVISION.\n        DEFINE FUNCTION foo PARAMETERS x y RETURNS VIDEO-MP4\n            DO\n                COMPRESS x.\n            END-FUNCTION.\n        foo(".to_string(),
+            );
+        }
+
+        // cursor after opening parenthesis of foo( on the final line
+        let req = Request::new(
+            1,
+            "textDocument/signatureHelp",
+            Some(json!({
+                "textDocument": { "uri": "file:///test.cnf" },
+                // place cursor immediately after '('
+                "position": { "line": 7, "character": 12 }
+            })),
+        );
+        let resp = handler.handle_request(req, &mut JsonRpcIO::new()).unwrap();
+        let result = resp.result.unwrap();
+        let sigs = &result["signatures"];
+        assert!(sigs.is_array(), "signatures field was not array");
+        assert!(sigs[0]["label"].as_str().unwrap().contains("foo"));
+        assert_eq!(result["activeParameter"].as_u64().unwrap(), 0);
     }
 
     #[test]
     fn test_completion_request() {
         let handler = MessageHandler::new();
+
+        // prepare document containing a variable and a function
+        {
+            let mut backend = handler.backend.lock().unwrap();
+            backend.set_document(
+                "file:///test.cnf".to_string(),
+                "IDENTIFICATION DIVISION.\n    PROGRAM-ID CompTest.\n    INPUT VIDEO-MP4 AS V1.\n    DEFINE FUNCTION bar PARAMETERS x RETURNS CSV-TABLE.\n".to_string(),
+            );
+        }
+
         let req = Request::new(
             2,
             "textDocument/completion",
@@ -637,13 +898,19 @@ mod tests {
             })),
         );
 
-        let response = handler.handle_request(req, &mut JsonRpcIO::new());
-        assert!(response.is_ok());
+        let resp = handler.handle_request(req, &mut JsonRpcIO::new()).unwrap();
+        let result = resp.result.unwrap();
+        let items = result["items"].as_array().unwrap();
+        let labels: Vec<String> = items
+            .iter()
+            .filter_map(|i| i["label"].as_str().map(String::from))
+            .collect();
 
-        if let Ok(resp) = response {
-            // Verify completions were returned
-            assert!(resp.result.is_some());
-        }
+        // static keyword should still be present
+        assert!(labels.contains(&"IDENTIFICATION DIVISION".to_string()));
+        // variable and function from document
+        assert!(labels.contains(&"V1".to_string()));
+        assert!(labels.contains(&"bar".to_string()));
     }
 
     #[test]

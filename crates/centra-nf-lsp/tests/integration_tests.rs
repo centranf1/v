@@ -5,7 +5,7 @@
 
 #![cfg(test)]
 
-use centra_nf_lsp::{MessageHandler, Notification, Request, Response};
+use centra_nf_lsp::{MessageHandler, Message, Notification, Request, Response, JsonRpcIO};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
@@ -250,6 +250,50 @@ fn test_handler_initialization() {
     // Handler should be created successfully
     // Verify it can be used (won't panic)
     let _handler_ref = &handler;
+}
+
+#[test]
+fn test_completion_integration() {
+    let handler = MessageHandler::new();
+    let mut io = JsonRpcIO::new();
+
+    // send didOpen to populate backend with a document
+    let open_req = Request::new(
+        1,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test.cnf",
+                "text": "IDENTIFICATION DIVISION.\nINPUT CSV-TABLE AS V2.\nDEFINE FUNCTION baz PARAMETERS a RETURNS VIDEO-MP4.\n"
+            }
+        })),
+    );
+    let msg = Message::Request(open_req);
+    let _ = handler.handle_message(msg, &mut io).unwrap();
+
+    // now request completions
+    let comp_req = Request::new(
+        2,
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": { "uri": "file:///test.cnf" },
+            "position": { "line": 0, "character": 0 }
+        })),
+    );
+    let msg2 = Message::Request(comp_req);
+    if let Some(resp) = handler.handle_message(msg2, &mut io).unwrap() {
+        let result = resp.result.unwrap();
+        let items = result["items"].as_array().unwrap();
+        let labels: Vec<String> = items
+            .iter()
+            .filter_map(|i| i["label"].as_str().map(String::from))
+            .collect();
+
+        assert!(labels.contains(&"V2".to_string()));
+        assert!(labels.contains(&"baz".to_string()));
+    } else {
+        panic!("expected completion response");
+    }
 }
 
 #[test]

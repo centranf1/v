@@ -2,9 +2,9 @@
 //!
 //! Main execution engine. Manages buffers and delegates to protocol/security crates.
 
+use crate::control_flow::{CallStack, Frame, ScopeManager};
 use crate::dag::Dag;
 use crate::scheduler::Scheduler;
-use crate::control_flow::{CallStack, Frame, ScopeManager};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -217,7 +217,12 @@ impl Runtime {
     }
 
     /// Call a function (push frame to call stack)
-    pub fn call_function(&mut self, name: String, parameters: Vec<String>, arguments: Vec<String>) -> Result<(), CnfError> {
+    pub fn call_function(
+        &mut self,
+        name: String,
+        parameters: Vec<String>,
+        arguments: Vec<String>,
+    ) -> Result<(), CnfError> {
         let frame = Frame::new(name, parameters, arguments);
         self.call_stack.push_frame(frame);
         self.scope_manager.push_scope();
@@ -232,9 +237,12 @@ impl Runtime {
             }
         }
 
-        let frame = self.call_stack.pop_frame()
+        let frame = self
+            .call_stack
+            .pop_frame()
             .map_err(|e| CnfError::InvalidInstruction(e))?;
-        self.scope_manager.pop_scope()
+        self.scope_manager
+            .pop_scope()
             .map_err(|e| CnfError::InvalidInstruction(e))?;
 
         Ok(frame.return_value.unwrap_or_else(|| String::new()))

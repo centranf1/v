@@ -153,7 +153,13 @@ impl std::fmt::Display for Instruction {
                 return_type,
                 instrs,
             } => {
-                write!(f, "FUNC-DEF({} [{}] ret{})", name, parameters.join(","), return_type.as_ref().unwrap_or(&"(none)".to_string()))?;
+                write!(
+                    f,
+                    "FUNC-DEF({} [{}] ret{})",
+                    name,
+                    parameters.join(","),
+                    return_type.as_ref().unwrap_or(&"(none)".to_string())
+                )?;
                 write!(f, " [{}]", instrs.len())
             }
             Instruction::FunctionCall { name, arguments } => {
@@ -231,10 +237,12 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
         .collect();
 
     // Collect function signatures for parameter count validation
-    let mut signatures: std::collections::HashMap<String, usize> =
-        std::collections::HashMap::new();
+    let mut signatures: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for stmt in &program.procedure.statements {
-        if let ProcedureStatement::FunctionDef { name, parameters, .. } = stmt {
+        if let ProcedureStatement::FunctionDef {
+            name, parameters, ..
+        } = stmt
+        {
             signatures.insert(name.clone(), parameters.len());
         }
     }
@@ -446,7 +454,8 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 let else_instrs = if let Some(stmts) = else_statements {
                     let mut instrs = Vec::new();
                     for stmt in stmts {
-                        let nested_instr = lower_single_statement(stmt, &declared_vars, &signatures)?;
+                        let nested_instr =
+                            lower_single_statement(stmt, &declared_vars, &signatures)?;
                         instrs.push(nested_instr);
                     }
                     Some(instrs)
@@ -500,7 +509,7 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 for param in parameters {
                     func_scope.insert(param.clone());
                 }
-                
+
                 let mut func_instrs = Vec::new();
                 for stmt in statements {
                     let nested_instr = lower_single_statement(stmt, &func_scope, &signatures)?;
@@ -581,12 +590,12 @@ fn lower_single_statement(
         } => {
             let mut then_instrs = Vec::new();
             for s in then_statements {
-                  then_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
+                then_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
             }
             let else_instrs = if let Some(else_stmts) = else_statements {
                 let mut else_i = Vec::new();
                 for s in else_stmts {
-                      else_i.push(lower_single_statement(s, declared_vars, signatures)?);
+                    else_i.push(lower_single_statement(s, declared_vars, signatures)?);
                 }
                 Some(else_i)
             } else {
@@ -605,7 +614,7 @@ fn lower_single_statement(
         } => {
             let mut loop_instrs = Vec::new();
             for s in statements {
-                  loop_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
+                loop_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
             }
             Ok(Instruction::ForLoop {
                 variable: variable.clone(),
@@ -619,7 +628,7 @@ fn lower_single_statement(
         } => {
             let mut loop_instrs = Vec::new();
             for s in statements {
-                  loop_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
+                loop_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
             }
             Ok(Instruction::WhileLoop {
                 condition: condition.clone(),
@@ -634,7 +643,7 @@ fn lower_single_statement(
         } => {
             let mut func_instrs = Vec::new();
             for s in statements {
-                  func_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
+                func_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
             }
             Ok(Instruction::FunctionDef {
                 name: name.clone(),

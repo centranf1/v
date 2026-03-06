@@ -1,6 +1,6 @@
 # CENTRA-NF Language Specification
 
-**Version 0.2.0 - Solid Programming Language**
+**Version 0.3.0 - LSP-Integrated Programming Language**
 
 **Auto-generated from errors_registry.json**
 

@@ -121,8 +121,15 @@ mod integration_tests {
         let result = compile(source);
         assert!(result.is_ok(), "explicit naming should compile");
         let ir = result.unwrap();
-        let ir_string = ir.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(";");
-        assert!(ir_string.contains("FOOBAR"), "IR must mention the custom variable name");
+        let ir_string = ir
+            .iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(";");
+        assert!(
+            ir_string.contains("FOOBAR"),
+            "IR must mention the custom variable name"
+        );
     }
 
     #[test]
@@ -231,7 +238,6 @@ mod integration_tests {
             .iter()
             .any(|instr| instr.to_string().contains("AGGREGATE")));
     }
-
 
     #[test]
     fn test_encrypt_decrypt_compilation() {
@@ -897,7 +903,9 @@ mod integration_tests {
         let result = compile(source);
         assert!(result.is_ok(), "Function definition should compile");
         let ir = result.unwrap();
-        assert!(ir.iter().any(|instr| instr.to_string().contains("FUNC-DEF")));
+        assert!(ir
+            .iter()
+            .any(|instr| instr.to_string().contains("FUNC-DEF")));
     }
 
     #[test]
@@ -915,7 +923,9 @@ mod integration_tests {
         let result = compile(source);
         assert!(result.is_ok(), "Function call should compile");
         let ir = result.unwrap();
-        assert!(ir.iter().any(|instr| instr.to_string().contains("FUNC-CALL")));
+        assert!(ir
+            .iter()
+            .any(|instr| instr.to_string().contains("FUNC-CALL")));
     }
 
     #[test]
@@ -935,9 +945,14 @@ mod integration_tests {
                 foo VIDEO-MP4.
         "#;
         let result = compile(source);
-        assert!(result.is_ok(), "Function call with correct arguments should compile");
+        assert!(
+            result.is_ok(),
+            "Function call with correct arguments should compile"
+        );
         let ir = result.unwrap();
-        assert!(ir.iter().any(|instr| instr.to_string().contains("FUNC-CALL")));
+        assert!(ir
+            .iter()
+            .any(|instr| instr.to_string().contains("FUNC-CALL")));
     }
 
     #[test]
@@ -1065,5 +1080,4 @@ mod integration_tests {
         let ir = result.unwrap();
         assert!(!ir.is_empty(), "Should generate IR");
     }
-
 }

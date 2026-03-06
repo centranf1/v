@@ -522,19 +522,22 @@ impl Parser {
                     self.advance();
                     self.expect(Token::Function)?;
                     let name = self.expect_identifier()?;
-                    
+
                     // Parse PARAMETERS (optional)
                     let parameters = if self.current() == &Token::Parameters {
                         self.advance();
                         let mut params = Vec::new();
-                        while self.current() != &Token::Returns && self.current() != &Token::Do && self.current() != &Token::EndFunction {
+                        while self.current() != &Token::Returns
+                            && self.current() != &Token::Do
+                            && self.current() != &Token::EndFunction
+                        {
                             params.push(self.expect_identifier()?);
                         }
                         params
                     } else {
                         Vec::new()
                     };
-                    
+
                     // Parse RETURNS type (optional)
                     let return_type = if self.current() == &Token::Returns {
                         self.advance();
@@ -542,12 +545,12 @@ impl Parser {
                     } else {
                         None
                     };
-                    
+
                     self.expect(Token::Do)?;
                     let statements = self.parse_block_until(&[Token::EndFunction])?;
                     self.expect(Token::EndFunction)?;
                     self.expect(Token::Period)?;
-                    
+
                     ProcedureStatement::FunctionDef {
                         name,
                         parameters,

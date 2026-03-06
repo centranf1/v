@@ -23,12 +23,18 @@ The CENTRA-NF Language Server Protocol (LSP) implementation provides comprehensi
 
 ### 4. Code Completion
 - **Method**: `textDocument/completion`
-- CENTRA-NF language keywords and operations
+- Suggestions are generated heuristically from the open document
+  and predefined language keywords.
 - Completion items include:
   - Division keywords (IDENTIFICATION, ENVIRONMENT, DATA, PROCEDURE)
   - Operations (COMPRESS, VERIFY-INTEGRITY)
-  - Detailed descriptions and documentation
-- CompletionItem kind: 14 (Keyword), 6 (Method)
+  - **Declared variable names** (from `INPUT`/`OUTPUT` statements)
+  - **Function identifiers** (from `DEFINE FUNCTION` declarations)
+- Items provide basic `detail` fields (`keyword`, `variable`, `function`)
+  and are assigned appropriate LSP kinds (14 for keywords, 5 for
+  variables, 3 for functions).
+- Internally the server uses lightweight `regex` patterns to scan the
+  document; full parsing is intentionally deferred to the compiler.
 
 ### 5. Goto Definition
 - **Method**: `textDocument/definition`
@@ -188,7 +194,7 @@ All requests follow LSP 2.0 JSON-RPC specification with Content-Length framing.
 
 All LSP features are tested with:
 - 25 unit tests (protocol structure, message handling)
-- 14 integration tests (end-to-end protocol validation)
+- 15 integration tests (end-to-end protocol validation)
 - Determinism tests (same input → identical output)
 - Round-trip serialization tests
 

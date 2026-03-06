@@ -9,7 +9,7 @@ pub mod string {
         s.is_empty()
     }
 
-    /// Get string length 
+    /// Get string length
     pub fn length(s: &str) -> usize {
         s.len()
     }
@@ -73,17 +73,29 @@ pub mod collection {
 pub mod math {
     /// Maximum of two values
     pub fn max(a: i64, b: i64) -> i64 {
-        if a > b { a } else { b }
+        if a > b {
+            a
+        } else {
+            b
+        }
     }
 
     /// Minimum of two values
     pub fn min(a: i64, b: i64) -> i64 {
-        if a < b { a } else { b }
+        if a < b {
+            a
+        } else {
+            b
+        }
     }
 
     /// Absolute value
     pub fn abs(a: i64) -> i64 {
-        if a < 0 { -a } else { a }
+        if a < 0 {
+            -a
+        } else {
+            a
+        }
     }
 }
 

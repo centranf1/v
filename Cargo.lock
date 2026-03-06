@@ -128,7 +128,7 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "centra-nf-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "cnf-compiler",
@@ -138,11 +138,12 @@ dependencies = [
 
 [[package]]
 name = "centra-nf-lsp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cnf-compiler",
  "cnf-runtime",
  "lsp-types",
+ "regex",
  "serde",
  "serde_json",
 ]
@@ -232,7 +233,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cnf-compiler"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cnf-runtime",
  "criterion",
@@ -240,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-runtime"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cnf-compiler",
  "cnf-security",
@@ -250,7 +251,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-security"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aes",
  "block-modes",
@@ -270,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "cobol-protocol-v153"
-version = "0.2.0"
+version = "0.3.0"
 
 [[package]]
 name = "colorchoice"
