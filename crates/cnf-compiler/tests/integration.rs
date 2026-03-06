@@ -1080,4 +1080,149 @@ mod integration_tests {
         let ir = result.unwrap();
         assert!(!ir.is_empty(), "Should generate IR");
     }
+
+    // === Arithmetic Operations Tests ===
+
+    #[test]
+    fn test_set_operation_compilation() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. SetTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                SET BINARY-BLOB "new_value".
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "SET operation should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("SET")));
+    }
+
+    #[test]
+    fn test_add_operation_compilation() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. AddTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                ADD BINARY-BLOB BINARY-BLOB BINARY-BLOB.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "ADD operation should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("ADD")));
+    }
+
+    #[test]
+    fn test_subtract_operation_compilation() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. SubtractTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                SUBTRACT BINARY-BLOB BINARY-BLOB BINARY-BLOB.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "SUBTRACT operation should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("SUBTRACT")));
+    }
+
+    #[test]
+    fn test_multiply_operation_compilation() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. MultiplyTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                MULTIPLY BINARY-BLOB BINARY-BLOB BINARY-BLOB.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "MULTIPLY operation should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("MULTIPLY")));
+    }
+
+    #[test]
+    fn test_divide_operation_compilation() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. DivideTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                DIVIDE BINARY-BLOB BINARY-BLOB BINARY-BLOB.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "DIVIDE operation should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("DIVIDE")));
+    }
+
+    #[test]
+    fn test_arithmetic_operations_determinism() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. ArithDeterminism.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                SET BINARY-BLOB "42".
+                ADD BINARY-BLOB BINARY-BLOB BINARY-BLOB.
+                SUBTRACT BINARY-BLOB BINARY-BLOB BINARY-BLOB.
+                MULTIPLY BINARY-BLOB BINARY-BLOB BINARY-BLOB.
+                DIVIDE BINARY-BLOB BINARY-BLOB BINARY-BLOB.
+        "#;
+
+        let ir1 = compile(source).expect("First compile should succeed");
+        let ir2 = compile(source).expect("Second compile should succeed");
+
+        assert_eq!(ir1, ir2, "Arithmetic operations IR must be identical");
+        assert_eq!(ir1.len(), 5, "Should generate 5 arithmetic instructions");
+    }
+
+    #[test]
+    fn test_arithmetic_with_undeclared_variable() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. ArithError.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                ADD UNDECLARED BINARY-BLOB BINARY-BLOB.
+        "#;
+
+        let result = compile(source);
+        assert!(result.is_err(), "Arithmetic with undeclared variable should fail");
+        let error = result.unwrap_err();
+        assert!(error.contains("not declared"));
+    }
 }

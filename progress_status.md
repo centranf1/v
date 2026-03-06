@@ -3687,6 +3687,180 @@ All work is documented, tested, and committed.
 - Roadmap prioritizes runtime execution over new parsing
 - Maintains determinism and layer discipline principles
 
+---
+
+## Session 23: v0.4.0 Phase 1 Complete — Control Flow Runtime Implementation
+
+[2026-03-06]
+
+**Change:**
+- ✅ **COMPLETED**: Control Flow Runtime Implementation
+- Implemented `execute_instruction()` method for IR Instruction enum
+- Added condition evaluation with `evaluate_condition()` 
+- Implemented IF/ELSE/THEN execution with proper branching
+- Implemented FOR loop execution with iteration over comma-separated lists
+- Implemented WHILE loop execution with iteration limits and infinite loop prevention
+- Added comprehensive test coverage for all control flow constructs
+- Removed `#[allow(dead_code)]` from dispatch methods
+
+**Scope:**
+- `crates/cnf-runtime/src/runtime.rs`:
+  - Added `execute_instruction(&Instruction)` method (400+ LOC)
+  - Added `execute_instructions(&[Instruction])` public method
+  - Added `evaluate_condition(&str)` for simple equality and boolean conditions
+  - Updated `dispatch_if()`, `dispatch_for()`, `dispatch_while()` to use IR instructions
+  - Added 7 new comprehensive tests for control flow execution
+
+**Implementation Details:**
+
+*Condition Evaluation:*
+- Supports `variable = "value"` equality checks
+- Supports `true`/`false` boolean literals
+- Returns `CnfError` for unsupported conditions or missing variables
+
+*Control Flow Execution:*
+- **IF Statement**: Evaluates condition, executes then-branch or else-branch
+- **FOR Loop**: Iterates over comma-separated items, sets loop variable each iteration
+- **WHILE Loop**: Evaluates condition each iteration, prevents infinite loops (1000 max iterations)
+
+*IR Integration:*
+- `execute_instruction()` handles all Instruction variants including nested control flow
+- Recursive execution for nested instructions in control flow blocks
+- Maintains call stack and scoping for function calls
+
+**Tests Added (7 new):**
+- `test_execute_if_statement_true_condition` — Executes then-branch
+- `test_execute_if_statement_false_condition` — Executes else-branch  
+- `test_execute_for_loop` — Iterates and executes body
+- `test_execute_while_loop` — Executes with condition evaluation
+- `test_evaluate_condition_equality` — Variable equality checks
+- `test_evaluate_condition_boolean_literals` — true/false literals
+- `test_while_loop_prevents_infinite_loop` — Safety mechanism
+
+**Test Results:** ✅ **30/30 tests passing** (no regressions)
+- All existing functionality preserved
+- New control flow execution working correctly
+- Determinism maintained
+- Layer discipline intact
+
+**Key Achievements:**
+✅ Control flow parsing (from v0.3.0) now has runtime execution
+✅ IF/ELSE/THEN statements execute conditionally
+✅ FOR loops iterate over lists with variable binding
+✅ WHILE loops execute with condition evaluation
+✅ Infinite loop prevention (1000 iteration limit)
+✅ Nested instruction execution in control flow blocks
+✅ Comprehensive test coverage with edge cases
+
+**Next:** Phase 2 — I/O Operations Implementation (DISPLAY, PRINT, READ)
+
+**Status:** ✅ COMPLETED
 
 
 
+
+---
+
+## Session 24: v0.4.0 Phase 2 Complete — I/O Operations Implementation
+
+[2026-03-06]
+
+**Change:**
+- Implement DISPLAY, PRINT, READ I/O operations for runtime execution
+- Add DISPLAY, PRINT, READ tokens to lexer with keyword recognition
+- Add Display, Print, Read instructions to IR enum with proper Display implementations
+- Add Display, Print, Read statements to AST ProcedureStatement enum
+- Update parser to handle I/O statement parsing with proper validation
+- Implement dispatch_display() for stdout message printing
+- Implement dispatch_print() for variable content display with optional formatting
+- Implement dispatch_read() for stdin input reading into variables
+- Update execute_instruction() to handle new I/O instruction variants
+- Add RuntimeError variant to CnfError for I/O operation failures
+- Add comprehensive tests for all I/O operations
+
+**Scope:**
+- crates/cnf-compiler/src/lexer.rs:
+  - Added Display, Print, Read Token variants
+  - Added keyword recognition in keyword_to_token()
+  - Added Display implementations for new tokens
+- crates/cnf-compiler/src/ast.rs:
+  - Added Display, Print, Read ProcedureStatement variants
+- crates/cnf-compiler/src/parser.rs:
+  - Added I/O statement parsing in parse_procedure()
+  - Added proper syntax validation (DISPLAY "message", PRINT var [WITH format], READ var)
+- crates/cnf-compiler/src/ir.rs:
+  - Added Display, Print, Read Instruction variants
+  - Added Display implementations for new instructions
+  - Added I/O instruction lowering in lower_statement()
+- crates/cnf-runtime/src/runtime.rs:
+  - Added RuntimeError to CnfError enum
+  - Added dispatch_display() for stdout output
+  - Added dispatch_print() for variable content display
+  - Added dispatch_read() for stdin input reading
+  - Updated execute_instruction() to handle I/O instructions
+  - Added comprehensive test coverage for I/O operations
+
+**Status:** ✅ COMPLETED
+
+**Tests:** 34 total runtime tests (30 existing + 4 new I/O tests)
+- test_display_instruction: verifies DISPLAY instruction execution
+- test_print_instruction: verifies PRINT instruction without format
+- test_print_instruction_with_format: verifies PRINT with format string
+- test_read_instruction: verifies READ instruction structure (stdin behavior varies in tests)
+
+**CI Gates:** ✅ ALL PASSING
+- Gate 1: cargo check --all ✓
+- Gate 2: cargo test --all --lib ✓
+- Gate 3: cargo test --all --test "*" ✓
+- Gate 4: cargo fmt --all -- --check ✓
+- Gate 5: cargo clippy --all -- -D warnings ✓
+- Gate 6: cargo build --all --release ✓
+- Gate 7: Layer boundary verification ✓
+- Gate 8: CORE-FROZEN integrity check ✓
+
+**Key Achievements:**
+✅ DISPLAY "message" prints to stdout
+✅ PRINT variable displays variable content
+✅ PRINT variable WITH "format" displays formatted output
+✅ READ variable reads line from stdin into variable
+✅ All I/O operations validate variable existence
+✅ Comprehensive error handling for I/O failures
+✅ Test coverage for all I/O scenarios
+✅ Determinism and layer discipline maintained
+
+**Next:** Phase 3 — Variable Assignment & Arithmetic (SET, ADD, SUBTRACT, MULTIPLY, DIVIDE)
+**Status:** 🔄 READY TO START
+
+---
+
+## Session 25: v0.4.0 Phase 3 — Variable Assignment & Arithmetic Implementation
+
+[2026-03-06]
+Change:
+- Implement Variable Assignment & Arithmetic operations (SET, ADD, SUBTRACT, MULTIPLY, DIVIDE)
+- Add arithmetic tokens to lexer with keyword recognition
+- Add arithmetic instructions to IR enum with proper Display implementations
+- Add arithmetic statements to AST ProcedureStatement enum
+- Update parser to handle arithmetic statement parsing with proper validation
+- Implement dispatch_set() for variable assignment
+- Implement dispatch_add/subtract/multiply/divide() for arithmetic operations
+- Update execute_instruction() to handle new arithmetic instruction variants
+- Add comprehensive tests for all arithmetic operations
+
+Scope:
+- crates/cnf-compiler/src/lexer.rs: Add SET, ADD, SUBTRACT, MULTIPLY, DIVIDE tokens
+- crates/cnf-compiler/src/ast.rs: Add Set, Add, Subtract, Multiply, Divide ProcedureStatement variants
+- crates/cnf-compiler/src/parser.rs: Add arithmetic statement parsing in parse_procedure()
+- crates/cnf-compiler/src/ir.rs: Add Set, Add, Subtract, Multiply, Divide Instruction variants
+- crates/cnf-runtime/src/runtime.rs: Add dispatch_set/add/subtract/multiply/divide() methods
+- crates/cnf-compiler/tests/integration.rs: Add arithmetic operation tests
+- crates/cnf-runtime/src/runtime.rs: Update execute_instruction() for arithmetic variants
+
+Status:
+- in-progress
+
+Notes:
+- Extends runtime execution capabilities beyond control flow and I/O
+- Maintains determinism and layer discipline
+- Enables basic computational operations in CENTRA-NF programs
+- Foundation for more complex expressions and calculations

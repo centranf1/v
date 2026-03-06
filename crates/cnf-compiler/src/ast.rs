@@ -117,6 +117,40 @@ pub enum ProcedureStatement {
         target: String,
         path: String,
     },
+    Display {
+        message: String,
+    },
+    Print {
+        target: String,
+        format: Option<String>,
+    },
+    Read {
+        target: String,
+    },
+    Set {
+        target: String,
+        value: String,
+    },
+    Add {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Subtract {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Multiply {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Divide {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
     If {
         condition: String,
         then_statements: Vec<Box<ProcedureStatement>>,

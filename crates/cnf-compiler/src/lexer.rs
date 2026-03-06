@@ -58,6 +58,18 @@ pub enum Token {
     Decrypt,
     As,
 
+    // I/O operations
+    Display,
+    Print,
+    Read,
+
+    // Arithmetic operations
+    Set,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+
     // Control flow
     If,
     Else,
@@ -110,6 +122,14 @@ impl fmt::Display for Token {
             Token::EndFunction => write!(f, "END-FUNCTION"),
             Token::Parameters => write!(f, "PARAMETERS"),
             Token::Returns => write!(f, "RETURNS"),
+            Token::Display => write!(f, "DISPLAY"),
+            Token::Print => write!(f, "PRINT"),
+            Token::Read => write!(f, "READ"),
+            Token::Set => write!(f, "SET"),
+            Token::Add => write!(f, "ADD"),
+            Token::Subtract => write!(f, "SUBTRACT"),
+            Token::Multiply => write!(f, "MULTIPLY"),
+            Token::Divide => write!(f, "DIVIDE"),
             _ => write!(f, "{:?}", self),
         }
     }
@@ -233,6 +253,14 @@ fn keyword_to_token(s: &str) -> Token {
         "ENCRYPT" => Token::Encrypt,
         "DECRYPT" => Token::Decrypt,
         "AS" => Token::As,
+        "DISPLAY" => Token::Display,
+        "PRINT" => Token::Print,
+        "READ" => Token::Read,
+        "SET" => Token::Set,
+        "ADD" => Token::Add,
+        "SUBTRACT" => Token::Subtract,
+        "MULTIPLY" => Token::Multiply,
+        "DIVIDE" => Token::Divide,
         "VIDEO-MP4" => Token::VideoMp4,
         "IMAGE-JPG" => Token::ImageJpg,
         "FINANCIAL-DECIMAL" => Token::FinancialDecimal,

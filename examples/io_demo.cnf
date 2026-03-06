@@ -1,0 +1,28 @@
+IDENTIFICATION DIVISION.
+PROGRAM-ID. "io-demo".
+AUTHOR. "CENTRA-NF v0.4.0".
+
+ENVIRONMENT DIVISION.
+OS "Linux".
+ARCH "x86_64".
+RUNTIME-VERSION "0.4.0".
+
+DATA DIVISION.
+    INPUT AS VIDEO-MP4.
+    OUTPUT AS VIDEO-MP4.
+    MESSAGE AS BINARY-BLOB.
+
+PROCEDURE DIVISION.
+    DISPLAY "CENTRA-NF v0.4.0 I/O Operations Demo".
+    DISPLAY "===================================".
+
+    DISPLAY "Testing DISPLAY instruction:".
+    DISPLAY "Hello, World from CENTRA-NF!".
+
+    DISPLAY "Testing PRINT instruction:".
+    PRINT MESSAGE.
+
+    DISPLAY "Testing PRINT with format:".
+    PRINT MESSAGE WITH "Message content: ".
+
+    DISPLAY "Demo completed successfully!".

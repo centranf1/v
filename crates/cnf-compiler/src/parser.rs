@@ -194,6 +194,45 @@ impl Parser {
                 self.expect(Token::Period)?;
                 Ok(ProcedureStatement::VerifyIntegrity { target })
             }
+            Token::Set => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let value = self.expect_string()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Set { target, value })
+            }
+            Token::Add => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let operand1 = self.expect_variable_or_type()?;
+                let operand2 = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Add { target, operand1, operand2 })
+            }
+            Token::Subtract => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let operand1 = self.expect_variable_or_type()?;
+                let operand2 = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Subtract { target, operand1, operand2 })
+            }
+            Token::Multiply => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let operand1 = self.expect_variable_or_type()?;
+                let operand2 = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Multiply { target, operand1, operand2 })
+            }
+            Token::Divide => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let operand1 = self.expect_variable_or_type()?;
+                let operand2 = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Divide { target, operand1, operand2 })
+            }
             _ => Err(format!("Unexpected token in block: {}", self.current())),
         }
     }
@@ -470,6 +509,30 @@ impl Parser {
                     let target = self.expect_variable_or_type()?;
                     self.expect(Token::Period)?;
                     ProcedureStatement::Extract { target, path }
+                }
+                Token::Display => {
+                    self.advance();
+                    let message = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Display { message }
+                }
+                Token::Print => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let format = if self.current() == &Token::Identifier("WITH".to_string()) {
+                        self.advance();
+                        Some(self.expect_identifier()?)
+                    } else {
+                        None
+                    };
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Print { target, format }
+                }
+                Token::Read => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Read { target }
                 }
                 Token::If => {
                     self.advance();

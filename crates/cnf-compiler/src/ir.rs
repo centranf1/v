@@ -52,6 +52,40 @@ pub enum Instruction {
         target: String,
         path: String,
     },
+    Display {
+        message: String,
+    },
+    Print {
+        target: String,
+        format: Option<String>,
+    },
+    Read {
+        target: String,
+    },
+    Set {
+        target: String,
+        value: String,
+    },
+    Add {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Subtract {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Multiply {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Divide {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
     IfStatement {
         condition: String,
         then_instrs: Vec<Instruction>,
@@ -125,6 +159,34 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Extract { target, path } => {
                 write!(f, "EXTRACT({} FROM {})", path, target)
+            }
+            Instruction::Display { message } => {
+                write!(f, "DISPLAY({})", message)
+            }
+            Instruction::Print { target, format } => {
+                if let Some(fmt) = format {
+                    write!(f, "PRINT({} WITH {})", target, fmt)
+                } else {
+                    write!(f, "PRINT({})", target)
+                }
+            }
+            Instruction::Read { target } => {
+                write!(f, "READ({})", target)
+            }
+            Instruction::Set { target, value } => {
+                write!(f, "SET({} = {})", target, value)
+            }
+            Instruction::Add { target, operand1, operand2 } => {
+                write!(f, "ADD({} = {} + {})", target, operand1, operand2)
+            }
+            Instruction::Subtract { target, operand1, operand2 } => {
+                write!(f, "SUBTRACT({} = {} - {})", target, operand1, operand2)
+            }
+            Instruction::Multiply { target, operand1, operand2 } => {
+                write!(f, "MULTIPLY({} = {} * {})", target, operand1, operand2)
+            }
+            Instruction::Divide { target, operand1, operand2 } => {
+                write!(f, "DIVIDE({} = {} / {})", target, operand1, operand2)
             }
             Instruction::IfStatement {
                 condition,
@@ -440,6 +502,142 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     path: path.clone(),
                 });
             }
+            ProcedureStatement::Display { message } => {
+                instructions.push(Instruction::Display {
+                    message: message.clone(),
+                });
+            }
+            ProcedureStatement::Print { target, format } => {
+                // Validate target exists
+                if !declared_vars.contains(target) {
+                    return Err(format!("CNF-E001: Variable '{}' not declared", target));
+                }
+                instructions.push(Instruction::Print {
+                    target: target.clone(),
+                    format: format.clone(),
+                });
+            }
+            ProcedureStatement::Read { target } => {
+                // Validate target exists
+                if !declared_vars.contains(target) {
+                    return Err(format!("CNF-E001: Variable '{}' not declared", target));
+                }
+                instructions.push(Instruction::Read {
+                    target: target.clone(),
+                });
+            }
+            ProcedureStatement::Set { target, value } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                instructions.push(Instruction::Set {
+                    target: target.clone(),
+                    value: value.clone(),
+                });
+            }
+            ProcedureStatement::Add { target, operand1, operand2 } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(operand1) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand1
+                    ));
+                }
+                if !declared_vars.contains(operand2) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand2
+                    ));
+                }
+                instructions.push(Instruction::Add {
+                    target: target.clone(),
+                    operand1: operand1.clone(),
+                    operand2: operand2.clone(),
+                });
+            }
+            ProcedureStatement::Subtract { target, operand1, operand2 } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(operand1) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand1
+                    ));
+                }
+                if !declared_vars.contains(operand2) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand2
+                    ));
+                }
+                instructions.push(Instruction::Subtract {
+                    target: target.clone(),
+                    operand1: operand1.clone(),
+                    operand2: operand2.clone(),
+                });
+            }
+            ProcedureStatement::Multiply { target, operand1, operand2 } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(operand1) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand1
+                    ));
+                }
+                if !declared_vars.contains(operand2) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand2
+                    ));
+                }
+                instructions.push(Instruction::Multiply {
+                    target: target.clone(),
+                    operand1: operand1.clone(),
+                    operand2: operand2.clone(),
+                });
+            }
+            ProcedureStatement::Divide { target, operand1, operand2 } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(operand1) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand1
+                    ));
+                }
+                if !declared_vars.contains(operand2) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand2
+                    ));
+                }
+                instructions.push(Instruction::Divide {
+                    target: target.clone(),
+                    operand1: operand1.clone(),
+                    operand2: operand2.clone(),
+                });
+            }
             ProcedureStatement::If {
                 condition,
                 then_statements,
@@ -658,6 +856,79 @@ fn lower_single_statement(
             Ok(Instruction::FunctionCall {
                 name: name.clone(),
                 arguments: arguments.clone(),
+            })
+        }
+        ProcedureStatement::Set { target, value } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::Set {
+                target: target.clone(),
+                value: value.clone(),
+            })
+        }
+        ProcedureStatement::Add { target, operand1, operand2 } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            if !declared_vars.contains(operand1) {
+                return Err(format!("Variable '{}' not declared", operand1));
+            }
+            if !declared_vars.contains(operand2) {
+                return Err(format!("Variable '{}' not declared", operand2));
+            }
+            Ok(Instruction::Add {
+                target: target.clone(),
+                operand1: operand1.clone(),
+                operand2: operand2.clone(),
+            })
+        }
+        ProcedureStatement::Subtract { target, operand1, operand2 } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            if !declared_vars.contains(operand1) {
+                return Err(format!("Variable '{}' not declared", operand1));
+            }
+            if !declared_vars.contains(operand2) {
+                return Err(format!("Variable '{}' not declared", operand2));
+            }
+            Ok(Instruction::Subtract {
+                target: target.clone(),
+                operand1: operand1.clone(),
+                operand2: operand2.clone(),
+            })
+        }
+        ProcedureStatement::Multiply { target, operand1, operand2 } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            if !declared_vars.contains(operand1) {
+                return Err(format!("Variable '{}' not declared", operand1));
+            }
+            if !declared_vars.contains(operand2) {
+                return Err(format!("Variable '{}' not declared", operand2));
+            }
+            Ok(Instruction::Multiply {
+                target: target.clone(),
+                operand1: operand1.clone(),
+                operand2: operand2.clone(),
+            })
+        }
+        ProcedureStatement::Divide { target, operand1, operand2 } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            if !declared_vars.contains(operand1) {
+                return Err(format!("Variable '{}' not declared", operand1));
+            }
+            if !declared_vars.contains(operand2) {
+                return Err(format!("Variable '{}' not declared", operand2));
+            }
+            Ok(Instruction::Divide {
+                target: target.clone(),
+                operand1: operand1.clone(),
+                operand2: operand2.clone(),
             })
         }
         _ => Err("Unsupported nested statement".to_string()),
