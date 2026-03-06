@@ -66,6 +66,16 @@ pub enum Instruction {
         condition: String,
         instrs: Vec<Instruction>,
     },
+    FunctionDef {
+        name: String,
+        parameters: Vec<String>,
+        return_type: Option<String>,
+        instrs: Vec<Instruction>,
+    },
+    FunctionCall {
+        name: String,
+        arguments: Vec<String>,
+    },
 }
 
 impl std::fmt::Display for Instruction {
@@ -137,7 +147,67 @@ impl std::fmt::Display for Instruction {
             Instruction::WhileLoop { condition, instrs } => {
                 write!(f, "WHILE({}) [{}]", condition, instrs.len())
             }
+            Instruction::FunctionDef {
+                name,
+                parameters,
+                return_type,
+                instrs,
+            } => {
+                write!(f, "FUNC-DEF({} [{}] ret{})", name, parameters.join(","), return_type.as_ref().unwrap_or(&"(none)".to_string()))?;
+                write!(f, " [{}]", instrs.len())
+            }
+            Instruction::FunctionCall { name, arguments } => {
+                write!(f, "FUNC-CALL({}({})", name, arguments.join(","))
+            }
         }
+    }
+}
+
+/// Type validator for checking operation legality
+struct TypeValidator;
+
+impl TypeValidator {
+    /// Check if an operation is legal on the given type
+    fn can_compress(_data_type: &crate::ast::DataType) -> bool {
+        // COMPRESS works on all types
+        true
+    }
+
+    /// Check if an operation is legal on the given type
+    fn can_transcode(data_type: &crate::ast::DataType) -> bool {
+        // TRANSCODE not allowed on BINARY-BLOB or FINANCIAL-DECIMAL
+        !matches!(
+            data_type,
+            crate::ast::DataType::BinaryBlob | crate::ast::DataType::FinancialDecimal
+        )
+    }
+
+    /// Check if an operation is legal on the given type
+    fn can_aggregate(data_type: &crate::ast::DataType) -> bool {
+        matches!(
+            data_type,
+            crate::ast::DataType::CsvTable
+                | crate::ast::DataType::FinancialDecimal
+                | crate::ast::DataType::ParquetTable
+        )
+    }
+
+    /// Check if an operation is legal on the given type
+    fn can_validate(data_type: &crate::ast::DataType) -> bool {
+        matches!(
+            data_type,
+            crate::ast::DataType::JsonObject
+                | crate::ast::DataType::XmlDocument
+                | crate::ast::DataType::CsvTable
+        )
+    }
+
+    /// Check if an operation is legal on the given type
+    fn can_extract(data_type: &crate::ast::DataType) -> bool {
+        matches!(
+            data_type,
+            crate::ast::DataType::JsonObject | crate::ast::DataType::XmlDocument
+        )
     }
 }
 
@@ -160,6 +230,15 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
         .map(|v| (v.name.clone(), v.data_type.clone()))
         .collect();
 
+    // Collect function signatures for parameter count validation
+    let mut signatures: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    for stmt in &program.procedure.statements {
+        if let ProcedureStatement::FunctionDef { name, parameters, .. } = stmt {
+            signatures.insert(name.clone(), parameters.len());
+        }
+    }
+
     for stmt in &program.procedure.statements {
         match stmt {
             ProcedureStatement::Compress { target } => {
@@ -168,6 +247,15 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                         "Variable '{}' not declared in DATA DIVISION",
                         target
                     ));
+                }
+                // Type check: COMPRESS requires compatible type
+                if let Some(dtype) = var_types.get(target) {
+                    if !TypeValidator::can_compress(dtype) {
+                        return Err(format!(
+                            "CNF-C001: COMPRESS operation not allowed on {} type",
+                            dtype
+                        ));
+                    }
                 }
                 instructions.push(Instruction::Compress {
                     target: target.clone(),
@@ -245,6 +333,15 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                             target
                         ));
                     }
+                    // Type check: AGGREGATE requires compatible type
+                    if let Some(dtype) = var_types.get(target) {
+                        if !TypeValidator::can_aggregate(dtype) {
+                            return Err(format!(
+                                "CNF-A001: AGGREGATE operation not allowed on {} type",
+                                dtype
+                            ));
+                        }
+                    }
                 }
                 instructions.push(Instruction::Aggregate {
                     targets: targets.clone(),
@@ -302,6 +399,14 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                         target
                     ));
                 }
+                // Type check: VALIDATE requires compatible type
+                if let Some(dtype) = var_types.get(target) {
+                    if !TypeValidator::can_validate(dtype) {
+                        return Err(format!(
+                            "CNF-V001: VALIDATE operation only allowed on JSON-OBJECT, XML-DOCUMENT, or CSV-TABLE types"
+                        ));
+                    }
+                }
                 instructions.push(Instruction::Validate {
                     target: target.clone(),
                     schema: schema.clone(),
@@ -313,6 +418,14 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                         "Variable '{}' not declared in DATA DIVISION",
                         target
                     ));
+                }
+                // Type check: EXTRACT requires compatible type
+                if let Some(dtype) = var_types.get(target) {
+                    if !TypeValidator::can_extract(dtype) {
+                        return Err(format!(
+                            "CNF-E001: EXTRACT operation only allowed on JSON-OBJECT or XML-DOCUMENT types"
+                        ));
+                    }
                 }
                 instructions.push(Instruction::Extract {
                     target: target.clone(),
@@ -327,13 +440,13 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 // Recursively lower nested statements
                 let mut then_instrs = Vec::new();
                 for stmt in then_statements {
-                    let nested_instr = lower_single_statement(&*stmt, &declared_vars)?;
+                    let nested_instr = lower_single_statement(stmt, &declared_vars, &signatures)?;
                     then_instrs.push(nested_instr);
                 }
                 let else_instrs = if let Some(stmts) = else_statements {
                     let mut instrs = Vec::new();
                     for stmt in stmts {
-                        let nested_instr = lower_single_statement(&*stmt, &declared_vars)?;
+                        let nested_instr = lower_single_statement(stmt, &declared_vars, &signatures)?;
                         instrs.push(nested_instr);
                     }
                     Some(instrs)
@@ -353,7 +466,7 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
             } => {
                 let mut loop_instrs = Vec::new();
                 for stmt in statements {
-                    let nested_instr = lower_single_statement(&*stmt, &declared_vars)?;
+                    let nested_instr = lower_single_statement(stmt, &declared_vars, &signatures)?;
                     loop_instrs.push(nested_instr);
                 }
                 instructions.push(Instruction::ForLoop {
@@ -368,12 +481,52 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
             } => {
                 let mut loop_instrs = Vec::new();
                 for stmt in statements {
-                    let nested_instr = lower_single_statement(&*stmt, &declared_vars)?;
+                    let nested_instr = lower_single_statement(stmt, &declared_vars, &signatures)?;
                     loop_instrs.push(nested_instr);
                 }
                 instructions.push(Instruction::WhileLoop {
                     condition: condition.clone(),
                     instrs: loop_instrs,
+                });
+            }
+            ProcedureStatement::FunctionDef {
+                name,
+                parameters,
+                return_type,
+                statements,
+            } => {
+                // Create a new scope that includes both declared variables and function parameters
+                let mut func_scope = declared_vars.clone();
+                for param in parameters {
+                    func_scope.insert(param.clone());
+                }
+                
+                let mut func_instrs = Vec::new();
+                for stmt in statements {
+                    let nested_instr = lower_single_statement(stmt, &func_scope, &signatures)?;
+                    func_instrs.push(nested_instr);
+                }
+                instructions.push(Instruction::FunctionDef {
+                    name: name.clone(),
+                    parameters: parameters.clone(),
+                    return_type: return_type.as_ref().map(|dt| dt.to_string()),
+                    instrs: func_instrs,
+                });
+            }
+            ProcedureStatement::FunctionCall { name, arguments } => {
+                if let Some(&expected) = signatures.get(name) {
+                    if arguments.len() != expected {
+                        return Err(format!(
+                            "Function '{}' called with {} arguments but defined with {}",
+                            name,
+                            arguments.len(),
+                            expected
+                        ));
+                    }
+                }
+                instructions.push(Instruction::FunctionCall {
+                    name: name.clone(),
+                    arguments: arguments.clone(),
                 });
             }
         }
@@ -386,21 +539,118 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
 fn lower_single_statement(
     stmt: &ProcedureStatement,
     declared_vars: &std::collections::HashSet<String>,
+    signatures: &std::collections::HashMap<String, usize>,
 ) -> Result<Instruction, String> {
     match stmt {
         ProcedureStatement::Compress { target } => {
             if !declared_vars.contains(target) {
                 return Err(format!("Variable '{}' not declared", target));
             }
-            Ok(Instruction::Compress { target: target.clone() })
+            Ok(Instruction::Compress {
+                target: target.clone(),
+            })
         }
         ProcedureStatement::VerifyIntegrity { target } => {
             if !declared_vars.contains(target) {
                 return Err(format!("Variable '{}' not declared", target));
             }
-            Ok(Instruction::VerifyIntegrity { target: target.clone() })
+            Ok(Instruction::VerifyIntegrity {
+                target: target.clone(),
+            })
         }
-        // Add more as needed
+        ProcedureStatement::Encrypt { target } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::Encrypt {
+                target: target.clone(),
+            })
+        }
+        ProcedureStatement::Decrypt { target } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::Decrypt {
+                target: target.clone(),
+            })
+        }
+        ProcedureStatement::If {
+            condition,
+            then_statements,
+            else_statements,
+        } => {
+            let mut then_instrs = Vec::new();
+            for s in then_statements {
+                  then_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
+            }
+            let else_instrs = if let Some(else_stmts) = else_statements {
+                let mut else_i = Vec::new();
+                for s in else_stmts {
+                      else_i.push(lower_single_statement(s, declared_vars, signatures)?);
+                }
+                Some(else_i)
+            } else {
+                None
+            };
+            Ok(Instruction::IfStatement {
+                condition: condition.clone(),
+                then_instrs,
+                else_instrs,
+            })
+        }
+        ProcedureStatement::For {
+            variable,
+            in_list,
+            statements,
+        } => {
+            let mut loop_instrs = Vec::new();
+            for s in statements {
+                  loop_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
+            }
+            Ok(Instruction::ForLoop {
+                variable: variable.clone(),
+                in_list: in_list.clone(),
+                instrs: loop_instrs,
+            })
+        }
+        ProcedureStatement::While {
+            condition,
+            statements,
+        } => {
+            let mut loop_instrs = Vec::new();
+            for s in statements {
+                  loop_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
+            }
+            Ok(Instruction::WhileLoop {
+                condition: condition.clone(),
+                instrs: loop_instrs,
+            })
+        }
+        ProcedureStatement::FunctionDef {
+            name,
+            parameters,
+            return_type,
+            statements,
+        } => {
+            let mut func_instrs = Vec::new();
+            for s in statements {
+                  func_instrs.push(lower_single_statement(s, declared_vars, signatures)?);
+            }
+            Ok(Instruction::FunctionDef {
+                name: name.clone(),
+                parameters: parameters.clone(),
+                return_type: return_type.as_ref().map(|dt| dt.to_string()),
+                instrs: func_instrs,
+            })
+        }
+        ProcedureStatement::FunctionCall { name, arguments } => {
+            // In nested context we can't easily access signatures map; assume caller has
+            // validated top-level calls. We still emit the instruction.
+            Ok(Instruction::FunctionCall {
+                name: name.clone(),
+                arguments: arguments.clone(),
+            })
+        }
         _ => Err("Unsupported nested statement".to_string()),
     }
 }

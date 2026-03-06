@@ -1,0 +1,9 @@
+[package]
+name = "cnf-stdlib"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+cnf-runtime = { path = "../cnf-runtime" }
+cnf-security = { path = "../cnf-security" }
+cobol-protocol-v153 = { path = "../cobol-protocol-v153" }

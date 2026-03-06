@@ -335,10 +335,9 @@ impl Parser {
                         }
                     };
 
-                    self.expect(Token::Period)?;
-
-                    // Use data type name as variable name if not explicitly provided
-                    let name = match data_type {
+                    // After the data type we may optionally see an 'AS <identifier>' clause
+                    // which allows the programmer to give the variable a custom name.
+                    let mut name = match data_type {
                         DataType::VideoMp4 => "VIDEO-MP4".to_string(),
                         DataType::ImageJpg => "IMAGE-JPG".to_string(),
                         DataType::FinancialDecimal => "FINANCIAL-DECIMAL".to_string(),
@@ -349,6 +348,13 @@ impl Parser {
                         DataType::XmlDocument => "XML-DOCUMENT".to_string(),
                         DataType::ParquetTable => "PARQUET-TABLE".to_string(),
                     };
+
+                    if self.current() == &Token::As {
+                        self.advance();
+                        name = self.expect_identifier()?;
+                    }
+
+                    self.expect(Token::Period)?;
 
                     variables.push(Variable { name, data_type });
                 }
@@ -480,13 +486,9 @@ impl Parser {
                     self.expect(Token::Period)?;
                     ProcedureStatement::If {
                         condition,
-                        then_statements: then_statements
-                            .into_iter()
-                            .map(Box::new)
-                            .collect(),
-                        else_statements: else_statements.map(|stmts| {
-                            stmts.into_iter().map(Box::new).collect()
-                        }),
+                        then_statements: then_statements.into_iter().map(Box::new).collect(),
+                        else_statements: else_statements
+                            .map(|stmts| stmts.into_iter().map(Box::new).collect()),
                     }
                 }
                 Token::For => {
@@ -515,6 +517,54 @@ impl Parser {
                         condition,
                         statements: statements.into_iter().map(Box::new).collect(),
                     }
+                }
+                Token::Define => {
+                    self.advance();
+                    self.expect(Token::Function)?;
+                    let name = self.expect_identifier()?;
+                    
+                    // Parse PARAMETERS (optional)
+                    let parameters = if self.current() == &Token::Parameters {
+                        self.advance();
+                        let mut params = Vec::new();
+                        while self.current() != &Token::Returns && self.current() != &Token::Do && self.current() != &Token::EndFunction {
+                            params.push(self.expect_identifier()?);
+                        }
+                        params
+                    } else {
+                        Vec::new()
+                    };
+                    
+                    // Parse RETURNS type (optional)
+                    let return_type = if self.current() == &Token::Returns {
+                        self.advance();
+                        Some(self.parse_data_type()?)
+                    } else {
+                        None
+                    };
+                    
+                    self.expect(Token::Do)?;
+                    let statements = self.parse_block_until(&[Token::EndFunction])?;
+                    self.expect(Token::EndFunction)?;
+                    self.expect(Token::Period)?;
+                    
+                    ProcedureStatement::FunctionDef {
+                        name,
+                        parameters,
+                        return_type,
+                        statements: statements.into_iter().map(Box::new).collect(),
+                    }
+                }
+                Token::Identifier(func_name) => {
+                    // Could be a function call
+                    let name = func_name.clone();
+                    self.advance();
+                    let mut arguments = Vec::new();
+                    while self.current() != &Token::Period && self.current() != &Token::Eof {
+                        arguments.push(self.expect_variable_or_type()?);
+                    }
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::FunctionCall { name, arguments }
                 }
                 Token::Eof => break,
                 _ => {

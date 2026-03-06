@@ -107,7 +107,7 @@ impl PermutationEngine {
                 "IDENTIFICATION", "ENVIRONMENT", "DATA", "PROCEDURE", "DIVISION",
                 "COMPRESS", "VERIFY", "ENCRYPT", "DECRYPT", "TRANSCODE",
                 "FILTER", "AGGREGATE", "MERGE", "SPLIT", "VALIDATE",
-                "EXTRACT", "CONVERT", "OS", "ARCH", "INVALID_KEYWORD",
+                "EXTRACT", "CONVERT", "OS", "ARCH", "AS", "INVALID_KEYWORD",
             ],
             data_types: vec![
                 "VIDEO-MP4", "IMAGE-JPG", "AUDIO-WAV", "CSV-TABLE",

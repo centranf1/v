@@ -56,6 +56,7 @@ pub enum Token {
     Extract,
     Encrypt,
     Decrypt,
+    As,
 
     // Control flow
     If,
@@ -68,6 +69,13 @@ pub enum Token {
     EndFor,
     EndWhile,
     In,
+
+    // Functions
+    Define,
+    Function,
+    EndFunction,
+    Parameters,
+    Returns,
 
     // Data types
     VideoMp4,
@@ -97,6 +105,11 @@ impl fmt::Display for Token {
             Token::Identifier(s) => write!(f, "IDENTIFIER({})", s),
             Token::String(s) => write!(f, "STRING({})", s),
             Token::Period => write!(f, "."),
+            Token::Define => write!(f, "DEFINE"),
+            Token::Function => write!(f, "FUNCTION"),
+            Token::EndFunction => write!(f, "END-FUNCTION"),
+            Token::Parameters => write!(f, "PARAMETERS"),
+            Token::Returns => write!(f, "RETURNS"),
             _ => write!(f, "{:?}", self),
         }
     }
@@ -219,6 +232,7 @@ fn keyword_to_token(s: &str) -> Token {
         "EXTRACT" => Token::Extract,
         "ENCRYPT" => Token::Encrypt,
         "DECRYPT" => Token::Decrypt,
+        "AS" => Token::As,
         "VIDEO-MP4" => Token::VideoMp4,
         "IMAGE-JPG" => Token::ImageJpg,
         "FINANCIAL-DECIMAL" => Token::FinancialDecimal,
@@ -238,6 +252,11 @@ fn keyword_to_token(s: &str) -> Token {
         "END-FOR" => Token::EndFor,
         "END-WHILE" => Token::EndWhile,
         "IN" => Token::In,
+        "DEFINE" => Token::Define,
+        "FUNCTION" => Token::Function,
+        "END-FUNCTION" => Token::EndFunction,
+        "PARAMETERS" => Token::Parameters,
+        "RETURNS" => Token::Returns,
         _ => Token::Identifier(s.to_string()),
     }
 }
@@ -245,6 +264,17 @@ fn keyword_to_token(s: &str) -> Token {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_lexer_recognizes_function_keywords() {
+        let source = "DEFINE FUNCTION END-FUNCTION PARAMETERS RETURNS";
+        let tokens = tokenize(source).unwrap();
+        assert_eq!(tokens[0], Token::Define);
+        assert_eq!(tokens[1], Token::Function);
+        assert_eq!(tokens[2], Token::EndFunction);
+        assert_eq!(tokens[3], Token::Parameters);
+        assert_eq!(tokens[4], Token::Returns);
+    }
 
     #[test]
     fn test_lexer_recognizes_keywords() {
@@ -278,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_lexer_recognizes_encrypt_decrypt() {
-        let tokens = tokenize("ENCRYPT BUFFER. DECRYPT BUFFER.").unwrap();
+        let tokens = tokenize("ENCRYPT BUFFER DECRYPT BUFFER").unwrap();
         assert_eq!(tokens[0], Token::Encrypt);
         assert_eq!(tokens[2], Token::Decrypt);
     }

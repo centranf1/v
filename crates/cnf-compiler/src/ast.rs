@@ -131,6 +131,16 @@ pub enum ProcedureStatement {
         condition: String,
         statements: Vec<Box<ProcedureStatement>>,
     },
+    FunctionDef {
+        name: String,
+        parameters: Vec<String>,
+        return_type: Option<DataType>,
+        statements: Vec<Box<ProcedureStatement>>,
+    },
+    FunctionCall {
+        name: String,
+        arguments: Vec<String>,
+    },
 }
 
 pub enum Division {

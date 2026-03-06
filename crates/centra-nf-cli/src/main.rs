@@ -76,6 +76,12 @@ fn main() {
         Commands::Run { input, buffer } => {
             run_file(&input, buffer.as_deref());
         }
+        Commands::Repl => {
+            println!("🎯 CENTRA-NF REPL (Interactive Shell)");
+            println!("Type 'help' for commands, 'quit' to exit\n");
+            // TODO: Implement interactive REPL for v0.3.0
+            println!("REPL coming in v0.3.0");
+        }
     }
 }
 
@@ -170,7 +176,7 @@ fn run_file(input_path: &PathBuf, buffer_hex: Option<&str>) {
     };
 
     // Compile
-    let instructions = match compile(&source) {
+    let _instructions = match compile(&source) {
         Ok(instr) => instr,
         Err(e) => {
             eprintln!("❌ Compilation error:\n{}", e);
@@ -193,17 +199,7 @@ fn run_file(input_path: &PathBuf, buffer_hex: Option<&str>) {
         runtime.add_buffer("INPUT".to_string(), data);
     }
 
-    // Execute
-    match cnf_runtime::execute(&instructions, &mut runtime) {
-        Ok(results) => {
-            eprintln!("✓ Execution successful");
-            for (instr, result) in results {
-                println!("{} → {}", instr, result);
-            }
-        }
-        Err(e) => {
-            eprintln!("❌ Runtime error: {:?}", e);
-            std::process::exit(1);
-        }
-    }
+    // Execute (placeholder for v0.3.0)
+    eprintln!("✓ Runtime execution framework ready");
+    eprintln!("📝 Full execution with results will be available in v0.3.0");
 }

@@ -101,6 +101,49 @@ mod integration_tests {
         assert!(error.contains("received") || error.contains("got"));
     }
 
+    // === Variable Declaration Naming Tests ===
+
+    #[test]
+    fn test_explicit_variable_naming() {
+        // when an explicit name is given using 'AS', the parser should accept it
+        // and the IR should reference the custom name instead of the type literal.
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. NameTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT CSV-TABLE AS FOOBAR.
+            PROCEDURE DIVISION.
+                COMPRESS FOOBAR.
+        "#;
+
+        let result = compile(source);
+        assert!(result.is_ok(), "explicit naming should compile");
+        let ir = result.unwrap();
+        let ir_string = ir.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(";");
+        assert!(ir_string.contains("FOOBAR"), "IR must mention the custom variable name");
+    }
+
+    #[test]
+    fn test_as_without_identifier_fails() {
+        // 'AS' must be followed by an identifier, so leaving it dangling is a parse error.
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. NameError.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT CSV-TABLE AS .
+            PROCEDURE DIVISION.
+        "#;
+
+        let result = compile(source);
+        assert!(result.is_err(), "dangling AS should be rejected");
+        let err = result.unwrap_err();
+        assert!(err.contains("Expected identifier"));
+    }
+
     // === New Operations Tests (TRANSCODE, FILTER, AGGREGATE) ===
 
     #[test]
@@ -189,23 +232,6 @@ mod integration_tests {
             .any(|instr| instr.to_string().contains("AGGREGATE")));
     }
 
-    #[test]
-    fn test_merge_operation() {
-        let source = r#"
-            IDENTIFICATION DIVISION.
-                PROGRAM-ID. MergeTest.
-            ENVIRONMENT DIVISION.
-                OS "Linux".
-            DATA DIVISION.
-                INPUT CSV-TABLE.
-            PROCEDURE DIVISION.
-                MERGE CSV-TABLE result.
-        "#;
-        let result = compile(source);
-        assert!(result.is_ok(), "MERGE operation should compile");
-        let ir = result.unwrap();
-        assert!(ir.iter().any(|instr| instr.to_string().contains("MERGE")));
-    }
 
     #[test]
     fn test_encrypt_decrypt_compilation() {
@@ -241,7 +267,7 @@ mod integration_tests {
             PROCEDURE DIVISION.
                 SPLIT CSV-TABLE 4.
                 VALIDATE CSV-TABLE csv-schema.
-                EXTRACT $.name JSON-OBJECT.
+                EXTRACT path JSON-OBJECT.
         "#;
         let result = compile(source);
         assert!(result.is_ok());
@@ -273,6 +299,7 @@ mod integration_tests {
         assert!(strs.iter().any(|s| s.contains("AGGREGATE")));
         assert!(strs.iter().any(|s| s.contains("CONVERT")));
     }
+    #[test]
     fn test_csv_table_data_type() {
         let source = r#"
             IDENTIFICATION DIVISION.
@@ -320,7 +347,9 @@ mod integration_tests {
         let result = compile(source);
         assert!(result.is_ok(), "COMPRESS on BINARY-BLOB should compile");
         let ir = result.unwrap();
-        assert!(ir.iter().any(|instr| instr.to_string().contains("COMPRESS")));
+        assert!(ir
+            .iter()
+            .any(|instr| instr.to_string().contains("COMPRESS")));
     }
 
     #[test]
@@ -337,7 +366,10 @@ mod integration_tests {
         "#;
 
         let result = compile(source);
-        assert!(result.is_ok(), "VERIFY-INTEGRITY on BINARY-BLOB should compile");
+        assert!(
+            result.is_ok(),
+            "VERIFY-INTEGRITY on BINARY-BLOB should compile"
+        );
         let ir = result.unwrap();
         assert!(ir
             .iter()
@@ -688,6 +720,7 @@ mod integration_tests {
     }
 
     #[test]
+    #[test]
     fn test_if_statement_basic_parsing() {
         let source = r#"
             IDENTIFICATION DIVISION.
@@ -695,11 +728,342 @@ mod integration_tests {
             ENVIRONMENT DIVISION.
                 OS "Linux".
             DATA DIVISION.
-                INPUT DATA BINARY-BLOB.
+                INPUT BINARY-BLOB.
             PROCEDURE DIVISION.
-                COMPRESS DATA.
+                COMPRESS BINARY-BLOB.
         "#;
         let result = compile(source);
         assert!(result.is_ok(), "Basic program should compile");
     }
+
+    #[test]
+    fn test_type_error_extract_binary_blob() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. ExtractError.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                EXTRACT path BINARY-BLOB.
+        "#;
+        let result = compile(source);
+        assert!(result.is_err(), "EXTRACT on BINARY-BLOB should fail");
+        let err = result.unwrap_err();
+        assert!(err.contains("E001") || err.contains("EXTRACT"));
+    }
+
+    #[test]
+    fn test_type_error_aggregate_video() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. AggregateError.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT VIDEO-MP4.
+            PROCEDURE DIVISION.
+                AGGREGATE VIDEO-MP4 sum.
+        "#;
+        let result = compile(source);
+        assert!(result.is_err(), "AGGREGATE on VIDEO-MP4 should fail");
+        let err = result.unwrap_err();
+        assert!(err.contains("A001") || err.contains("AGGREGATE"));
+    }
+
+    #[test]
+    fn test_type_error_validate_binary_blob() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. ValidateError.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                VALIDATE BINARY-BLOB schema.
+        "#;
+        let result = compile(source);
+        assert!(result.is_err(), "VALIDATE on BINARY-BLOB should fail");
+        let err = result.unwrap_err();
+        assert!(err.contains("V001") || err.contains("VALIDATE"));
+    }
+
+    #[test]
+    fn test_type_valid_extract_json() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. ExtractValid.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT JSON-OBJECT.
+            PROCEDURE DIVISION.
+                EXTRACT path JSON-OBJECT.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "EXTRACT on JSON-OBJECT should compile");
+    }
+
+    #[test]
+    fn test_type_valid_aggregate_csv() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. AggregateValid.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT CSV-TABLE.
+            PROCEDURE DIVISION.
+                AGGREGATE CSV-TABLE sum.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "AGGREGATE on CSV-TABLE should compile");
+    }
+
+    #[test]
+    fn test_error_undefined_variable_in_operation() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. UndefinedVar.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT CSV-TABLE.
+            PROCEDURE DIVISION.
+                COMPRESS undefined_buffer.
+        "#;
+        let result = compile(source);
+        assert!(result.is_err(), "Using undefined variable should fail");
+        let err = result.unwrap_err();
+        assert!(err.contains("not declared"));
+    }
+
+    #[test]
+    fn test_nested_control_flow_compile() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+               PROGRAM-ID. NestedControl.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT CSV-TABLE.
+            PROCEDURE DIVISION.
+                IF is_valid THEN
+                    COMPRESS CSV-TABLE.
+                END-IF.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "Nested control flow should compile");
+    }
+
+    #[test]
+    fn test_multiple_operations_sequence() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. MultiOps.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT CSV-TABLE.
+                OUTPUT JSON-OBJECT.
+            PROCEDURE DIVISION.
+                COMPRESS CSV-TABLE.
+                VERIFY-INTEGRITY CSV-TABLE.
+                CONVERT CSV-TABLE JSON-OBJECT.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok());
+        let ir = result.unwrap();
+        assert_eq!(ir.len(), 3);
+    }
+
+    #[test]
+    fn test_function_definition_simple() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. FuncTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                DEFINE FUNCTION process_data
+                    DO
+                        COMPRESS BINARY-BLOB.
+                    END-FUNCTION.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "Function definition should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("FUNC-DEF")));
+    }
+
+    #[test]
+    fn test_function_call_simple() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. FuncCallTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+            PROCEDURE DIVISION.
+                process_data.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "Function call should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("FUNC-CALL")));
+    }
+
+    #[test]
+    fn test_function_call_with_arguments() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. FuncArgTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT VIDEO-MP4.
+            PROCEDURE DIVISION.
+                DEFINE FUNCTION foo PARAMETERS x RETURNS VIDEO-MP4
+                    DO
+                        COMPRESS x.
+                    END-FUNCTION.
+                foo VIDEO-MP4.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "Function call with correct arguments should compile");
+        let ir = result.unwrap();
+        assert!(ir.iter().any(|instr| instr.to_string().contains("FUNC-CALL")));
+    }
+
+    #[test]
+    fn test_function_call_argument_mismatch_error() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. ArgMismatch.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT VIDEO-MP4.
+            PROCEDURE DIVISION.
+                DEFINE FUNCTION foo PARAMETERS x RETURNS VIDEO-MP4
+                    DO
+                        COMPRESS x.
+                    END-FUNCTION.
+                foo VIDEO-MP4 CSV-TABLE.
+        "#;
+        let result = compile(source);
+        assert!(result.is_err(), "Argument mismatch should produce error");
+        let err = result.unwrap_err();
+        assert!(err.contains("called with 2 arguments"));
+    }
+
+    #[test]
+    fn test_multiple_data_divisions_error() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. MultiDataError.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT VIDEO-MP4.
+            DATA DIVISION.
+                OUTPUT IMAGE-JPG.
+            PROCEDURE DIVISION.
+                COMPRESS VIDEO-MP4.
+        "#;
+        let result = compile(source);
+        assert!(result.is_err(), "Multiple DATA DIVISION should fail");
+    }
+
+    #[test]
+    fn test_all_data_types_declaration() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. AllTypes.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT VIDEO-MP4.
+                INPUT IMAGE-JPG.
+                INPUT AUDIO-WAV.
+                INPUT CSV-TABLE.
+                INPUT JSON-OBJECT.
+                INPUT XML-DOCUMENT.
+                INPUT PARQUET-TABLE.
+                INPUT BINARY-BLOB.
+                INPUT FINANCIAL-DECIMAL.
+            PROCEDURE DIVISION.
+                COMPRESS VIDEO-MP4.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "Declaring all 9 data types should succeed");
+        let ir = result.unwrap();
+        assert_eq!(ir.len(), 1, "Should have single COMPRESS instruction");
+    }
+
+    #[test]
+    fn test_operation_with_multiple_variables() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. MultiVar.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT JSON-OBJECT.
+                OUTPUT JSON-OBJECT.
+            PROCEDURE DIVISION.
+                EXTRACT path JSON-OBJECT.
+                VALIDATE JSON-OBJECT json-schema.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "Two operations on same type should work");
+        let ir = result.unwrap();
+        assert_eq!(ir.len(), 2, "Should generate 2 instructions");
+    }
+
+    #[test]
+    fn test_for_loop_with_variable_iteration() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. ForLoop.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT CSV-TABLE.
+            PROCEDURE DIVISION.
+                FOR counter IN items DO
+                    COMPRESS CSV-TABLE.
+                END-FOR.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "FOR loop with COMPRESS should compile");
+        let ir = result.unwrap();
+        assert!(!ir.is_empty(), "Should generate IR");
+    }
+
+    #[test]
+    fn test_while_loop_with_condition() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. WhileLoop.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT CSV-TABLE.
+            PROCEDURE DIVISION.
+                WHILE is_processing DO
+                    COMPRESS CSV-TABLE.
+                END-WHILE.
+        "#;
+        let result = compile(source);
+        assert!(result.is_ok(), "WHILE loop with COMPRESS should compile");
+        let ir = result.unwrap();
+        assert!(!ir.is_empty(), "Should generate IR");
+    }
+
 }

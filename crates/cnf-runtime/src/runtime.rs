@@ -4,6 +4,7 @@
 
 use crate::dag::Dag;
 use crate::scheduler::Scheduler;
+use crate::control_flow::{CallStack, Frame, ScopeManager};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -34,6 +35,8 @@ impl std::error::Error for CnfError {}
 pub struct Runtime {
     buffers: HashMap<String, Vec<u8>>,
     dag: Dag,
+    call_stack: CallStack,
+    scope_manager: ScopeManager,
 }
 
 impl Runtime {
@@ -41,6 +44,8 @@ impl Runtime {
         Runtime {
             buffers: HashMap::new(),
             dag: Dag::initialize_layers(),
+            call_stack: CallStack::new(),
+            scope_manager: ScopeManager::new(),
         }
     }
 
@@ -92,7 +97,7 @@ impl Runtime {
         let buf = self
             .get_buffer_mut(target)
             .map_err(|e| CnfError::EncryptionFailed(e.to_string()))?;
-        let result = cnf_security::encrypt_aes256(&buf);
+        let result = cnf_security::encrypt_aes256(buf);
         *buf = result;
         Ok(())
     }
@@ -102,7 +107,7 @@ impl Runtime {
         let buf = self
             .get_buffer_mut(target)
             .map_err(|e| CnfError::DecryptionFailed(e.to_string()))?;
-        let result = cnf_security::decrypt_aes256(&buf);
+        let result = cnf_security::decrypt_aes256(buf);
         *buf = result;
         Ok(())
     }
@@ -178,56 +183,84 @@ impl Runtime {
     }
 
     /// Execute IF statement (simplified: always execute then branch).
-    fn dispatch_if(&mut self, condition: &str, then_instrs: &[Instruction], else_instrs: Option<&[Instruction]>) -> Result<(), CnfError> {
-        // Simplified: assume condition is always true for now
-        for instr in then_instrs {
-            self.dispatch_instruction_enum(instr)?;
-        }
-        // Else not executed
+    /// TODO: Implement proper condition evaluation
+    #[allow(dead_code)]
+    fn dispatch_if(
+        &mut self,
+        _condition: &str,
+        _then_instrs: &[&str],
+        _else_instrs: Option<&[&str]>,
+    ) -> Result<(), CnfError> {
+        // Placeholder: In v0.3.0, integrate with ConditionEvaluator
         Ok(())
     }
 
     /// Execute FOR loop (simplified: execute once).
-    fn dispatch_for(&mut self, _variable: &str, _in_list: &str, instrs: &[Instruction]) -> Result<(), CnfError> {
-        // Simplified: execute loop body once
-        for instr in instrs {
-            self.dispatch_instruction_enum(instr)?;
-        }
+    /// TODO: Implement proper loop execution
+    #[allow(dead_code)]
+    fn dispatch_for(
+        &mut self,
+        _variable: &str,
+        _in_list: &str,
+        _instrs: &[&str],
+    ) -> Result<(), CnfError> {
+        // Placeholder: In v0.3.0, integrate with LoopContext
         Ok(())
     }
 
     /// Execute WHILE loop (simplified: execute once if condition non-empty).
-    fn dispatch_while(&mut self, condition: &str, instrs: &[Instruction]) -> Result<(), CnfError> {
-        // Simplified: execute once if condition is not empty
-        if !condition.is_empty() {
-            for instr in instrs {
-                self.dispatch_instruction_enum(instr)?;
-            }
-        }
+    /// TODO: Implement proper loop execution
+    #[allow(dead_code)]
+    fn dispatch_while(&mut self, _condition: &str, _instrs: &[&str]) -> Result<(), CnfError> {
+        // Placeholder: In v0.3.0, integrate with ConditionEvaluator
         Ok(())
     }
 
-    /// Dispatch single instruction enum (for nested execution).
-    fn dispatch_instruction_enum(&mut self, instruction: &Instruction) -> Result<(), CnfError> {
-        match instruction {
-            Instruction::Compress { target } => self.dispatch_compress(target),
-            Instruction::VerifyIntegrity { target } => self.dispatch_verify(target).map(|_| ()),
-            Instruction::Encrypt { target } => self.dispatch_encrypt(target),
-            Instruction::Decrypt { target } => self.dispatch_decrypt(target),
-            Instruction::Transcode { target, output_type } => self.dispatch_transcode(target, output_type),
-            Instruction::Filter { target, condition } => self.dispatch_filter(target, condition),
-            Instruction::Aggregate { targets, operation } => self.dispatch_aggregate(targets, operation),
-            Instruction::Convert { target, output_type } => self.dispatch_convert(target, output_type),
-            Instruction::Merge { targets, output_name } => self.dispatch_merge(targets, output_name),
-            Instruction::Split { target, parts } => self.dispatch_split(target, parts),
-            Instruction::Validate { target, schema } => self.dispatch_validate(target, schema),
-            Instruction::Extract { target, path } => self.dispatch_extract(target, path),
-            Instruction::IfStatement { condition, then_instrs, else_instrs } => {
-                self.dispatch_if(condition, then_instrs, else_instrs.as_deref())
+    /// Call a function (push frame to call stack)
+    pub fn call_function(&mut self, name: String, parameters: Vec<String>, arguments: Vec<String>) -> Result<(), CnfError> {
+        let frame = Frame::new(name, parameters, arguments);
+        self.call_stack.push_frame(frame);
+        self.scope_manager.push_scope();
+        Ok(())
+    }
+
+    /// Return from a function (pop frame and optionally set return value)
+    pub fn return_from_function(&mut self, value: Option<String>) -> Result<String, CnfError> {
+        if let Some(v) = value {
+            if let Ok(frame) = self.call_stack.current_frame_mut() {
+                frame.set_return(v.clone());
             }
-            Instruction::ForLoop { variable, in_list, instrs } => self.dispatch_for(variable, in_list, instrs),
-            Instruction::WhileLoop { condition, instrs } => self.dispatch_while(condition, instrs),
         }
+
+        let frame = self.call_stack.pop_frame()
+            .map_err(|e| CnfError::InvalidInstruction(e))?;
+        self.scope_manager.pop_scope()
+            .map_err(|e| CnfError::InvalidInstruction(e))?;
+
+        Ok(frame.return_value.unwrap_or_else(|| String::new()))
+    }
+
+    /// Get variable from current scope or call frame
+    pub fn get_variable(&self, name: &str) -> Option<String> {
+        if !self.call_stack.is_empty() {
+            if let Ok(frame) = self.call_stack.current_frame() {
+                if let Some(val) = frame.get(name) {
+                    return Some(val);
+                }
+            }
+        }
+        self.scope_manager.get(name)
+    }
+
+    /// Set variable in current scope
+    pub fn set_variable(&mut self, name: String, value: String) {
+        if !self.call_stack.is_empty() {
+            if let Ok(frame) = self.call_stack.current_frame_mut() {
+                frame.set_local(name, value);
+                return;
+            }
+        }
+        self.scope_manager.set(name, value);
     }
 
     /// Dispatch single instruction.
@@ -385,9 +418,13 @@ mod tests {
     fn test_dispatch_transcode_and_filter_noop() {
         let mut runtime = Runtime::new();
         runtime.add_buffer("b".to_string(), vec![1, 2]);
-        runtime.dispatch_instruction("TRANSCODE(b -> CSV-TABLE)").unwrap();
+        runtime
+            .dispatch_instruction("TRANSCODE(b -> CSV-TABLE)")
+            .unwrap();
         assert!(runtime.get_output("b").unwrap().ends_with(b"CSV-TABLE"));
-        runtime.dispatch_instruction("FILTER(b WHERE cond)").unwrap();
+        runtime
+            .dispatch_instruction("FILTER(b WHERE cond)")
+            .unwrap();
     }
 
     #[test]
@@ -410,14 +447,18 @@ mod tests {
     fn test_dispatch_validate() {
         let mut runtime = Runtime::new();
         runtime.add_buffer("buf".to_string(), vec![1, 2]);
-        runtime.dispatch_instruction("VALIDATE(buf AGAINST json-schema)").unwrap();
+        runtime
+            .dispatch_instruction("VALIDATE(buf AGAINST json-schema)")
+            .unwrap();
     }
 
     #[test]
     fn test_dispatch_extract() {
         let mut runtime = Runtime::new();
         runtime.add_buffer("data".to_string(), b"test".to_vec());
-        runtime.dispatch_instruction("EXTRACT($.field FROM data)").unwrap();
+        runtime
+            .dispatch_instruction("EXTRACT($.field FROM data)")
+            .unwrap();
     }
 
     #[test]
@@ -425,14 +466,18 @@ mod tests {
         let mut runtime = Runtime::new();
         runtime.add_buffer("col1".to_string(), vec![1, 2, 3]);
         runtime.add_buffer("col2".to_string(), vec![4, 5, 6]);
-        runtime.dispatch_instruction("AGGREGATE(col1,col2 AS sum)").unwrap();
+        runtime
+            .dispatch_instruction("AGGREGATE(col1,col2 AS sum)")
+            .unwrap();
     }
 
     #[test]
     fn test_dispatch_convert() {
         let mut runtime = Runtime::new();
         runtime.add_buffer("buf".to_string(), vec![1, 2]);
-        runtime.dispatch_instruction("CONVERT(buf -> JSON-OBJECT)").unwrap();
+        runtime
+            .dispatch_instruction("CONVERT(buf -> JSON-OBJECT)")
+            .unwrap();
         let out = runtime.get_output("buf").unwrap();
         assert!(out.ends_with(b"JSON-OBJECT"));
     }

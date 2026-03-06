@@ -260,6 +260,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cnf-stdlib"
+version = "0.2.0"
+dependencies = [
+ "cnf-runtime",
+ "cnf-security",
+ "cobol-protocol-v153",
+]
+
+[[package]]
 name = "cobol-protocol-v153"
 version = "0.2.0"
 
