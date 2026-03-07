@@ -13,9 +13,9 @@
 //! - Provide deterministic encryption/decryption
 //! - Be isolated and sealed
 
-use sha2::{Digest, Sha256};
-use aes_gcm::{Aes256Gcm, Key, Nonce};
 use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Key, Nonce};
+use sha2::{Digest, Sha256};
 
 /// Compute SHA-256 digest of buffer and return hex-encoded string.
 /// Input → UTF-8 hex string (64 characters for 256-bit hash)
@@ -72,7 +72,9 @@ pub fn decrypt_aes256(data: &[u8]) -> Vec<u8> {
     // Extract ciphertext (rest of the data)
     let ciphertext = &data[12..];
 
-    cipher.decrypt(&nonce, ciphertext).expect("decryption failure")
+    cipher
+        .decrypt(&nonce, ciphertext)
+        .expect("decryption failure")
 }
 
 #[cfg(test)]

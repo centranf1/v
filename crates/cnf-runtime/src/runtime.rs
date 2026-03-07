@@ -224,14 +224,18 @@ impl Runtime {
             "json" => self.validate_json(buf),
             "csv" => self.validate_csv(buf),
             "xml" => self.validate_xml(buf),
-            _ => Err(CnfError::InvalidInstruction(format!("unsupported validation schema: {}", schema))),
+            _ => Err(CnfError::InvalidInstruction(format!(
+                "unsupported validation schema: {}",
+                schema
+            ))),
         }
     }
 
     /// Validate JSON format manually (no external crates).
     fn validate_json(&self, data: &[u8]) -> Result<(), CnfError> {
-        let text = std::str::from_utf8(data)
-            .map_err(|_| CnfError::InvalidInstruction("invalid UTF-8 for JSON validation".into()))?;
+        let text = std::str::from_utf8(data).map_err(|_| {
+            CnfError::InvalidInstruction("invalid UTF-8 for JSON validation".into())
+        })?;
 
         // Simple JSON validation: check balanced braces and basic structure
         let mut brace_depth = 0;
@@ -251,7 +255,9 @@ impl Runtime {
                 b'}' if !in_string => {
                     brace_depth -= 1;
                     if brace_depth < 0 {
-                        return Err(CnfError::InvalidInstruction("unmatched closing brace in JSON".into()));
+                        return Err(CnfError::InvalidInstruction(
+                            "unmatched closing brace in JSON".into(),
+                        ));
                     }
                 }
                 _ => {}
@@ -259,11 +265,15 @@ impl Runtime {
         }
 
         if brace_depth != 0 {
-            return Err(CnfError::InvalidInstruction("unmatched opening brace in JSON".into()));
+            return Err(CnfError::InvalidInstruction(
+                "unmatched opening brace in JSON".into(),
+            ));
         }
 
         if in_string {
-            return Err(CnfError::InvalidInstruction("unterminated string in JSON".into()));
+            return Err(CnfError::InvalidInstruction(
+                "unterminated string in JSON".into(),
+            ));
         }
 
         Ok(())
@@ -277,7 +287,9 @@ impl Runtime {
         // Check for header row: look for comma in first line
         if let Some(first_line) = text.lines().next() {
             if !first_line.contains(',') {
-                return Err(CnfError::InvalidInstruction("CSV missing header row with comma separator".into()));
+                return Err(CnfError::InvalidInstruction(
+                    "CSV missing header row with comma separator".into(),
+                ));
             }
         } else {
             return Err(CnfError::InvalidInstruction("CSV file is empty".into()));
@@ -309,16 +321,21 @@ impl Runtime {
                             let expected_tag = current_tag[1..].to_string();
                             if let Some(opening_tag) = tag_stack.pop() {
                                 if opening_tag != expected_tag {
-                                    return Err(CnfError::InvalidInstruction(
-                                        format!("XML tag mismatch: expected </{}>, got </{}>", opening_tag, expected_tag)
-                                    ));
+                                    return Err(CnfError::InvalidInstruction(format!(
+                                        "XML tag mismatch: expected </{}>, got </{}>",
+                                        opening_tag, expected_tag
+                                    )));
                                 }
                             } else {
-                                return Err(CnfError::InvalidInstruction(
-                                    format!("XML unexpected closing tag: </{}>", expected_tag)
-                                ));
+                                return Err(CnfError::InvalidInstruction(format!(
+                                    "XML unexpected closing tag: </{}>",
+                                    expected_tag
+                                )));
                             }
-                        } else if !current_tag.is_empty() && !current_tag.starts_with('!') && !current_tag.starts_with('?') {
+                        } else if !current_tag.is_empty()
+                            && !current_tag.starts_with('!')
+                            && !current_tag.starts_with('?')
+                        {
                             // Opening tag (skip comments and processing instructions)
                             tag_stack.push(current_tag.clone());
                         }
@@ -326,7 +343,8 @@ impl Runtime {
                     }
                 }
                 _ if in_tag => {
-                    if byte.is_ascii_alphanumeric() || byte == b'/' || byte == b'!' || byte == b'?' {
+                    if byte.is_ascii_alphanumeric() || byte == b'/' || byte == b'!' || byte == b'?'
+                    {
                         current_tag.push(byte as char);
                     }
                 }
@@ -335,9 +353,10 @@ impl Runtime {
         }
 
         if !tag_stack.is_empty() {
-            return Err(CnfError::InvalidInstruction(
-                format!("XML unclosed tags: {:?}", tag_stack)
-            ));
+            return Err(CnfError::InvalidInstruction(format!(
+                "XML unclosed tags: {:?}",
+                tag_stack
+            )));
         }
 
         Ok(())

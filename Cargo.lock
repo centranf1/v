@@ -324,6 +324,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cnf-storage"
+version = "0.3.0"
+dependencies = [
+ "cnf-security",
+ "crc32fast",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "cobol-protocol-v153"
 version = "0.3.0"
 dependencies = [

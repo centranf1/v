@@ -8,8 +8,8 @@
 //! DO NOT modify, extend, or wrap this crate without explicit authorization.
 //! This protocol layer is sealed.
 
-use flate2::{write::DeflateEncoder, read::DeflateDecoder};
 use flate2::Compression;
+use flate2::{read::DeflateDecoder, write::DeflateEncoder};
 use std::io::{Read, Write};
 
 /// Compress buffer through L1 → L2 → L3 stages.
@@ -28,8 +28,12 @@ pub fn compress_l1_l3(input: Vec<u8>) -> Result<Vec<u8>, String> {
 
     // Real DEFLATE compression (simulating L1-L3 pipeline)
     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(&input).map_err(|e| format!("compression failed: {}", e))?;
-    let compressed = encoder.finish().map_err(|e| format!("compression finish failed: {}", e))?;
+    encoder
+        .write_all(&input)
+        .map_err(|e| format!("compression failed: {}", e))?;
+    let compressed = encoder
+        .finish()
+        .map_err(|e| format!("compression finish failed: {}", e))?;
 
     Ok(compressed)
 }
@@ -44,7 +48,9 @@ pub fn decompress_l1_l3(input: &[u8]) -> Result<Vec<u8>, String> {
     // Real DEFLATE decompression
     let mut decoder = DeflateDecoder::new(input);
     let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed).map_err(|e| format!("decompression failed: {}", e))?;
+    decoder
+        .read_to_end(&mut decompressed)
+        .map_err(|e| format!("decompression failed: {}", e))?;
 
     Ok(decompressed)
 }
