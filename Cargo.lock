@@ -301,6 +301,7 @@ version = "0.3.0"
 dependencies = [
  "cnf-compiler",
  "cnf-security",
+ "cnf-storage",
  "cobol-protocol-v153",
  "criterion",
 ]

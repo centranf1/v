@@ -51,6 +51,8 @@ pub enum DataType {
     TextString,
     NumberInteger,
     NumberDecimal,
+    FileHandle,
+    RecordStream,
 }
 
 impl std::fmt::Display for DataType {
@@ -68,6 +70,8 @@ impl std::fmt::Display for DataType {
             DataType::TextString => write!(f, "TEXT-STRING"),
             DataType::NumberInteger => write!(f, "NUMBER-INTEGER"),
             DataType::NumberDecimal => write!(f, "NUMBER-DECIMAL"),
+            DataType::FileHandle => write!(f, "FILE-HANDLE"),
+            DataType::RecordStream => write!(f, "RECORD-STREAM"),
         }
     }
 }
@@ -194,6 +198,27 @@ pub enum ProcedureStatement {
     FunctionCall {
         name: String,
         arguments: Vec<String>,
+    },
+    Open {
+        file_handle: String,
+        file_path: String,
+    },
+    ReadFile {
+        file_handle: String,
+        output_stream: String,
+    },
+    WriteFile {
+        file_handle: String,
+        input_stream: String,
+    },
+    Close {
+        file_handle: String,
+    },
+    Checkpoint {
+        record_stream: String,
+    },
+    Replay {
+        target: String,
     },
 }
 

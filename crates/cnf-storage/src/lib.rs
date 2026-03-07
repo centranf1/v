@@ -13,3 +13,5 @@
 pub mod checkpoint;
 pub mod storage;
 pub mod wal;
+
+pub use storage::Storage;

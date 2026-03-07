@@ -17,6 +17,7 @@ pub enum CnfError {
     DecryptionFailed(String),
     InvalidInstruction(String),
     RuntimeError(String),
+    IoError(String),
 }
 
 impl std::fmt::Display for CnfError {
@@ -29,17 +30,25 @@ impl std::fmt::Display for CnfError {
             CnfError::EncryptionFailed(msg) => write!(f, "Encryption failed: {}", msg),
             CnfError::DecryptionFailed(msg) => write!(f, "Decryption failed: {}", msg),
             CnfError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
+            CnfError::IoError(msg) => write!(f, "I/O error: {}", msg),
         }
     }
 }
 
 impl std::error::Error for CnfError {}
 
+impl From<std::io::Error> for CnfError {
+    fn from(err: std::io::Error) -> Self {
+        CnfError::IoError(err.to_string())
+    }
+}
+
 pub struct Runtime {
     buffers: HashMap<String, Vec<u8>>,
     dag: Dag,
     call_stack: CallStack,
     scope_manager: ScopeManager,
+    storage: cnf_storage::Storage,
 }
 
 impl Runtime {
@@ -49,6 +58,7 @@ impl Runtime {
             dag: Dag::initialize_layers(),
             call_stack: CallStack::new(),
             scope_manager: ScopeManager::new(),
+            storage: cnf_storage::Storage::new(),
         }
     }
 
@@ -233,7 +243,7 @@ impl Runtime {
 
     /// Validate JSON format manually (no external crates).
     fn validate_json(&self, data: &[u8]) -> Result<(), CnfError> {
-        let text = std::str::from_utf8(data).map_err(|_| {
+        let _text = std::str::from_utf8(data).map_err(|_| {
             CnfError::InvalidInstruction("invalid UTF-8 for JSON validation".into())
         })?;
 
@@ -300,7 +310,7 @@ impl Runtime {
 
     /// Validate XML format manually (no external crates).
     fn validate_xml(&self, data: &[u8]) -> Result<(), CnfError> {
-        let text = std::str::from_utf8(data)
+        let _text = std::str::from_utf8(data)
             .map_err(|_| CnfError::InvalidInstruction("invalid UTF-8 for XML validation".into()))?;
 
         // Simple XML validation: check for matching opening/closing tags
@@ -318,19 +328,21 @@ impl Runtime {
                     if in_tag {
                         if current_tag.starts_with('/') {
                             // Closing tag
-                            let expected_tag = current_tag[1..].to_string();
-                            if let Some(opening_tag) = tag_stack.pop() {
-                                if opening_tag != expected_tag {
+                            if let Some(expected_tag) = current_tag.strip_prefix('/') {
+                                let expected_tag = expected_tag.to_string();
+                                if let Some(opening_tag) = tag_stack.pop() {
+                                    if opening_tag != expected_tag {
+                                        return Err(CnfError::InvalidInstruction(format!(
+                                            "XML tag mismatch: expected </{}>, got </{}>",
+                                            opening_tag, expected_tag
+                                        )));
+                                    }
+                                } else {
                                     return Err(CnfError::InvalidInstruction(format!(
-                                        "XML tag mismatch: expected </{}>, got </{}>",
-                                        opening_tag, expected_tag
+                                        "XML unexpected closing tag: </{}>",
+                                        expected_tag
                                     )));
                                 }
-                            } else {
-                                return Err(CnfError::InvalidInstruction(format!(
-                                    "XML unexpected closing tag: </{}>",
-                                    expected_tag
-                                )));
                             }
                         } else if !current_tag.is_empty()
                             && !current_tag.starts_with('!')
@@ -689,6 +701,67 @@ impl Runtime {
         Ok(())
     }
 
+    /// Dispatch OPEN file operation
+    fn dispatch_open(&mut self, file_handle: &str, file_path: &str) -> Result<(), CnfError> {
+        // Use cnf-storage to open file
+        let handle = self.storage.open_file(file_path)?;
+        self.set_variable(file_handle.to_string(), handle.to_string());
+        Ok(())
+    }
+
+    /// Dispatch READ-FILE operation
+    fn dispatch_read_file(&mut self, file_handle: &str, output_stream: &str) -> Result<(), CnfError> {
+        let handle_str = self.get_variable(file_handle)
+            .ok_or_else(|| CnfError::InvalidInstruction(format!("File handle '{}' not found", file_handle)))?;
+        let handle = handle_str.parse::<u64>()
+            .map_err(|_| CnfError::InvalidInstruction(format!("Invalid file handle '{}'", handle_str)))?;
+        
+        let stream = self.storage.read_file(handle)?;
+        self.set_variable(output_stream.to_string(), stream);
+        Ok(())
+    }
+
+    /// Dispatch WRITE-FILE operation
+    fn dispatch_write_file(&mut self, file_handle: &str, input_stream: &str) -> Result<(), CnfError> {
+        let handle_str = self.get_variable(file_handle)
+            .ok_or_else(|| CnfError::InvalidInstruction(format!("File handle '{}' not found", file_handle)))?;
+        let handle = handle_str.parse::<u64>()
+            .map_err(|_| CnfError::InvalidInstruction(format!("Invalid file handle '{}'", handle_str)))?;
+        
+        let data = self.get_variable(input_stream)
+            .ok_or_else(|| CnfError::InvalidInstruction(format!("Input stream '{}' not found", input_stream)))?;
+        
+        self.storage.write_file(handle, &data)?;
+        Ok(())
+    }
+
+    /// Dispatch CLOSE operation
+    fn dispatch_close(&mut self, file_handle: &str) -> Result<(), CnfError> {
+        let handle_str = self.get_variable(file_handle)
+            .ok_or_else(|| CnfError::InvalidInstruction(format!("File handle '{}' not found", file_handle)))?;
+        let handle = handle_str.parse::<u64>()
+            .map_err(|_| CnfError::InvalidInstruction(format!("Invalid file handle '{}'", handle_str)))?;
+        
+        self.storage.close_file(handle)?;
+        Ok(())
+    }
+
+    /// Dispatch CHECKPOINT operation
+    fn dispatch_checkpoint(&mut self, record_stream: &str) -> Result<(), CnfError> {
+        let data = self.get_variable(record_stream)
+            .ok_or_else(|| CnfError::InvalidInstruction(format!("Record stream '{}' not found", record_stream)))?;
+        
+        self.storage.checkpoint(&data)?;
+        Ok(())
+    }
+
+    /// Dispatch REPLAY operation
+    fn dispatch_replay(&mut self, target: &str) -> Result<(), CnfError> {
+        let data = self.storage.replay()?;
+        self.set_variable(target.to_string(), data);
+        Ok(())
+    }
+
     /// Execute IF statement with condition evaluation.
     pub fn dispatch_if(
         &mut self,
@@ -1018,6 +1091,24 @@ impl Runtime {
                 self.call_function(name.clone(), params, args)?;
                 // TODO: Execute function body in v0.5.0
                 self.return_from_function(None)?;
+            }
+            Instruction::Open { file_handle, file_path } => {
+                self.dispatch_open(file_handle, file_path)?;
+            }
+            Instruction::ReadFile { file_handle, output_stream } => {
+                self.dispatch_read_file(file_handle, output_stream)?;
+            }
+            Instruction::WriteFile { file_handle, input_stream } => {
+                self.dispatch_write_file(file_handle, input_stream)?;
+            }
+            Instruction::Close { file_handle } => {
+                self.dispatch_close(file_handle)?;
+            }
+            Instruction::Checkpoint { record_stream } => {
+                self.dispatch_checkpoint(record_stream)?;
+            }
+            Instruction::Replay { target } => {
+                self.dispatch_replay(target)?;
             }
         }
         Ok(())

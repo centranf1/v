@@ -124,6 +124,27 @@ pub enum Instruction {
         name: String,
         arguments: Vec<String>,
     },
+    Open {
+        file_handle: String,
+        file_path: String,
+    },
+    ReadFile {
+        file_handle: String,
+        output_stream: String,
+    },
+    WriteFile {
+        file_handle: String,
+        input_stream: String,
+    },
+    Close {
+        file_handle: String,
+    },
+    Checkpoint {
+        record_stream: String,
+    },
+    Replay {
+        target: String,
+    },
 }
 
 impl std::fmt::Display for Instruction {
@@ -274,6 +295,24 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::FunctionCall { name, arguments } => {
                 write!(f, "FUNC-CALL({}({})", name, arguments.join(","))
+            }
+            Instruction::Open { file_handle, file_path } => {
+                write!(f, "OPEN({} AS {})", file_handle, file_path)
+            }
+            Instruction::ReadFile { file_handle, output_stream } => {
+                write!(f, "READ-FILE({} INTO {})", file_handle, output_stream)
+            }
+            Instruction::WriteFile { file_handle, input_stream } => {
+                write!(f, "WRITE-FILE({} FROM {})", file_handle, input_stream)
+            }
+            Instruction::Close { file_handle } => {
+                write!(f, "CLOSE({})", file_handle)
+            }
+            Instruction::Checkpoint { record_stream } => {
+                write!(f, "CHECKPOINT({})", record_stream)
+            }
+            Instruction::Replay { target } => {
+                write!(f, "REPLAY({})", target)
             }
         }
     }
@@ -861,6 +900,157 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     arguments: arguments.clone(),
                 });
             }
+            ProcedureStatement::Open { file_handle, file_path } => {
+                if !declared_vars.contains(file_handle) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        file_handle
+                    ));
+                }
+                // Type check: file_handle must be FILE-HANDLE
+                if let Some(dtype) = var_types.get(file_handle) {
+                    if !matches!(dtype, crate::ast::DataType::FileHandle) {
+                        return Err(format!(
+                            "OPEN operation requires FILE-HANDLE type, got {}",
+                            dtype
+                        ));
+                    }
+                }
+                instructions.push(Instruction::Open {
+                    file_handle: file_handle.clone(),
+                    file_path: file_path.clone(),
+                });
+            }
+            ProcedureStatement::ReadFile { file_handle, output_stream } => {
+                if !declared_vars.contains(file_handle) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        file_handle
+                    ));
+                }
+                if !declared_vars.contains(output_stream) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        output_stream
+                    ));
+                }
+                // Type check: file_handle must be FILE-HANDLE, output_stream must be RECORD-STREAM
+                if let Some(dtype) = var_types.get(file_handle) {
+                    if !matches!(dtype, crate::ast::DataType::FileHandle) {
+                        return Err(format!(
+                            "READ-FILE operation requires FILE-HANDLE type for file_handle, got {}",
+                            dtype
+                        ));
+                    }
+                }
+                if let Some(dtype) = var_types.get(output_stream) {
+                    if !matches!(dtype, crate::ast::DataType::RecordStream) {
+                        return Err(format!(
+                            "READ-FILE operation requires RECORD-STREAM type for output_stream, got {}",
+                            dtype
+                        ));
+                    }
+                }
+                instructions.push(Instruction::ReadFile {
+                    file_handle: file_handle.clone(),
+                    output_stream: output_stream.clone(),
+                });
+            }
+            ProcedureStatement::WriteFile { file_handle, input_stream } => {
+                if !declared_vars.contains(file_handle) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        file_handle
+                    ));
+                }
+                if !declared_vars.contains(input_stream) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        input_stream
+                    ));
+                }
+                // Type check: file_handle must be FILE-HANDLE, input_stream must be RECORD-STREAM
+                if let Some(dtype) = var_types.get(file_handle) {
+                    if !matches!(dtype, crate::ast::DataType::FileHandle) {
+                        return Err(format!(
+                            "WRITE-FILE operation requires FILE-HANDLE type for file_handle, got {}",
+                            dtype
+                        ));
+                    }
+                }
+                if let Some(dtype) = var_types.get(input_stream) {
+                    if !matches!(dtype, crate::ast::DataType::RecordStream) {
+                        return Err(format!(
+                            "WRITE-FILE operation requires RECORD-STREAM type for input_stream, got {}",
+                            dtype
+                        ));
+                    }
+                }
+                instructions.push(Instruction::WriteFile {
+                    file_handle: file_handle.clone(),
+                    input_stream: input_stream.clone(),
+                });
+            }
+            ProcedureStatement::Close { file_handle } => {
+                if !declared_vars.contains(file_handle) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        file_handle
+                    ));
+                }
+                // Type check: file_handle must be FILE-HANDLE
+                if let Some(dtype) = var_types.get(file_handle) {
+                    if !matches!(dtype, crate::ast::DataType::FileHandle) {
+                        return Err(format!(
+                            "CLOSE operation requires FILE-HANDLE type, got {}",
+                            dtype
+                        ));
+                    }
+                }
+                instructions.push(Instruction::Close {
+                    file_handle: file_handle.clone(),
+                });
+            }
+            ProcedureStatement::Checkpoint { record_stream } => {
+                if !declared_vars.contains(record_stream) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        record_stream
+                    ));
+                }
+                // Type check: record_stream must be RECORD-STREAM
+                if let Some(dtype) = var_types.get(record_stream) {
+                    if !matches!(dtype, crate::ast::DataType::RecordStream) {
+                        return Err(format!(
+                            "CHECKPOINT operation requires RECORD-STREAM type, got {}",
+                            dtype
+                        ));
+                    }
+                }
+                instructions.push(Instruction::Checkpoint {
+                    record_stream: record_stream.clone(),
+                });
+            }
+            ProcedureStatement::Replay { target } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                // Type check: target must be RECORD-STREAM
+                if let Some(dtype) = var_types.get(target) {
+                    if !matches!(dtype, crate::ast::DataType::RecordStream) {
+                        return Err(format!(
+                            "REPLAY operation requires RECORD-STREAM type, got {}",
+                            dtype
+                        ));
+                    }
+                }
+                instructions.push(Instruction::Replay {
+                    target: target.clone(),
+                });
+            }
         }
     }
 
@@ -1073,6 +1263,63 @@ fn lower_single_statement(
                 operand2: operand2.clone(),
             })
         }
+        ProcedureStatement::Open { file_handle, file_path } => {
+            if !declared_vars.contains(file_handle) {
+                return Err(format!("Variable '{}' not declared", file_handle));
+            }
+            Ok(Instruction::Open {
+                file_handle: file_handle.clone(),
+                file_path: file_path.clone(),
+            })
+        }
+        ProcedureStatement::ReadFile { file_handle, output_stream } => {
+            if !declared_vars.contains(file_handle) {
+                return Err(format!("Variable '{}' not declared", file_handle));
+            }
+            if !declared_vars.contains(output_stream) {
+                return Err(format!("Variable '{}' not declared", output_stream));
+            }
+            Ok(Instruction::ReadFile {
+                file_handle: file_handle.clone(),
+                output_stream: output_stream.clone(),
+            })
+        }
+        ProcedureStatement::WriteFile { file_handle, input_stream } => {
+            if !declared_vars.contains(file_handle) {
+                return Err(format!("Variable '{}' not declared", file_handle));
+            }
+            if !declared_vars.contains(input_stream) {
+                return Err(format!("Variable '{}' not declared", input_stream));
+            }
+            Ok(Instruction::WriteFile {
+                file_handle: file_handle.clone(),
+                input_stream: input_stream.clone(),
+            })
+        }
+        ProcedureStatement::Close { file_handle } => {
+            if !declared_vars.contains(file_handle) {
+                return Err(format!("Variable '{}' not declared", file_handle));
+            }
+            Ok(Instruction::Close {
+                file_handle: file_handle.clone(),
+            })
+        }
+        ProcedureStatement::Checkpoint { record_stream } => {
+            if !declared_vars.contains(record_stream) {
+                return Err(format!("Variable '{}' not declared", record_stream));
+            }
+            Ok(Instruction::Checkpoint {
+                record_stream: record_stream.clone(),
+            })
+        }
+        ProcedureStatement::Replay { target } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::Replay {
+                target: target.clone(),
+            })
+        }
         _ => Err("Unsupported nested statement".to_string()),
     }
 }
@@ -1108,5 +1355,41 @@ mod tests {
             target: "x".to_string(),
         };
         assert_eq!(d1, d2);
+    }
+
+    #[test]
+    fn test_file_operation_instructions() {
+        let open_instr = Instruction::Open {
+            file_handle: "fh".to_string(),
+            file_path: "/path/to/file".to_string(),
+        };
+        assert_eq!(format!("{}", open_instr), "OPEN(fh AS /path/to/file)");
+
+        let read_instr = Instruction::ReadFile {
+            file_handle: "fh".to_string(),
+            output_stream: "rs".to_string(),
+        };
+        assert_eq!(format!("{}", read_instr), "READ-FILE(fh INTO rs)");
+
+        let write_instr = Instruction::WriteFile {
+            file_handle: "fh".to_string(),
+            input_stream: "rs".to_string(),
+        };
+        assert_eq!(format!("{}", write_instr), "WRITE-FILE(fh FROM rs)");
+
+        let close_instr = Instruction::Close {
+            file_handle: "fh".to_string(),
+        };
+        assert_eq!(format!("{}", close_instr), "CLOSE(fh)");
+
+        let checkpoint_instr = Instruction::Checkpoint {
+            record_stream: "rs".to_string(),
+        };
+        assert_eq!(format!("{}", checkpoint_instr), "CHECKPOINT(rs)");
+
+        let replay_instr = Instruction::Replay {
+            target: "rs".to_string(),
+        };
+        assert_eq!(format!("{}", replay_instr), "REPLAY(rs)");
     }
 }

@@ -304,6 +304,48 @@ impl Parser {
                 self.expect(Token::Period)?;
                 Ok(ProcedureStatement::Length { target, source })
             }
+            Token::Open => {
+                self.advance();
+                let file_handle = self.expect_variable_or_type()?;
+                self.expect(Token::As)?;
+                let file_path = self.expect_string()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Open { file_handle, file_path })
+            }
+            Token::ReadFile => {
+                self.advance();
+                let file_handle = self.expect_variable_or_type()?;
+                self.expect(Token::As)?;
+                let output_stream = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::ReadFile { file_handle, output_stream })
+            }
+            Token::WriteFile => {
+                self.advance();
+                let file_handle = self.expect_variable_or_type()?;
+                self.expect(Token::As)?;
+                let input_stream = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::WriteFile { file_handle, input_stream })
+            }
+            Token::Close => {
+                self.advance();
+                let file_handle = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Close { file_handle })
+            }
+            Token::Checkpoint => {
+                self.advance();
+                let record_stream = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Checkpoint { record_stream })
+            }
+            Token::Replay => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Replay { target })
+            }
             _ => Err(format!("Unexpected token in block: {}", self.current())),
         }
     }
@@ -472,6 +514,8 @@ impl Parser {
                         DataType::TextString => "TEXT-STRING".to_string(),
                         DataType::NumberInteger => "NUMBER-INTEGER".to_string(),
                         DataType::NumberDecimal => "NUMBER-DECIMAL".to_string(),
+                        DataType::FileHandle => "FILE-HANDLE".to_string(),
+                        DataType::RecordStream => "RECORD-STREAM".to_string(),
                     };
 
                     if self.current() == &Token::As {
