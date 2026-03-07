@@ -115,6 +115,11 @@ impl Wal {
         Ok(())
     }
 
+    /// Get the next sequence number
+    pub fn get_next_sequence(&self) -> u64 {
+        self.next_sequence
+    }
+
     /// Replay all entries from the WAL.
     pub fn replay(&mut self) -> io::Result<Vec<WalEntry>> {
         let mut entries = Vec::new();

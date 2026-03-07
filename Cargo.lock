@@ -301,6 +301,7 @@ version = "0.3.0"
 dependencies = [
  "cnf-compiler",
  "cnf-security",
+ "cnf-stdlib",
  "cnf-storage",
  "cobol-protocol-v153",
  "criterion",
@@ -319,7 +320,6 @@ dependencies = [
 name = "cnf-stdlib"
 version = "0.2.0"
 dependencies = [
- "cnf-runtime",
  "cnf-security",
  "cobol-protocol-v153",
 ]

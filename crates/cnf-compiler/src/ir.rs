@@ -100,6 +100,32 @@ pub enum Instruction {
         target: String,
         source: String,
     },
+    Uppercase {
+        target: String,
+        source: String,
+    },
+    Lowercase {
+        target: String,
+        source: String,
+    },
+    Trim {
+        target: String,
+        source: String,
+    },
+    Max {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Min {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Abs {
+        target: String,
+        operand: String,
+    },
     IfStatement {
         condition: String,
         then_instrs: Vec<Instruction>,
@@ -256,6 +282,32 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Length { target, source } => {
                 write!(f, "LENGTH({} = len({}))", target, source)
+            }
+            Instruction::Uppercase { target, source } => {
+                write!(f, "UPPERCASE({} = upper({}))", target, source)
+            }
+            Instruction::Lowercase { target, source } => {
+                write!(f, "LOWERCASE({} = lower({}))", target, source)
+            }
+            Instruction::Trim { target, source } => {
+                write!(f, "TRIM({} = trim({}))", target, source)
+            }
+            Instruction::Max {
+                target,
+                operand1,
+                operand2,
+            } => {
+                write!(f, "MAX({} = max({}, {}))", target, operand1, operand2)
+            }
+            Instruction::Min {
+                target,
+                operand1,
+                operand2,
+            } => {
+                write!(f, "MIN({} = min({}, {}))", target, operand1, operand2)
+            }
+            Instruction::Abs { target, operand } => {
+                write!(f, "ABS({} = abs({}))", target, operand)
             }
             Instruction::IfStatement {
                 condition,
@@ -800,6 +852,136 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 instructions.push(Instruction::Length {
                     target: target.clone(),
                     source: source.clone(),
+                });
+            }
+            ProcedureStatement::Uppercase { target, source } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(source) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        source
+                    ));
+                }
+                instructions.push(Instruction::Uppercase {
+                    target: target.clone(),
+                    source: source.clone(),
+                });
+            }
+            ProcedureStatement::Lowercase { target, source } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(source) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        source
+                    ));
+                }
+                instructions.push(Instruction::Lowercase {
+                    target: target.clone(),
+                    source: source.clone(),
+                });
+            }
+            ProcedureStatement::Trim { target, source } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(source) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        source
+                    ));
+                }
+                instructions.push(Instruction::Trim {
+                    target: target.clone(),
+                    source: source.clone(),
+                });
+            }
+            ProcedureStatement::Max {
+                target,
+                operand1,
+                operand2,
+            } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(operand1) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand1
+                    ));
+                }
+                if !declared_vars.contains(operand2) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand2
+                    ));
+                }
+                instructions.push(Instruction::Max {
+                    target: target.clone(),
+                    operand1: operand1.clone(),
+                    operand2: operand2.clone(),
+                });
+            }
+            ProcedureStatement::Min {
+                target,
+                operand1,
+                operand2,
+            } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(operand1) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand1
+                    ));
+                }
+                if !declared_vars.contains(operand2) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand2
+                    ));
+                }
+                instructions.push(Instruction::Min {
+                    target: target.clone(),
+                    operand1: operand1.clone(),
+                    operand2: operand2.clone(),
+                });
+            }
+            ProcedureStatement::Abs { target, operand } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(operand) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        operand
+                    ));
+                }
+                instructions.push(Instruction::Abs {
+                    target: target.clone(),
+                    operand: operand.clone(),
                 });
             }
             ProcedureStatement::If {

@@ -143,6 +143,64 @@ mod runtime_execution_tests {
     }
 
     #[test]
+    fn test_runtime_string_helpers() {
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("SRC".to_string(), b" hello ".to_vec());
+        runtime.add_buffer("OUT".to_string(), Vec::new());
+
+        // uppercase
+        runtime.execute_instruction(&Instruction::Uppercase {
+            target: "OUT".to_string(),
+            source: "SRC".to_string(),
+        }).unwrap();
+        assert_eq!(runtime.get_output("OUT").unwrap(), b" HELLO ");
+
+        // lowercase
+        runtime.add_buffer("OUT".to_string(), Vec::new());
+        runtime.execute_instruction(&Instruction::Lowercase {
+            target: "OUT".to_string(),
+            source: "SRC".to_string(),
+        }).unwrap();
+        assert_eq!(runtime.get_output("OUT").unwrap(), b" hello ");
+
+        // trim
+        runtime.add_buffer("OUT".to_string(), Vec::new());
+        runtime.execute_instruction(&Instruction::Trim {
+            target: "OUT".to_string(),
+            source: "SRC".to_string(),
+        }).unwrap();
+        assert_eq!(runtime.get_output("OUT").unwrap(), b"hello");
+    }
+
+    #[test]
+    fn test_runtime_math_helpers() {
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("RESULT".to_string(), Vec::new());
+
+        runtime.execute_instruction(&Instruction::Max {
+            target: "RESULT".to_string(),
+            operand1: "10".to_string(),
+            operand2: "7".to_string(),
+        }).unwrap();
+        assert_eq!(runtime.get_output("RESULT").unwrap(), b"10");
+
+        runtime.add_buffer("RESULT".to_string(), Vec::new());
+        runtime.execute_instruction(&Instruction::Min {
+            target: "RESULT".to_string(),
+            operand1: "10".to_string(),
+            operand2: "7".to_string(),
+        }).unwrap();
+        assert_eq!(runtime.get_output("RESULT").unwrap(), b"7");
+
+        runtime.add_buffer("RESULT".to_string(), Vec::new());
+        runtime.execute_instruction(&Instruction::Abs {
+            target: "RESULT".to_string(),
+            operand: "-5".to_string(),
+        }).unwrap();
+        assert_eq!(runtime.get_output("RESULT").unwrap(), b"5");
+    }
+
+    #[test]
     fn test_runtime_verify_integrity_produces_hash() {
         // Test VERIFY-INTEGRITY instruction
         let mut runtime = Runtime::new();

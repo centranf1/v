@@ -701,6 +701,72 @@ impl Runtime {
         Ok(())
     }
 
+    /// Execute UPPERCASE instruction.
+    fn dispatch_uppercase(&mut self, target: &str, source: &str) -> Result<(), CnfError> {
+        // clone data to avoid simultaneous mutable borrow
+        let src = self.get_buffer(source)?.to_vec();
+        let src_str = String::from_utf8_lossy(&src);
+        let result = cnf_stdlib::string::to_upper(&src_str);
+        let buf = self.get_buffer_mut(target)?;
+        buf.clear();
+        buf.extend_from_slice(result.as_bytes());
+        Ok(())
+    }
+
+    /// Execute LOWERCASE instruction.
+    fn dispatch_lowercase(&mut self, target: &str, source: &str) -> Result<(), CnfError> {
+        let src = self.get_buffer(source)?.to_vec();
+        let src_str = String::from_utf8_lossy(&src);
+        let result = cnf_stdlib::string::to_lower(&src_str);
+        let buf = self.get_buffer_mut(target)?;
+        buf.clear();
+        buf.extend_from_slice(result.as_bytes());
+        Ok(())
+    }
+
+    /// Execute TRIM instruction.
+    fn dispatch_trim(&mut self, target: &str, source: &str) -> Result<(), CnfError> {
+        let src = self.get_buffer(source)?.to_vec();
+        let src_str = String::from_utf8_lossy(&src);
+        let result = cnf_stdlib::string::trim(&src_str);
+        let buf = self.get_buffer_mut(target)?;
+        buf.clear();
+        buf.extend_from_slice(result.as_bytes());
+        Ok(())
+    }
+
+    /// Execute MAX instruction.
+    fn dispatch_max(&mut self, target: &str, operand1: &str, operand2: &str) -> Result<(), CnfError> {
+        let val1 = self.parse_numeric_value(operand1)?;
+        let val2 = self.parse_numeric_value(operand2)?;
+        let result = cnf_stdlib::math::max(val1 as i64, val2 as i64);
+        let buf = self.get_buffer_mut(target)?;
+        buf.clear();
+        buf.extend_from_slice(result.to_string().as_bytes());
+        Ok(())
+    }
+
+    /// Execute MIN instruction.
+    fn dispatch_min(&mut self, target: &str, operand1: &str, operand2: &str) -> Result<(), CnfError> {
+        let val1 = self.parse_numeric_value(operand1)?;
+        let val2 = self.parse_numeric_value(operand2)?;
+        let result = cnf_stdlib::math::min(val1 as i64, val2 as i64);
+        let buf = self.get_buffer_mut(target)?;
+        buf.clear();
+        buf.extend_from_slice(result.to_string().as_bytes());
+        Ok(())
+    }
+
+    /// Execute ABS instruction.
+    fn dispatch_abs(&mut self, target: &str, operand: &str) -> Result<(), CnfError> {
+        let val = self.parse_numeric_value(operand)?;
+        let result = cnf_stdlib::math::abs(val as i64);
+        let buf = self.get_buffer_mut(target)?;
+        buf.clear();
+        buf.extend_from_slice(result.to_string().as_bytes());
+        Ok(())
+    }
+
     /// Dispatch OPEN file operation
     fn dispatch_open(&mut self, file_handle: &str, file_path: &str) -> Result<(), CnfError> {
         // Use cnf-storage to open file
@@ -1016,6 +1082,32 @@ impl Runtime {
             }
             Instruction::Length { target, source } => {
                 self.dispatch_length(target, source)?;
+            }
+            Instruction::Uppercase { target, source } => {
+                self.dispatch_uppercase(target, source)?;
+            }
+            Instruction::Lowercase { target, source } => {
+                self.dispatch_lowercase(target, source)?;
+            }
+            Instruction::Trim { target, source } => {
+                self.dispatch_trim(target, source)?;
+            }
+            Instruction::Max {
+                target,
+                operand1,
+                operand2,
+            } => {
+                self.dispatch_max(target, operand1, operand2)?;
+            }
+            Instruction::Min {
+                target,
+                operand1,
+                operand2,
+            } => {
+                self.dispatch_min(target, operand1, operand2)?;
+            }
+            Instruction::Abs { target, operand } => {
+                self.dispatch_abs(target, operand)?;
             }
             Instruction::IfStatement {
                 condition,

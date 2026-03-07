@@ -175,6 +175,32 @@ pub enum ProcedureStatement {
         target: String,
         source: String,
     },
+    Uppercase {
+        target: String,
+        source: String,
+    },
+    Lowercase {
+        target: String,
+        source: String,
+    },
+    Trim {
+        target: String,
+        source: String,
+    },
+    Max {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Min {
+        target: String,
+        operand1: String,
+        operand2: String,
+    },
+    Abs {
+        target: String,
+        operand: String,
+    },
     If {
         condition: String,
         then_statements: Vec<Box<ProcedureStatement>>,

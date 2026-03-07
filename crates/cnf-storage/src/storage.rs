@@ -1,6 +1,9 @@
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::Path;
+use std::collections::HashMap;
+use crate::checkpoint::CheckpointManager;
+use crate::wal::Wal;
 
 /// Perform an atomic write: write data to a temporary file and then rename.
 /// Returns `Ok(())` on success, or an io::Error on failure.
@@ -22,16 +25,22 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
 
 /// Storage manager for file operations
 pub struct Storage {
-    open_files: std::collections::HashMap<u64, std::fs::File>,
+    open_files: HashMap<u64, std::fs::File>,
     next_handle: u64,
+    wal: Option<Wal>,
+    checkpoint_manager: Option<CheckpointManager>,
+    data_store: HashMap<String, Vec<u8>>,
 }
 
 impl Storage {
     /// Create new storage instance
     pub fn new() -> Self {
         Storage {
-            open_files: std::collections::HashMap::new(),
+            open_files: HashMap::new(),
             next_handle: 1,
+            wal: None,
+            checkpoint_manager: None,
+            data_store: HashMap::new(),
         }
     }
 
@@ -76,20 +85,39 @@ impl Storage {
 
     /// Checkpoint data (placeholder for now)
     pub fn checkpoint(&mut self, _data: &str) -> io::Result<()> {
-        // TODO: Implement checkpoint using WAL/checkpoint modules
+        if let Some(ref mgr) = self.checkpoint_manager {
+            // Get next sequence from WAL if available
+            let sequence = self.wal.as_ref().map(|w| w.get_next_sequence()).unwrap_or(0);
+            mgr.snapshot(sequence, self.data_store.clone())?;
+        }
         Ok(())
     }
 
     /// Replay data (placeholder for now)
     pub fn replay(&mut self) -> io::Result<String> {
-        // TODO: Implement replay using WAL/checkpoint modules
+        if let Some(ref mut wal) = self.wal {
+            let entries = wal.replay()?;
+            // Reconstruct data from WAL entries
+            let mut result = String::new();
+            for entry in entries {
+                result.push_str(&format!("{}:{}\\n", entry.operation, entry.key));
+            }
+            return Ok(result);
+        }
         Ok("".to_string())
     }
 }
 
 impl Default for Storage {
     fn default() -> Self {
-        Self::new()
+        let storage = Storage {
+            open_files: HashMap::new(),
+            next_handle: 1,
+            wal: None,
+            checkpoint_manager: None,
+            data_store: HashMap::new(),
+        };
+        storage
     }
 }
 

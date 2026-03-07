@@ -304,6 +304,58 @@ impl Parser {
                 self.expect(Token::Period)?;
                 Ok(ProcedureStatement::Length { target, source })
             }
+            Token::Uppercase => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let source = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Uppercase { target, source })
+            }
+            Token::Lowercase => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let source = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Lowercase { target, source })
+            }
+            Token::Trim => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let source = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Trim { target, source })
+            }
+            Token::Max => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let operand1 = self.expect_variable_or_type()?;
+                let operand2 = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Max {
+                    target,
+                    operand1,
+                    operand2,
+                })
+            }
+            Token::Min => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let operand1 = self.expect_variable_or_type()?;
+                let operand2 = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Min {
+                    target,
+                    operand1,
+                    operand2,
+                })
+            }
+            Token::Abs => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let operand = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Abs { target, operand })
+            }
             Token::Open => {
                 self.advance();
                 let file_handle = self.expect_variable_or_type()?;
@@ -635,6 +687,50 @@ impl Parser {
                     let parts = self.expect_identifier()?;
                     self.expect(Token::Period)?;
                     ProcedureStatement::Split { target, parts }
+                }
+                Token::Uppercase => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let source = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Uppercase { target, source }
+                }
+                Token::Lowercase => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let source = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Lowercase { target, source }
+                }
+                Token::Trim => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let source = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Trim { target, source }
+                }
+                Token::Max => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let operand1 = self.expect_variable_or_type()?;
+                    let operand2 = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Max { target, operand1, operand2 }
+                }
+                Token::Min => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let operand1 = self.expect_variable_or_type()?;
+                    let operand2 = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Min { target, operand1, operand2 }
+                }
+                Token::Abs => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let operand = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Abs { target, operand }
                 }
                 Token::Validate => {
                     self.advance();

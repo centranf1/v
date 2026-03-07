@@ -118,6 +118,47 @@ Last updated: 2026-03-06
 - crates/centra-nf-cli/tests/cli_integration.rs
 - crates/centra-nf-cli/tests/integration_test.rs
 - crates/cnf-runtime/src/runtime.rs
+
+---
+
+## Session 4: v0.5.0 Phase 2 – Persistence & stdlib helpers
+
+[2026-03-07]
+
+**Change:**
+- Added WAL and CheckpointManager hooks to runtime dispatch (`dispatch_checkpoint`,
+  `dispatch_replay`) via cnf-storage dependency
+- Wrote extensive end-to-end CLI tests for OPEN → READ-FILE → CHECKPOINT → REPLAY
+  with data verification and multiple handles
+- Connected cnf-stdlib math and string helpers (add, subtract, multiply, max,
+  min, abs, uppercase, lowercase, trim) to runtime `execute_instruction` and
+  dispatch methods
+- Updated AST, IR, parser, lexer and integration tests to recognize and lower
+  new helper statements
+- Added runtime unit tests covering stdlib helpers and updated compiler
+  integration tests for pipeline support
+- Fixed cyclic dependency between cnf-runtime and cnf-stdlib by removing
+  runtime dependency from stdlib crate
+
+**Scope:**
+- crates/cnf-runtime/src/runtime.rs (helper dispatch implementations, WAL/checkpoint calls)
+- crates/cnf-storage/src/storage.rs (persistence field additions)
+- crates/centra-nf-cli/tests/file_operations_e2e.rs (new end-to-end tests)
+- crates/cnf-compiler/src/{lexer.rs,parser.rs,ast.rs,ir.rs} (new instructions, parsing logic)
+- crates/cnf-compiler/tests/integration.rs (stdlib helper compilation tests)
+- crates/cnf-runtime/tests/execution_tests.rs (runtime helper tests)
+- crates/cnf-runtime/Cargo.toml (added stdlib dependency)
+- crates/cnf-stdlib/Cargo.toml (removed cyclic dependency)
+
+**Status:** planned → **completed**
+
+**Notes:**
+- All 8 CI gates pass with 100% test coverage (now 91 unit + 14 integration tests across
+  crates, plus CLI and e2e tests)
+- Layer discipline maintained; no core-frozen modifications
+- Followed test-first approach with negative checks for literals and data validation
+
+---
 - examples/*.cnf (simple, full_pipeline, control_flow, io_demo, advanced_ops)
 
 **Status:** ✅ COMPLETED

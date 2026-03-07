@@ -101,6 +101,44 @@ mod integration_tests {
         assert!(error.contains("received") || error.contains("got"));
     }
 
+    #[test]
+    fn test_pipeline_includes_stdlib_helpers() {
+        // Create a CNF snippet using new string and math helpers
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. StdlibTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT TEXT-STRING AS A.
+                INPUT TEXT-STRING AS B.
+                INPUT NUMBER-INTEGER AS N.
+                INPUT NUMBER-INTEGER AS M.
+                INPUT NUMBER-INTEGER AS O.
+            PROCEDURE DIVISION.
+                UPPERCASE A B.
+                LOWERCASE B A.
+                TRIM A A.
+                SET N "5".
+                SET M "10".
+                MAX N N M.
+                MIN N N M.
+                SET O "-3".
+                ABS N O.
+        "#;
+
+        let ir = compile(source).expect("Compilation with stdlib helpers should succeed");
+
+        // ensure IR contains the corresponding instructions
+        let ir_strings: Vec<String> = ir.iter().map(|instr| instr.to_string()).collect();
+        assert!(ir_strings.iter().any(|s| s.starts_with("UPPERCASE")));
+        assert!(ir_strings.iter().any(|s| s.starts_with("LOWERCASE")));
+        assert!(ir_strings.iter().any(|s| s.starts_with("TRIM")));
+        assert!(ir_strings.iter().any(|s| s.starts_with("MAX")));
+        assert!(ir_strings.iter().any(|s| s.starts_with("MIN")));
+        assert!(ir_strings.iter().any(|s| s.starts_with("ABS")));
+    }
+
     // === Variable Declaration Naming Tests ===
 
     #[test]
