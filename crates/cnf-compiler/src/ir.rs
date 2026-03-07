@@ -171,6 +171,25 @@ pub enum Instruction {
     Replay {
         target: String,
     },
+    SendBuffer {
+        buffer: String,
+        target_node: String,
+    },
+    ReceiveBuffer {
+        buffer: String,
+        source_node: String,
+    },
+    PipeStream {
+        buffer: String,
+        target_node: String,
+        output: String,
+    },
+    CallRemote {
+        node: String,
+        function_name: String,
+        args: Vec<String>,
+        output: String,
+    },
 }
 
 impl std::fmt::Display for Instruction {
@@ -348,13 +367,22 @@ impl std::fmt::Display for Instruction {
             Instruction::FunctionCall { name, arguments } => {
                 write!(f, "FUNC-CALL({}({})", name, arguments.join(","))
             }
-            Instruction::Open { file_handle, file_path } => {
+            Instruction::Open {
+                file_handle,
+                file_path,
+            } => {
                 write!(f, "OPEN({} AS {})", file_handle, file_path)
             }
-            Instruction::ReadFile { file_handle, output_stream } => {
+            Instruction::ReadFile {
+                file_handle,
+                output_stream,
+            } => {
                 write!(f, "READ-FILE({} INTO {})", file_handle, output_stream)
             }
-            Instruction::WriteFile { file_handle, input_stream } => {
+            Instruction::WriteFile {
+                file_handle,
+                input_stream,
+            } => {
                 write!(f, "WRITE-FILE({} FROM {})", file_handle, input_stream)
             }
             Instruction::Close { file_handle } => {
@@ -365,6 +393,41 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Replay { target } => {
                 write!(f, "REPLAY({})", target)
+            }
+            Instruction::SendBuffer {
+                buffer,
+                target_node,
+            } => {
+                write!(f, "SEND_BUFFER({} TO {})", buffer, target_node)
+            }
+            Instruction::ReceiveBuffer {
+                buffer,
+                source_node,
+            } => {
+                write!(f, "RECEIVE_BUFFER({} FROM {})", buffer, source_node)
+            }
+            Instruction::PipeStream {
+                buffer,
+                target_node,
+                output,
+            } => {
+                write!(
+                    f,
+                    "PIPE_STREAM({} TO {} -> {})",
+                    buffer, target_node, output
+                )
+            }
+            Instruction::CallRemote {
+                node,
+                function_name,
+                args,
+                output,
+            } => {
+                write!(
+                    f,
+                    "CALL_REMOTE({}:{}({:?}) -> {})",
+                    node, function_name, args, output
+                )
             }
         }
     }
@@ -417,6 +480,11 @@ impl TypeValidator {
             crate::ast::DataType::JsonObject | crate::ast::DataType::XmlDocument
         )
     }
+}
+
+/// Check if a string is a literal value
+fn is_literal(s: &str) -> bool {
+    s.starts_with('"') && s.ends_with('"')
 }
 
 pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
@@ -1082,7 +1150,10 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     arguments: arguments.clone(),
                 });
             }
-            ProcedureStatement::Open { file_handle, file_path } => {
+            ProcedureStatement::Open {
+                file_handle,
+                file_path,
+            } => {
                 if !declared_vars.contains(file_handle) {
                     return Err(format!(
                         "Variable '{}' not declared in DATA DIVISION",
@@ -1103,7 +1174,10 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     file_path: file_path.clone(),
                 });
             }
-            ProcedureStatement::ReadFile { file_handle, output_stream } => {
+            ProcedureStatement::ReadFile {
+                file_handle,
+                output_stream,
+            } => {
                 if !declared_vars.contains(file_handle) {
                     return Err(format!(
                         "Variable '{}' not declared in DATA DIVISION",
@@ -1138,7 +1212,10 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     output_stream: output_stream.clone(),
                 });
             }
-            ProcedureStatement::WriteFile { file_handle, input_stream } => {
+            ProcedureStatement::WriteFile {
+                file_handle,
+                input_stream,
+            } => {
                 if !declared_vars.contains(file_handle) {
                     return Err(format!(
                         "Variable '{}' not declared in DATA DIVISION",
@@ -1231,6 +1308,94 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 }
                 instructions.push(Instruction::Replay {
                     target: target.clone(),
+                });
+            }
+            ProcedureStatement::SendBuffer {
+                buffer,
+                target_node,
+            } => {
+                if !declared_vars.contains(buffer) {
+                    return Err(format!("Buffer '{}' not declared in DATA DIVISION", buffer));
+                }
+                // Validate node reference if network division exists
+                if let Some(ref network) = program.network {
+                    let node_exists = network.nodes.iter().any(|n| &n.name == target_node);
+                    if !node_exists {
+                        return Err(format!("L6.006 NodeNotFound: {}", target_node));
+                    }
+                }
+                instructions.push(Instruction::SendBuffer {
+                    buffer: buffer.clone(),
+                    target_node: target_node.clone(),
+                });
+            }
+            ProcedureStatement::ReceiveBuffer {
+                buffer,
+                source_node,
+            } => {
+                if !declared_vars.contains(buffer) {
+                    return Err(format!("Buffer '{}' not declared in DATA DIVISION", buffer));
+                }
+                // Validate node reference if network division exists
+                if let Some(ref network) = program.network {
+                    let node_exists = network.nodes.iter().any(|n| &n.name == source_node);
+                    if !node_exists {
+                        return Err(format!("L6.006 NodeNotFound: {}", source_node));
+                    }
+                }
+                instructions.push(Instruction::ReceiveBuffer {
+                    buffer: buffer.clone(),
+                    source_node: source_node.clone(),
+                });
+            }
+            ProcedureStatement::PipeStream {
+                buffer,
+                target_node,
+                output,
+            } => {
+                if !declared_vars.contains(buffer) {
+                    return Err(format!("Buffer '{}' not declared in DATA DIVISION", buffer));
+                }
+                if !declared_vars.contains(output) {
+                    return Err(format!("Output '{}' not declared in DATA DIVISION", output));
+                }
+                // Validate node reference if network division exists
+                if let Some(ref network) = program.network {
+                    let node_exists = network.nodes.iter().any(|n| &n.name == target_node);
+                    if !node_exists {
+                        return Err(format!("L6.006 NodeNotFound: {}", target_node));
+                    }
+                }
+                instructions.push(Instruction::PipeStream {
+                    buffer: buffer.clone(),
+                    target_node: target_node.clone(),
+                    output: output.clone(),
+                });
+            }
+            ProcedureStatement::CallRemote {
+                node,
+                function_name,
+                args,
+                output,
+            } => {
+                // Validate node reference if network division exists
+                if let Some(ref network) = program.network {
+                    let node_exists = network.nodes.iter().any(|n| &n.name == node);
+                    if !node_exists {
+                        return Err(format!("L6.006 NodeNotFound: {}", node));
+                    }
+                }
+                // Validate args are declared variables
+                for arg in args {
+                    if !declared_vars.contains(arg) && !is_literal(arg) {
+                        return Err(format!("Argument '{}' not declared in DATA DIVISION", arg));
+                    }
+                }
+                instructions.push(Instruction::CallRemote {
+                    node: node.clone(),
+                    function_name: function_name.clone(),
+                    args: args.clone(),
+                    output: output.clone(),
                 });
             }
         }
@@ -1445,7 +1610,10 @@ fn lower_single_statement(
                 operand2: operand2.clone(),
             })
         }
-        ProcedureStatement::Open { file_handle, file_path } => {
+        ProcedureStatement::Open {
+            file_handle,
+            file_path,
+        } => {
             if !declared_vars.contains(file_handle) {
                 return Err(format!("Variable '{}' not declared", file_handle));
             }
@@ -1454,7 +1622,10 @@ fn lower_single_statement(
                 file_path: file_path.clone(),
             })
         }
-        ProcedureStatement::ReadFile { file_handle, output_stream } => {
+        ProcedureStatement::ReadFile {
+            file_handle,
+            output_stream,
+        } => {
             if !declared_vars.contains(file_handle) {
                 return Err(format!("Variable '{}' not declared", file_handle));
             }
@@ -1466,7 +1637,10 @@ fn lower_single_statement(
                 output_stream: output_stream.clone(),
             })
         }
-        ProcedureStatement::WriteFile { file_handle, input_stream } => {
+        ProcedureStatement::WriteFile {
+            file_handle,
+            input_stream,
+        } => {
             if !declared_vars.contains(file_handle) {
                 return Err(format!("Variable '{}' not declared", file_handle));
             }

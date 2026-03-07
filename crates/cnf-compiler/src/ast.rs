@@ -10,6 +10,7 @@ use std::collections::HashMap;
 pub struct Program {
     pub identification: IdentificationDivision,
     pub environment: EnvironmentDivision,
+    pub network: Option<NetworkDivision>,
     pub data: DataDivision,
     pub procedure: ProcedureDivision,
 }
@@ -24,6 +25,37 @@ pub struct IdentificationDivision {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnvironmentDivision {
     pub config: HashMap<String, String>, // key → quoted value
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NetworkDivision {
+    pub nodes: Vec<NodeDeclaration>,
+    pub self_node: String,
+    pub topology: Topology,
+    pub timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NodeDeclaration {
+    pub name: String,
+    pub address: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Topology {
+    Pipeline,
+    Mesh,
+    Star,
+}
+
+impl std::fmt::Display for Topology {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Topology::Pipeline => write!(f, "PIPELINE"),
+            Topology::Mesh => write!(f, "MESH"),
+            Topology::Star => write!(f, "STAR"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -245,6 +277,25 @@ pub enum ProcedureStatement {
     },
     Replay {
         target: String,
+    },
+    SendBuffer {
+        buffer: String,
+        target_node: String,
+    },
+    ReceiveBuffer {
+        buffer: String,
+        source_node: String,
+    },
+    PipeStream {
+        buffer: String,
+        target_node: String,
+        output: String,
+    },
+    CallRemote {
+        node: String,
+        function_name: String,
+        args: Vec<String>,
+        output: String,
     },
 }
 

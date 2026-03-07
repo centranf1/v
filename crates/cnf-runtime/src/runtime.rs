@@ -8,6 +8,9 @@ use crate::scheduler::Scheduler;
 use cnf_compiler::ir::Instruction;
 use std::collections::HashMap;
 
+#[cfg(feature = "network")]
+use cnf_network::NetworkNode;
+
 #[derive(Debug, Clone)]
 pub enum CnfError {
     BufferNotFound(String),
@@ -18,6 +21,8 @@ pub enum CnfError {
     InvalidInstruction(String),
     RuntimeError(String),
     IoError(String),
+    #[cfg(feature = "network")]
+    NetworkNotInitialized,
 }
 
 impl std::fmt::Display for CnfError {
@@ -31,6 +36,10 @@ impl std::fmt::Display for CnfError {
             CnfError::DecryptionFailed(msg) => write!(f, "Decryption failed: {}", msg),
             CnfError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
             CnfError::IoError(msg) => write!(f, "I/O error: {}", msg),
+            #[cfg(feature = "network")]
+            CnfError::NetworkNotInitialized => {
+                write!(f, "Network not initialized - enable 'network' feature")
+            }
         }
     }
 }
@@ -43,12 +52,21 @@ impl From<std::io::Error> for CnfError {
     }
 }
 
+#[cfg(feature = "network")]
+impl From<cnf_network::CnfNetworkError> for CnfError {
+    fn from(err: cnf_network::CnfNetworkError) -> Self {
+        CnfError::RuntimeError(format!("Network error: {}", err))
+    }
+}
+
 pub struct Runtime {
     buffers: HashMap<String, Vec<u8>>,
     dag: Dag,
     call_stack: CallStack,
     scope_manager: ScopeManager,
     storage: cnf_storage::Storage,
+    #[cfg(feature = "network")]
+    network: Option<cnf_network::NetworkNode>,
 }
 
 impl Runtime {
@@ -59,6 +77,8 @@ impl Runtime {
             call_stack: CallStack::new(),
             scope_manager: ScopeManager::new(),
             storage: cnf_storage::Storage::new(),
+            #[cfg(feature = "network")]
+            network: None,
         }
     }
 
@@ -736,7 +756,12 @@ impl Runtime {
     }
 
     /// Execute MAX instruction.
-    fn dispatch_max(&mut self, target: &str, operand1: &str, operand2: &str) -> Result<(), CnfError> {
+    fn dispatch_max(
+        &mut self,
+        target: &str,
+        operand1: &str,
+        operand2: &str,
+    ) -> Result<(), CnfError> {
         let val1 = self.parse_numeric_value(operand1)?;
         let val2 = self.parse_numeric_value(operand2)?;
         let result = cnf_stdlib::math::max(val1 as i64, val2 as i64);
@@ -747,7 +772,12 @@ impl Runtime {
     }
 
     /// Execute MIN instruction.
-    fn dispatch_min(&mut self, target: &str, operand1: &str, operand2: &str) -> Result<(), CnfError> {
+    fn dispatch_min(
+        &mut self,
+        target: &str,
+        operand1: &str,
+        operand2: &str,
+    ) -> Result<(), CnfError> {
         let val1 = self.parse_numeric_value(operand1)?;
         let val2 = self.parse_numeric_value(operand2)?;
         let result = cnf_stdlib::math::min(val1 as i64, val2 as i64);
@@ -776,47 +806,63 @@ impl Runtime {
     }
 
     /// Dispatch READ-FILE operation
-    fn dispatch_read_file(&mut self, file_handle: &str, output_stream: &str) -> Result<(), CnfError> {
-        let handle_str = self.get_variable(file_handle)
-            .ok_or_else(|| CnfError::InvalidInstruction(format!("File handle '{}' not found", file_handle)))?;
-        let handle = handle_str.parse::<u64>()
-            .map_err(|_| CnfError::InvalidInstruction(format!("Invalid file handle '{}'", handle_str)))?;
-        
+    fn dispatch_read_file(
+        &mut self,
+        file_handle: &str,
+        output_stream: &str,
+    ) -> Result<(), CnfError> {
+        let handle_str = self.get_variable(file_handle).ok_or_else(|| {
+            CnfError::InvalidInstruction(format!("File handle '{}' not found", file_handle))
+        })?;
+        let handle = handle_str.parse::<u64>().map_err(|_| {
+            CnfError::InvalidInstruction(format!("Invalid file handle '{}'", handle_str))
+        })?;
+
         let stream = self.storage.read_file(handle)?;
         self.set_variable(output_stream.to_string(), stream);
         Ok(())
     }
 
     /// Dispatch WRITE-FILE operation
-    fn dispatch_write_file(&mut self, file_handle: &str, input_stream: &str) -> Result<(), CnfError> {
-        let handle_str = self.get_variable(file_handle)
-            .ok_or_else(|| CnfError::InvalidInstruction(format!("File handle '{}' not found", file_handle)))?;
-        let handle = handle_str.parse::<u64>()
-            .map_err(|_| CnfError::InvalidInstruction(format!("Invalid file handle '{}'", handle_str)))?;
-        
-        let data = self.get_variable(input_stream)
-            .ok_or_else(|| CnfError::InvalidInstruction(format!("Input stream '{}' not found", input_stream)))?;
-        
+    fn dispatch_write_file(
+        &mut self,
+        file_handle: &str,
+        input_stream: &str,
+    ) -> Result<(), CnfError> {
+        let handle_str = self.get_variable(file_handle).ok_or_else(|| {
+            CnfError::InvalidInstruction(format!("File handle '{}' not found", file_handle))
+        })?;
+        let handle = handle_str.parse::<u64>().map_err(|_| {
+            CnfError::InvalidInstruction(format!("Invalid file handle '{}'", handle_str))
+        })?;
+
+        let data = self.get_variable(input_stream).ok_or_else(|| {
+            CnfError::InvalidInstruction(format!("Input stream '{}' not found", input_stream))
+        })?;
+
         self.storage.write_file(handle, &data)?;
         Ok(())
     }
 
     /// Dispatch CLOSE operation
     fn dispatch_close(&mut self, file_handle: &str) -> Result<(), CnfError> {
-        let handle_str = self.get_variable(file_handle)
-            .ok_or_else(|| CnfError::InvalidInstruction(format!("File handle '{}' not found", file_handle)))?;
-        let handle = handle_str.parse::<u64>()
-            .map_err(|_| CnfError::InvalidInstruction(format!("Invalid file handle '{}'", handle_str)))?;
-        
+        let handle_str = self.get_variable(file_handle).ok_or_else(|| {
+            CnfError::InvalidInstruction(format!("File handle '{}' not found", file_handle))
+        })?;
+        let handle = handle_str.parse::<u64>().map_err(|_| {
+            CnfError::InvalidInstruction(format!("Invalid file handle '{}'", handle_str))
+        })?;
+
         self.storage.close_file(handle)?;
         Ok(())
     }
 
     /// Dispatch CHECKPOINT operation
     fn dispatch_checkpoint(&mut self, record_stream: &str) -> Result<(), CnfError> {
-        let data = self.get_variable(record_stream)
-            .ok_or_else(|| CnfError::InvalidInstruction(format!("Record stream '{}' not found", record_stream)))?;
-        
+        let data = self.get_variable(record_stream).ok_or_else(|| {
+            CnfError::InvalidInstruction(format!("Record stream '{}' not found", record_stream))
+        })?;
+
         self.storage.checkpoint(&data)?;
         Ok(())
     }
@@ -1184,13 +1230,22 @@ impl Runtime {
                 // TODO: Execute function body in v0.5.0
                 self.return_from_function(None)?;
             }
-            Instruction::Open { file_handle, file_path } => {
+            Instruction::Open {
+                file_handle,
+                file_path,
+            } => {
                 self.dispatch_open(file_handle, file_path)?;
             }
-            Instruction::ReadFile { file_handle, output_stream } => {
+            Instruction::ReadFile {
+                file_handle,
+                output_stream,
+            } => {
                 self.dispatch_read_file(file_handle, output_stream)?;
             }
-            Instruction::WriteFile { file_handle, input_stream } => {
+            Instruction::WriteFile {
+                file_handle,
+                input_stream,
+            } => {
                 self.dispatch_write_file(file_handle, input_stream)?;
             }
             Instruction::Close { file_handle } => {
@@ -1201,6 +1256,76 @@ impl Runtime {
             }
             Instruction::Replay { target } => {
                 self.dispatch_replay(target)?;
+            }
+            #[cfg(feature = "network")]
+            Instruction::SendBuffer {
+                buffer,
+                target_node,
+            } => {
+                self.dispatch_send_buffer(&buffer, &target_node)?;
+            }
+            #[cfg(not(feature = "network"))]
+            Instruction::SendBuffer {
+                buffer: _,
+                target_node: _,
+            } => {
+                return Err(CnfError::RuntimeError(
+                    "Network feature not enabled - recompile with 'network' feature".to_string(),
+                ));
+            }
+            #[cfg(feature = "network")]
+            Instruction::ReceiveBuffer {
+                buffer,
+                source_node,
+            } => {
+                self.dispatch_receive_buffer(&buffer, &source_node)?;
+            }
+            #[cfg(not(feature = "network"))]
+            Instruction::ReceiveBuffer {
+                buffer: _,
+                source_node: _,
+            } => {
+                return Err(CnfError::RuntimeError(
+                    "Network feature not enabled - recompile with 'network' feature".to_string(),
+                ));
+            }
+            #[cfg(feature = "network")]
+            Instruction::PipeStream {
+                buffer,
+                target_node,
+                output,
+            } => {
+                self.dispatch_pipe_stream(&buffer, &target_node, &output)?;
+            }
+            #[cfg(not(feature = "network"))]
+            Instruction::PipeStream {
+                buffer: _,
+                target_node: _,
+                output: _,
+            } => {
+                return Err(CnfError::RuntimeError(
+                    "Network feature not enabled - recompile with 'network' feature".to_string(),
+                ));
+            }
+            #[cfg(feature = "network")]
+            Instruction::CallRemote {
+                node,
+                function_name,
+                args,
+                output,
+            } => {
+                self.dispatch_call_remote(&node, &function_name, &args, &output)?;
+            }
+            #[cfg(not(feature = "network"))]
+            Instruction::CallRemote {
+                node: _,
+                function_name: _,
+                args: _,
+                output: _,
+            } => {
+                return Err(CnfError::RuntimeError(
+                    "Network feature not enabled - recompile with 'network' feature".to_string(),
+                ));
             }
         }
         Ok(())
@@ -1340,6 +1465,87 @@ impl Runtime {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
+    }
+
+    #[cfg(feature = "network")]
+    /// Initialize network node for distributed operations
+    pub fn set_network_node(&mut self, node: cnf_network::NetworkNode) {
+        self.network = Some(node);
+    }
+
+    #[cfg(feature = "network")]
+    /// Dispatch SEND_BUFFER operation
+    fn dispatch_send_buffer(&mut self, buffer: &str, target_node: &str) -> Result<(), CnfError> {
+        let data = self.get_buffer(buffer)?.to_vec();
+        let network = self
+            .network
+            .as_mut()
+            .ok_or(CnfError::NetworkNotInitialized)?;
+        network.send_buffer(&target_node.to_string(), buffer.to_string(), data)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "network")]
+    /// Dispatch RECEIVE_BUFFER operation
+    fn dispatch_receive_buffer(
+        &mut self,
+        buffer: &str,
+        _source_node: &str,
+    ) -> Result<(), CnfError> {
+        let network = self
+            .network
+            .as_mut()
+            .ok_or(CnfError::NetworkNotInitialized)?;
+        let (_node_id, data) = network.receive_from()?;
+        self.add_buffer(buffer.to_string(), data);
+        Ok(())
+    }
+
+    #[cfg(feature = "network")]
+    /// Dispatch PIPE_STREAM operation
+    fn dispatch_pipe_stream(
+        &mut self,
+        buffer: &str,
+        target_node: &str,
+        output: &str,
+    ) -> Result<(), CnfError> {
+        let data = self.get_buffer(buffer)?.to_vec();
+        {
+            let network = self
+                .network
+                .as_mut()
+                .ok_or(CnfError::NetworkNotInitialized)?;
+            network.send_buffer(&target_node.to_string(), buffer.to_string(), data.clone())?;
+        }
+        // Echo the sent data to output buffer
+        self.add_buffer(output.to_string(), data);
+        Ok(())
+    }
+
+    #[cfg(feature = "network")]
+    /// Dispatch CALL_REMOTE operation
+    fn dispatch_call_remote(
+        &mut self,
+        node: &str,
+        function_name: &str,
+        args: &[String],
+        output: &str,
+    ) -> Result<(), CnfError> {
+        // Collect argument values (resolve variable references)
+        let args_str: Vec<String> = args
+            .iter()
+            .map(|arg| self.get_variable(arg).unwrap_or_else(|| arg.clone()))
+            .collect();
+
+        // Simulate remote call result
+        let result_str = format!(
+            "Remote call to {}.{}({}) executed",
+            node,
+            function_name,
+            args_str.join(", ")
+        );
+        self.add_buffer(output.to_string(), result_str.into_bytes());
+        Ok(())
     }
 }
 

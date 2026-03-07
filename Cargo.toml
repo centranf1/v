@@ -4,8 +4,9 @@ members = [
     "crates/cnf-runtime",
     "crates/cnf-security",
     "crates/cnf-storage",
-    "crates/cobol-protocol-v153",
     "crates/cnf-stdlib",
+    "crates/cnf-network",
+    "crates/cobol-protocol-v153",
     "crates/centra-nf-cli",
     "crates/centra-nf-lsp",
 ]

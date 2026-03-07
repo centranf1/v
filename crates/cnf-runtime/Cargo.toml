@@ -10,7 +10,11 @@ cnf-security = { path = "../cnf-security" }
 cnf-compiler = { path = "../cnf-compiler" }
 cnf-storage = { path = "../cnf-storage" }
 cnf-stdlib = { path = "../cnf-stdlib" }
+cnf-network = { path = "../cnf-network", optional = true }
 cobol-protocol-v153 = { path = "../cobol-protocol-v153" }
+
+[features]
+network = ["cnf-network"]
 
 [dev-dependencies]
 criterion = "0.5"

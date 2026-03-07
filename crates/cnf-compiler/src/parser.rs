@@ -362,7 +362,10 @@ impl Parser {
                 self.expect(Token::As)?;
                 let file_path = self.expect_string()?;
                 self.expect(Token::Period)?;
-                Ok(ProcedureStatement::Open { file_handle, file_path })
+                Ok(ProcedureStatement::Open {
+                    file_handle,
+                    file_path,
+                })
             }
             Token::ReadFile => {
                 self.advance();
@@ -370,7 +373,10 @@ impl Parser {
                 self.expect(Token::As)?;
                 let output_stream = self.expect_variable_or_type()?;
                 self.expect(Token::Period)?;
-                Ok(ProcedureStatement::ReadFile { file_handle, output_stream })
+                Ok(ProcedureStatement::ReadFile {
+                    file_handle,
+                    output_stream,
+                })
             }
             Token::WriteFile => {
                 self.advance();
@@ -378,7 +384,10 @@ impl Parser {
                 self.expect(Token::As)?;
                 let input_stream = self.expect_variable_or_type()?;
                 self.expect(Token::Period)?;
-                Ok(ProcedureStatement::WriteFile { file_handle, input_stream })
+                Ok(ProcedureStatement::WriteFile {
+                    file_handle,
+                    input_stream,
+                })
             }
             Token::Close => {
                 self.advance();
@@ -397,6 +406,59 @@ impl Parser {
                 let target = self.expect_variable_or_type()?;
                 self.expect(Token::Period)?;
                 Ok(ProcedureStatement::Replay { target })
+            }
+            Token::Send => {
+                self.advance();
+                let buffer = self.expect_variable_or_type()?;
+                self.expect(Token::To)?;
+                let target_node = self.expect_string()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::SendBuffer {
+                    buffer,
+                    target_node,
+                })
+            }
+            Token::Receive => {
+                self.advance();
+                let buffer = self.expect_variable_or_type()?;
+                self.expect(Token::From)?;
+                let source_node = self.expect_string()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::ReceiveBuffer {
+                    buffer,
+                    source_node,
+                })
+            }
+            Token::Pipe => {
+                self.advance();
+                let buffer = self.expect_variable_or_type()?;
+                self.expect(Token::To)?;
+                let target_node = self.expect_string()?;
+                let output = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::PipeStream {
+                    buffer,
+                    target_node,
+                    output,
+                })
+            }
+            Token::CallRemote => {
+                self.advance();
+                let node = self.expect_string()?;
+                self.expect(Token::Identifier("FUNCTION".to_string()))?;
+                let function_name = self.expect_identifier()?;
+                let mut args = Vec::new();
+                while self.current() != &Token::Period {
+                    args.push(self.expect_variable_or_type()?);
+                }
+                self.expect(Token::Period)?;
+                let output = String::new(); // Will be filled by IR lowering
+                Ok(ProcedureStatement::CallRemote {
+                    node,
+                    function_name,
+                    args,
+                    output,
+                })
             }
             _ => Err(format!("Unexpected token in block: {}", self.current())),
         }
@@ -482,6 +544,96 @@ impl Parser {
         }
 
         Ok(EnvironmentDivision { config })
+    }
+
+    fn parse_network(&mut self) -> Result<NetworkDivision, String> {
+        self.expect(Token::Network)?;
+        self.expect(Token::Division)?;
+        self.expect(Token::Period)?;
+
+        let mut nodes = Vec::new();
+        let mut self_node = String::new();
+        let mut topology = Topology::Mesh;
+        let mut timeout_ms = 30000u64;
+
+        while self.current() != &Token::DataDiv {
+            match self.current() {
+                Token::Node => {
+                    self.advance();
+                    let name = self.expect_string()?;
+                    self.expect(Token::At)?;
+                    let address = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                    nodes.push(NodeDeclaration { name, address });
+                }
+                Token::Self_ => {
+                    self.advance();
+                    self_node = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                }
+                Token::Topology => {
+                    self.advance();
+                    topology = match self.current() {
+                        Token::Pipeline => {
+                            self.advance();
+                            Topology::Pipeline
+                        }
+                        Token::Mesh => {
+                            self.advance();
+                            Topology::Mesh
+                        }
+                        Token::Star => {
+                            self.advance();
+                            Topology::Star
+                        }
+                        _ => {
+                            return Err(format!(
+                                "Expected PIPELINE, MESH, or STAR, got {}",
+                                self.current()
+                            ))
+                        }
+                    };
+                    self.expect(Token::Period)?;
+                }
+                Token::Timeout => {
+                    self.advance();
+                    // Expect number (as identifier for now, will be parsed)
+                    if let Token::Identifier(num_str) = self.current() {
+                        let num_clone = num_str.clone();
+                        self.advance();
+                        timeout_ms = num_clone
+                            .parse::<u64>()
+                            .map_err(|_| format!("Invalid timeout value: {}", num_clone))?;
+                    } else {
+                        return Err(format!(
+                            "Expected number for TIMEOUT, got {}",
+                            self.current()
+                        ));
+                    }
+                    self.expect(Token::Period)?;
+                }
+                Token::Eof => {
+                    return Err("Unexpected EOF in NETWORK DIVISION".to_string());
+                }
+                _ => {
+                    return Err(format!(
+                        "Unexpected token in NETWORK DIVISION: {}",
+                        self.current()
+                    ));
+                }
+            }
+        }
+
+        if self_node.is_empty() {
+            return Err("NETWORK DIVISION: missing SELF node declaration".to_string());
+        }
+
+        Ok(NetworkDivision {
+            nodes,
+            self_node,
+            topology,
+            timeout_ms,
+        })
     }
 
     fn parse_data(&mut self) -> Result<DataDivision, String> {
@@ -715,7 +867,11 @@ impl Parser {
                     let operand1 = self.expect_variable_or_type()?;
                     let operand2 = self.expect_variable_or_type()?;
                     self.expect(Token::Period)?;
-                    ProcedureStatement::Max { target, operand1, operand2 }
+                    ProcedureStatement::Max {
+                        target,
+                        operand1,
+                        operand2,
+                    }
                 }
                 Token::Min => {
                     self.advance();
@@ -723,7 +879,11 @@ impl Parser {
                     let operand1 = self.expect_variable_or_type()?;
                     let operand2 = self.expect_variable_or_type()?;
                     self.expect(Token::Period)?;
-                    ProcedureStatement::Min { target, operand1, operand2 }
+                    ProcedureStatement::Min {
+                        target,
+                        operand1,
+                        operand2,
+                    }
                 }
                 Token::Abs => {
                     self.advance();
@@ -968,6 +1128,14 @@ impl Parser {
     pub fn parse(mut self) -> Result<Program, String> {
         let identification = self.parse_identification()?;
         let environment = self.parse_environment()?;
+
+        // NETWORK DIVISION is optional
+        let network = if self.current() == &Token::Network {
+            Some(self.parse_network()?)
+        } else {
+            None
+        };
+
         let data = self.parse_data()?;
         let procedure = self.parse_procedure()?;
 
@@ -978,6 +1146,7 @@ impl Parser {
         Ok(Program {
             identification,
             environment,
+            network,
             data,
             procedure,
         })

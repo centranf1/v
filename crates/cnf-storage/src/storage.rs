@@ -1,9 +1,9 @@
+use crate::checkpoint::CheckpointManager;
+use crate::wal::Wal;
+use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::Path;
-use std::collections::HashMap;
-use crate::checkpoint::CheckpointManager;
-use crate::wal::Wal;
 
 /// Perform an atomic write: write data to a temporary file and then rename.
 /// Returns `Ok(())` on success, or an io::Error on failure.
@@ -60,7 +60,9 @@ impl Storage {
 
     /// Read entire file content as string
     pub fn read_file(&mut self, handle: u64) -> io::Result<String> {
-        let file = self.open_files.get_mut(&handle)
+        let file = self
+            .open_files
+            .get_mut(&handle)
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Invalid file handle"))?;
         let mut contents = String::new();
         std::io::Read::read_to_string(file, &mut contents)?;
@@ -69,7 +71,9 @@ impl Storage {
 
     /// Write data to file
     pub fn write_file(&mut self, handle: u64, data: &str) -> io::Result<()> {
-        let file = self.open_files.get_mut(&handle)
+        let file = self
+            .open_files
+            .get_mut(&handle)
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Invalid file handle"))?;
         file.write_all(data.as_bytes())?;
         file.flush()?;
@@ -78,7 +82,8 @@ impl Storage {
 
     /// Close file handle
     pub fn close_file(&mut self, handle: u64) -> io::Result<()> {
-        self.open_files.remove(&handle)
+        self.open_files
+            .remove(&handle)
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Invalid file handle"))?;
         Ok(())
     }
@@ -87,7 +92,11 @@ impl Storage {
     pub fn checkpoint(&mut self, _data: &str) -> io::Result<()> {
         if let Some(ref mgr) = self.checkpoint_manager {
             // Get next sequence from WAL if available
-            let sequence = self.wal.as_ref().map(|w| w.get_next_sequence()).unwrap_or(0);
+            let sequence = self
+                .wal
+                .as_ref()
+                .map(|w| w.get_next_sequence())
+                .unwrap_or(0);
             mgr.snapshot(sequence, self.data_store.clone())?;
         }
         Ok(())
@@ -110,14 +119,13 @@ impl Storage {
 
 impl Default for Storage {
     fn default() -> Self {
-        let storage = Storage {
+        Storage {
             open_files: HashMap::new(),
             next_handle: 1,
             wal: None,
             checkpoint_manager: None,
             data_store: HashMap::new(),
-        };
-        storage
+        }
     }
 }
 
