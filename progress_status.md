@@ -3888,7 +3888,7 @@ Scope:
 - crates/cnf-runtime/src/runtime.rs: Update execute_instruction() for arithmetic variants
 
 Status:
-- in-progress
+- completed
 
 Notes:
 - Extends runtime execution capabilities beyond control flow and I/O

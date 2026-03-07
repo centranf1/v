@@ -403,6 +403,58 @@ impl Runtime {
             .map_err(|_| CnfError::RuntimeError(format!("Cannot parse '{}' as number", content)))
     }
 
+    /// Execute CONCATENATE instruction (concatenate strings).
+    fn dispatch_concatenate(&mut self, target: &str, operands: &[String]) -> Result<(), CnfError> {
+        let mut result = String::new();
+        for op in operands {
+            let buf = self.get_buffer(op)?;
+            let content = String::from_utf8_lossy(buf);
+            result.push_str(&content);
+        }
+        let buf = self.get_buffer_mut(target)?;
+        buf.clear();
+        buf.extend_from_slice(result.as_bytes());
+        Ok(())
+    }
+
+    /// Execute SUBSTRING instruction.
+    fn dispatch_substring(
+        &mut self,
+        target: &str,
+        source: &str,
+        start: &str,
+        length: &str,
+    ) -> Result<(), CnfError> {
+        let start_idx: usize = start
+            .parse()
+            .map_err(|_| CnfError::InvalidInstruction(start.to_string()))?;
+        let len: usize = length
+            .parse()
+            .map_err(|_| CnfError::InvalidInstruction(length.to_string()))?;
+        let src_buf = self.get_buffer(source)?;
+        let src_str = String::from_utf8_lossy(src_buf);
+        let substring = if start_idx < src_str.len() {
+            let end = (start_idx + len).min(src_str.len());
+            src_str[start_idx..end].to_string()
+        } else {
+            String::new()
+        };
+        let buf = self.get_buffer_mut(target)?;
+        buf.clear();
+        buf.extend_from_slice(substring.as_bytes());
+        Ok(())
+    }
+
+    /// Execute LENGTH instruction.
+    fn dispatch_length(&mut self, target: &str, source: &str) -> Result<(), CnfError> {
+        let src_buf = self.get_buffer(source)?;
+        let len = src_buf.len().to_string();
+        let buf = self.get_buffer_mut(target)?;
+        buf.clear();
+        buf.extend_from_slice(len.as_bytes());
+        Ok(())
+    }
+
     /// Execute IF statement with condition evaluation.
     pub fn dispatch_if(
         &mut self,
@@ -643,6 +695,20 @@ impl Runtime {
                 operand2,
             } => {
                 self.dispatch_divide(target, operand1, operand2)?;
+            }
+            Instruction::Concatenate { target, operands } => {
+                self.dispatch_concatenate(target, operands)?;
+            }
+            Instruction::Substring {
+                target,
+                source,
+                start,
+                length,
+            } => {
+                self.dispatch_substring(target, source, start, length)?;
+            }
+            Instruction::Length { target, source } => {
+                self.dispatch_length(target, source)?;
             }
             Instruction::IfStatement {
                 condition,

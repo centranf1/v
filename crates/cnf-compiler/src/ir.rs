@@ -86,6 +86,20 @@ pub enum Instruction {
         operand1: String,
         operand2: String,
     },
+    Concatenate {
+        target: String,
+        operands: Vec<String>,
+    },
+    Substring {
+        target: String,
+        source: String,
+        start: String,
+        length: String,
+    },
+    Length {
+        target: String,
+        source: String,
+    },
     IfStatement {
         condition: String,
         then_instrs: Vec<Instruction>,
@@ -203,6 +217,24 @@ impl std::fmt::Display for Instruction {
                 operand2,
             } => {
                 write!(f, "DIVIDE({} = {} / {})", target, operand1, operand2)
+            }
+            Instruction::Concatenate { target, operands } => {
+                write!(f, "CONCATENATE({} = {})", target, operands.join(" + "))
+            }
+            Instruction::Substring {
+                target,
+                source,
+                start,
+                length,
+            } => {
+                write!(
+                    f,
+                    "SUBSTRING({} = {}[{}..{}])",
+                    target, source, start, length
+                )
+            }
+            Instruction::Length { target, source } => {
+                write!(f, "LENGTH({} = len({}))", target, source)
             }
             Instruction::IfStatement {
                 condition,
@@ -669,6 +701,66 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     target: target.clone(),
                     operand1: operand1.clone(),
                     operand2: operand2.clone(),
+                });
+            }
+            ProcedureStatement::Concatenate { target, operands } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                for op in operands {
+                    if !declared_vars.contains(op) {
+                        return Err(format!("Variable '{}' not declared in DATA DIVISION", op));
+                    }
+                }
+                instructions.push(Instruction::Concatenate {
+                    target: target.clone(),
+                    operands: operands.clone(),
+                });
+            }
+            ProcedureStatement::Substring {
+                target,
+                source,
+                start,
+                length,
+            } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(source) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        source
+                    ));
+                }
+                instructions.push(Instruction::Substring {
+                    target: target.clone(),
+                    source: source.clone(),
+                    start: start.clone(),
+                    length: length.clone(),
+                });
+            }
+            ProcedureStatement::Length { target, source } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
+                }
+                if !declared_vars.contains(source) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        source
+                    ));
+                }
+                instructions.push(Instruction::Length {
+                    target: target.clone(),
+                    source: source.clone(),
                 });
             }
             ProcedureStatement::If {

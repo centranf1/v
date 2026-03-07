@@ -70,6 +70,11 @@ pub enum Token {
     Multiply,
     Divide,
 
+    // String operations
+    Concatenate,
+    Substring,
+    Length,
+
     // Control flow
     If,
     Else,
@@ -99,6 +104,9 @@ pub enum Token {
     JsonObject,
     XmlDocument,
     ParquetTable,
+    TextString,
+    NumberInteger,
+    NumberDecimal,
 
     // Literals and punctuation
     Identifier(String),
@@ -261,6 +269,9 @@ fn keyword_to_token(s: &str) -> Token {
         "SUBTRACT" => Token::Subtract,
         "MULTIPLY" => Token::Multiply,
         "DIVIDE" => Token::Divide,
+        "CONCATENATE" => Token::Concatenate,
+        "SUBSTRING" => Token::Substring,
+        "LENGTH" => Token::Length,
         "VIDEO-MP4" => Token::VideoMp4,
         "IMAGE-JPG" => Token::ImageJpg,
         "FINANCIAL-DECIMAL" => Token::FinancialDecimal,
@@ -270,6 +281,9 @@ fn keyword_to_token(s: &str) -> Token {
         "JSON-OBJECT" => Token::JsonObject,
         "XML-DOCUMENT" => Token::XmlDocument,
         "PARQUET-TABLE" => Token::ParquetTable,
+        "TEXT-STRING" => Token::TextString,
+        "NUMBER-INTEGER" => Token::NumberInteger,
+        "NUMBER-DECIMAL" => Token::NumberDecimal,
         "IF" => Token::If,
         "ELSE" => Token::Else,
         "THEN" => Token::Then,

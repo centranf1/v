@@ -48,6 +48,9 @@ pub enum DataType {
     JsonObject,
     XmlDocument,
     ParquetTable,
+    TextString,
+    NumberInteger,
+    NumberDecimal,
 }
 
 impl std::fmt::Display for DataType {
@@ -62,6 +65,9 @@ impl std::fmt::Display for DataType {
             DataType::JsonObject => write!(f, "JSON-OBJECT"),
             DataType::XmlDocument => write!(f, "XML-DOCUMENT"),
             DataType::ParquetTable => write!(f, "PARQUET-TABLE"),
+            DataType::TextString => write!(f, "TEXT-STRING"),
+            DataType::NumberInteger => write!(f, "NUMBER-INTEGER"),
+            DataType::NumberDecimal => write!(f, "NUMBER-DECIMAL"),
         }
     }
 }
@@ -150,6 +156,20 @@ pub enum ProcedureStatement {
         target: String,
         operand1: String,
         operand2: String,
+    },
+    Concatenate {
+        target: String,
+        operands: Vec<String>,
+    },
+    Substring {
+        target: String,
+        source: String,
+        start: String,
+        length: String,
+    },
+    Length {
+        target: String,
+        source: String,
     },
     If {
         condition: String,
