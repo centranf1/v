@@ -350,6 +350,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cnf-verifier"
+version = "0.1.0"
+dependencies = [
+ "cnf-compiler",
+ "cnf-storage",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "cobol-protocol-v153"
 version = "0.3.0"
 dependencies = [

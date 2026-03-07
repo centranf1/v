@@ -4796,7 +4796,51 @@ Persistent Layer (NEW):
 
 ---
 
-## v0.6.0 RELEASE TAG
+## Session 9: cnf-verifier crate + Hoare AST + Z3 stub (v0.7.0)
+
+[2026-03-07]
+
+Change:
+- Add cnf-verifier crate (Layer L7 Formal Verification Engine) with Hoare AST and Z3 stub
+
+Scope:
+- crates/cnf-verifier/ (new crate with 6 files: Cargo.toml, lib.rs, error.rs, assertion.rs, hoare.rs, z3_bridge.rs)
+- Cargo.toml (workspace members)
+- crates/cnf-verifier/tests/ (25 tests)
+- progress_status.md
+
+Status: completed
+
+Notes:
+- Implements Hoare triples, assertions, Z3 bridge stub for formal verification
+- Zero unsafe, zero clippy warnings, all CI gates green
+- TDD approach: tests first, pure Rust (no z3 system library yet)
+- 25 tests covering all error variants, predicate display, Hoare context operations, verifier integration
+- Layer L7 positioned above L6 network for future distributed verification
+- CORE-FROZEN preserved, no cross-layer violations
+
+Tests: 25 total (all unit tests in cnf-verifier)
+- Predicate evaluation: True→Proved, False→Refuted, others→Unknown (stub)
+- SMT-LIB2 display for all Predicate variants
+- HoareContext: add_annotation, collect_triples, set_buffer_state
+- Verifier: verify_all() with deterministic results
+- CnfVerifierError: all 8 variants display correctly with L7.xxx codes
+
+CI Gates: ✅ ALL PASSING
+- Gate 1: cargo check --all ✓
+- Gate 2: cargo test --all --lib ✓
+- Gate 3: cargo test --all --test '*' ✓
+- Gate 4: cargo fmt --all -- --check ✓
+- Gate 5: cargo clippy --all -- -D warnings ✓
+- Gate 6: cargo build --all --release ✓
+- Gate 7: Layer boundary verification ✓
+- Gate 8: CORE-FROZEN integrity check ✓
+- Gate 9: cnf-storage ⊥ cnf-network ✓
+- Gate 10: Distributed determinism verified ✓
+
+---
+
+## v0.7.0 RELEASE TAG
 
 **Tag:** v0.6.0
 **Date:** 2026-03-07

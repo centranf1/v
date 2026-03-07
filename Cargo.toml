@@ -6,6 +6,7 @@ members = [
     "crates/cnf-storage",
     "crates/cnf-stdlib",
     "crates/cnf-network",
+    "crates/cnf-verifier",
     "crates/cobol-protocol-v153",
     "crates/centra-nf-cli",
     "crates/centra-nf-lsp",
