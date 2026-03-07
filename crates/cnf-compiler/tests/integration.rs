@@ -1137,7 +1137,9 @@ mod integration_tests {
         let result = compile(source);
         assert!(result.is_ok(), "SUBTRACT operation should compile");
         let ir = result.unwrap();
-        assert!(ir.iter().any(|instr| instr.to_string().contains("SUBTRACT")));
+        assert!(ir
+            .iter()
+            .any(|instr| instr.to_string().contains("SUBTRACT")));
     }
 
     #[test]
@@ -1157,7 +1159,9 @@ mod integration_tests {
         let result = compile(source);
         assert!(result.is_ok(), "MULTIPLY operation should compile");
         let ir = result.unwrap();
-        assert!(ir.iter().any(|instr| instr.to_string().contains("MULTIPLY")));
+        assert!(ir
+            .iter()
+            .any(|instr| instr.to_string().contains("MULTIPLY")));
     }
 
     #[test]
@@ -1220,7 +1224,10 @@ mod integration_tests {
         "#;
 
         let result = compile(source);
-        assert!(result.is_err(), "Arithmetic with undeclared variable should fail");
+        assert!(
+            result.is_err(),
+            "Arithmetic with undeclared variable should fail"
+        );
         let error = result.unwrap_err();
         assert!(error.contains("not declared"));
     }

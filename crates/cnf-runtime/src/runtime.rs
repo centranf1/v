@@ -211,7 +211,8 @@ impl Runtime {
         if !path.starts_with("$.") {
             return Err(CnfError::InvalidInstruction(path.to_string()));
         }
-        let text = String::from_utf8(buf.to_vec()).map_err(|_| CnfError::InvalidInstruction("non-utf8 buffer".into()))?;
+        let text = String::from_utf8(buf.to_vec())
+            .map_err(|_| CnfError::InvalidInstruction("non-utf8 buffer".into()))?;
         let json: serde_json::Value = serde_json::from_str(&text)
             .map_err(|_| CnfError::InvalidInstruction("invalid json".into()))?;
         let mut current = &json;
@@ -249,9 +250,10 @@ impl Runtime {
         use std::io::{self, BufRead};
         let stdin = io::stdin();
         let mut line = String::new();
-        stdin.lock().read_line(&mut line).map_err(|e| {
-            CnfError::RuntimeError(format!("Failed to read from stdin: {}", e))
-        })?;
+        stdin
+            .lock()
+            .read_line(&mut line)
+            .map_err(|e| CnfError::RuntimeError(format!("Failed to read from stdin: {}", e)))?;
         // Remove trailing newline
         let line = line.trim_end();
         let buf = self.get_buffer_mut(target)?;
@@ -267,7 +269,9 @@ impl Runtime {
     /// f64.
     fn dispatch_aggregate(&mut self, targets: &[String], operation: &str) -> Result<(), CnfError> {
         if targets.is_empty() {
-            return Err(CnfError::InvalidInstruction("aggregate with no targets".into()));
+            return Err(CnfError::InvalidInstruction(
+                "aggregate with no targets".into(),
+            ));
         }
         let mut total = 0f64;
         let mut count = 0usize;
@@ -317,7 +321,12 @@ impl Runtime {
     }
 
     /// Execute ADD instruction (add two numeric values).
-    fn dispatch_add(&mut self, target: &str, operand1: &str, operand2: &str) -> Result<(), CnfError> {
+    fn dispatch_add(
+        &mut self,
+        target: &str,
+        operand1: &str,
+        operand2: &str,
+    ) -> Result<(), CnfError> {
         let val1 = self.parse_numeric_value(operand1)?;
         let val2 = self.parse_numeric_value(operand2)?;
         let result = val1 + val2;
@@ -328,7 +337,12 @@ impl Runtime {
     }
 
     /// Execute SUBTRACT instruction (subtract two numeric values).
-    fn dispatch_subtract(&mut self, target: &str, operand1: &str, operand2: &str) -> Result<(), CnfError> {
+    fn dispatch_subtract(
+        &mut self,
+        target: &str,
+        operand1: &str,
+        operand2: &str,
+    ) -> Result<(), CnfError> {
         let val1 = self.parse_numeric_value(operand1)?;
         let val2 = self.parse_numeric_value(operand2)?;
         let result = val1 - val2;
@@ -339,7 +353,12 @@ impl Runtime {
     }
 
     /// Execute MULTIPLY instruction (multiply two numeric values).
-    fn dispatch_multiply(&mut self, target: &str, operand1: &str, operand2: &str) -> Result<(), CnfError> {
+    fn dispatch_multiply(
+        &mut self,
+        target: &str,
+        operand1: &str,
+        operand2: &str,
+    ) -> Result<(), CnfError> {
         let val1 = self.parse_numeric_value(operand1)?;
         let val2 = self.parse_numeric_value(operand2)?;
         let result = val1 * val2;
@@ -350,7 +369,12 @@ impl Runtime {
     }
 
     /// Execute DIVIDE instruction (divide two numeric values).
-    fn dispatch_divide(&mut self, target: &str, operand1: &str, operand2: &str) -> Result<(), CnfError> {
+    fn dispatch_divide(
+        &mut self,
+        target: &str,
+        operand1: &str,
+        operand2: &str,
+    ) -> Result<(), CnfError> {
         let val1 = self.parse_numeric_value(operand1)?;
         let val2 = self.parse_numeric_value(operand2)?;
         if val2 == 0.0 {
@@ -369,13 +393,14 @@ impl Runtime {
         if let Ok(num) = value.parse::<f64>() {
             return Ok(num);
         }
-        
+
         // Otherwise treat as variable name
         let buf = self.get_buffer(value)?;
         let content = String::from_utf8_lossy(buf);
-        content.trim().parse::<f64>().map_err(|_| {
-            CnfError::RuntimeError(format!("Cannot parse '{}' as number", content))
-        })
+        content
+            .trim()
+            .parse::<f64>()
+            .map_err(|_| CnfError::RuntimeError(format!("Cannot parse '{}' as number", content)))
     }
 
     /// Execute IF statement with condition evaluation.
@@ -416,7 +441,11 @@ impl Runtime {
     }
 
     /// Execute WHILE loop with loop control.
-    pub fn dispatch_while(&mut self, condition: &str, instrs: &[Instruction]) -> Result<(), CnfError> {
+    pub fn dispatch_while(
+        &mut self,
+        condition: &str,
+        instrs: &[Instruction],
+    ) -> Result<(), CnfError> {
         let max_iterations = 1000; // Prevent infinite loops
         let mut iterations = 0;
 
@@ -542,13 +571,19 @@ impl Runtime {
             Instruction::Decrypt { target } => {
                 self.dispatch_decrypt(target)?;
             }
-            Instruction::Transcode { target, output_type } => {
+            Instruction::Transcode {
+                target,
+                output_type,
+            } => {
                 self.dispatch_transcode(target, output_type)?;
             }
             Instruction::Filter { target, condition } => {
                 self.dispatch_filter(target, condition)?;
             }
-            Instruction::Merge { targets, output_name } => {
+            Instruction::Merge {
+                targets,
+                output_name,
+            } => {
                 self.dispatch_merge(targets, output_name)?;
             }
             Instruction::Split { target, parts } => {
@@ -572,22 +607,41 @@ impl Runtime {
             Instruction::Aggregate { targets, operation } => {
                 self.dispatch_aggregate(targets, operation)?;
             }
-            Instruction::Convert { target, output_type } => {
+            Instruction::Convert {
+                target,
+                output_type,
+            } => {
                 self.dispatch_convert(target, output_type)?;
             }
             Instruction::Set { target, value } => {
                 self.dispatch_set(target, value)?;
             }
-            Instruction::Add { target, operand1, operand2 } => {
+            Instruction::Add {
+                target,
+                operand1,
+                operand2,
+            } => {
                 self.dispatch_add(target, operand1, operand2)?;
             }
-            Instruction::Subtract { target, operand1, operand2 } => {
+            Instruction::Subtract {
+                target,
+                operand1,
+                operand2,
+            } => {
                 self.dispatch_subtract(target, operand1, operand2)?;
             }
-            Instruction::Multiply { target, operand1, operand2 } => {
+            Instruction::Multiply {
+                target,
+                operand1,
+                operand2,
+            } => {
                 self.dispatch_multiply(target, operand1, operand2)?;
             }
-            Instruction::Divide { target, operand1, operand2 } => {
+            Instruction::Divide {
+                target,
+                operand1,
+                operand2,
+            } => {
                 self.dispatch_divide(target, operand1, operand2)?;
             }
             Instruction::IfStatement {
@@ -978,9 +1032,7 @@ mod tests {
             target: "buf1".to_string(), // Compress buf1 in each iteration
         }];
 
-        runtime
-            .dispatch_for("item", "buf1,buf2", &instrs)
-            .unwrap();
+        runtime.dispatch_for("item", "buf1,buf2", &instrs).unwrap();
 
         // buf1 should be compressed (executed twice)
         let output1 = runtime.get_output("buf1").unwrap();

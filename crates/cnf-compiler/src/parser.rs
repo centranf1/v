@@ -207,7 +207,11 @@ impl Parser {
                 let operand1 = self.expect_variable_or_type()?;
                 let operand2 = self.expect_variable_or_type()?;
                 self.expect(Token::Period)?;
-                Ok(ProcedureStatement::Add { target, operand1, operand2 })
+                Ok(ProcedureStatement::Add {
+                    target,
+                    operand1,
+                    operand2,
+                })
             }
             Token::Subtract => {
                 self.advance();
@@ -215,7 +219,11 @@ impl Parser {
                 let operand1 = self.expect_variable_or_type()?;
                 let operand2 = self.expect_variable_or_type()?;
                 self.expect(Token::Period)?;
-                Ok(ProcedureStatement::Subtract { target, operand1, operand2 })
+                Ok(ProcedureStatement::Subtract {
+                    target,
+                    operand1,
+                    operand2,
+                })
             }
             Token::Multiply => {
                 self.advance();
@@ -223,7 +231,11 @@ impl Parser {
                 let operand1 = self.expect_variable_or_type()?;
                 let operand2 = self.expect_variable_or_type()?;
                 self.expect(Token::Period)?;
-                Ok(ProcedureStatement::Multiply { target, operand1, operand2 })
+                Ok(ProcedureStatement::Multiply {
+                    target,
+                    operand1,
+                    operand2,
+                })
             }
             Token::Divide => {
                 self.advance();
@@ -231,7 +243,11 @@ impl Parser {
                 let operand1 = self.expect_variable_or_type()?;
                 let operand2 = self.expect_variable_or_type()?;
                 self.expect(Token::Period)?;
-                Ok(ProcedureStatement::Divide { target, operand1, operand2 })
+                Ok(ProcedureStatement::Divide {
+                    target,
+                    operand1,
+                    operand2,
+                })
             }
             _ => Err(format!("Unexpected token in block: {}", self.current())),
         }
@@ -533,6 +549,61 @@ impl Parser {
                     let target = self.expect_variable_or_type()?;
                     self.expect(Token::Period)?;
                     ProcedureStatement::Read { target }
+                }
+                Token::Set => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let value = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Set { target, value }
+                }
+                Token::Add => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let operand1 = self.expect_variable_or_type()?;
+                    let operand2 = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Add {
+                        target,
+                        operand1,
+                        operand2,
+                    }
+                }
+                Token::Subtract => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let operand1 = self.expect_variable_or_type()?;
+                    let operand2 = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Subtract {
+                        target,
+                        operand1,
+                        operand2,
+                    }
+                }
+                Token::Multiply => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let operand1 = self.expect_variable_or_type()?;
+                    let operand2 = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Multiply {
+                        target,
+                        operand1,
+                        operand2,
+                    }
+                }
+                Token::Divide => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    let operand1 = self.expect_variable_or_type()?;
+                    let operand2 = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Divide {
+                        target,
+                        operand1,
+                        operand2,
+                    }
                 }
                 Token::If => {
                     self.advance();

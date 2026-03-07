@@ -176,16 +176,32 @@ impl std::fmt::Display for Instruction {
             Instruction::Set { target, value } => {
                 write!(f, "SET({} = {})", target, value)
             }
-            Instruction::Add { target, operand1, operand2 } => {
+            Instruction::Add {
+                target,
+                operand1,
+                operand2,
+            } => {
                 write!(f, "ADD({} = {} + {})", target, operand1, operand2)
             }
-            Instruction::Subtract { target, operand1, operand2 } => {
+            Instruction::Subtract {
+                target,
+                operand1,
+                operand2,
+            } => {
                 write!(f, "SUBTRACT({} = {} - {})", target, operand1, operand2)
             }
-            Instruction::Multiply { target, operand1, operand2 } => {
+            Instruction::Multiply {
+                target,
+                operand1,
+                operand2,
+            } => {
                 write!(f, "MULTIPLY({} = {} * {})", target, operand1, operand2)
             }
-            Instruction::Divide { target, operand1, operand2 } => {
+            Instruction::Divide {
+                target,
+                operand1,
+                operand2,
+            } => {
                 write!(f, "DIVIDE({} = {} / {})", target, operand1, operand2)
             }
             Instruction::IfStatement {
@@ -539,7 +555,11 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     value: value.clone(),
                 });
             }
-            ProcedureStatement::Add { target, operand1, operand2 } => {
+            ProcedureStatement::Add {
+                target,
+                operand1,
+                operand2,
+            } => {
                 if !declared_vars.contains(target) {
                     return Err(format!(
                         "Variable '{}' not declared in DATA DIVISION",
@@ -564,7 +584,11 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     operand2: operand2.clone(),
                 });
             }
-            ProcedureStatement::Subtract { target, operand1, operand2 } => {
+            ProcedureStatement::Subtract {
+                target,
+                operand1,
+                operand2,
+            } => {
                 if !declared_vars.contains(target) {
                     return Err(format!(
                         "Variable '{}' not declared in DATA DIVISION",
@@ -589,7 +613,11 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     operand2: operand2.clone(),
                 });
             }
-            ProcedureStatement::Multiply { target, operand1, operand2 } => {
+            ProcedureStatement::Multiply {
+                target,
+                operand1,
+                operand2,
+            } => {
                 if !declared_vars.contains(target) {
                     return Err(format!(
                         "Variable '{}' not declared in DATA DIVISION",
@@ -614,7 +642,11 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     operand2: operand2.clone(),
                 });
             }
-            ProcedureStatement::Divide { target, operand1, operand2 } => {
+            ProcedureStatement::Divide {
+                target,
+                operand1,
+                operand2,
+            } => {
                 if !declared_vars.contains(target) {
                     return Err(format!(
                         "Variable '{}' not declared in DATA DIVISION",
@@ -869,7 +901,11 @@ fn lower_single_statement(
                 value: value.clone(),
             })
         }
-        ProcedureStatement::Add { target, operand1, operand2 } => {
+        ProcedureStatement::Add {
+            target,
+            operand1,
+            operand2,
+        } => {
             if !declared_vars.contains(target) {
                 return Err(format!("Variable '{}' not declared", target));
             }
@@ -885,7 +921,11 @@ fn lower_single_statement(
                 operand2: operand2.clone(),
             })
         }
-        ProcedureStatement::Subtract { target, operand1, operand2 } => {
+        ProcedureStatement::Subtract {
+            target,
+            operand1,
+            operand2,
+        } => {
             if !declared_vars.contains(target) {
                 return Err(format!("Variable '{}' not declared", target));
             }
@@ -901,7 +941,11 @@ fn lower_single_statement(
                 operand2: operand2.clone(),
             })
         }
-        ProcedureStatement::Multiply { target, operand1, operand2 } => {
+        ProcedureStatement::Multiply {
+            target,
+            operand1,
+            operand2,
+        } => {
             if !declared_vars.contains(target) {
                 return Err(format!("Variable '{}' not declared", target));
             }
@@ -917,7 +961,11 @@ fn lower_single_statement(
                 operand2: operand2.clone(),
             })
         }
-        ProcedureStatement::Divide { target, operand1, operand2 } => {
+        ProcedureStatement::Divide {
+            target,
+            operand1,
+            operand2,
+        } => {
             if !declared_vars.contains(target) {
                 return Err(format!("Variable '{}' not declared", target));
             }

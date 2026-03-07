@@ -28,7 +28,11 @@ fn test_cli_run_accepts_valid_filename() {
     let path = write_temp_cnf(source);
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_centra-nf"));
-    cmd.arg("run").arg(&path).arg("--buffer").arg("00").arg("--verbose");
+    cmd.arg("run")
+        .arg(&path)
+        .arg("--buffer")
+        .arg("00")
+        .arg("--verbose");
     cmd.assert()
         .success()
         .stderr(predicate::str::contains("Execution completed"));
@@ -58,9 +62,7 @@ fn test_cli_run_loads_ir_correctly() {
     let path = write_temp_cnf(source);
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_centra-nf"));
-    cmd.arg("run")
-        .arg(&path)
-        .arg("--verbose");
+    cmd.arg("run").arg(&path).arg("--buffer").arg("00").arg("--verbose");
 
     cmd.assert()
         .success()
