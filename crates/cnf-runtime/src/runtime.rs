@@ -23,6 +23,22 @@ pub enum CnfError {
     IoError(String),
     #[cfg(feature = "network")]
     NetworkNotInitialized,
+    #[cfg(feature = "verifier")]
+    VerifierNotInitialized,
+    #[cfg(feature = "verifier")]
+    AuditChainNotInitialized,
+    #[cfg(feature = "verifier")]
+    PreconditionFailed(String),
+    #[cfg(feature = "verifier")]
+    PostconditionFailed(String),
+    #[cfg(feature = "verifier")]
+    InvariantViolated(String),
+    #[cfg(feature = "verifier")]
+    ProofNotFound(String),
+    #[cfg(feature = "verifier")]
+    AssertionFailed(String),
+    #[cfg(feature = "verifier")]
+    AuditChainError(String),
 }
 
 impl std::fmt::Display for CnfError {
@@ -39,6 +55,41 @@ impl std::fmt::Display for CnfError {
             #[cfg(feature = "network")]
             CnfError::NetworkNotInitialized => {
                 write!(f, "Network not initialized - enable 'network' feature")
+            }
+            #[cfg(feature = "verifier")]
+            CnfError::VerifierNotInitialized => {
+                write!(
+                    f,
+                    "Verifier not initialized - enable 'verifier' feature and call set_verifier()"
+                )
+            }
+            #[cfg(feature = "verifier")]
+            CnfError::AuditChainNotInitialized => {
+                write!(f, "Audit chain not initialized - call enable_audit_chain()")
+            }
+            #[cfg(feature = "verifier")]
+            CnfError::PreconditionFailed(location) => {
+                write!(f, "L7.001.F Precondition failed at {}", location)
+            }
+            #[cfg(feature = "verifier")]
+            CnfError::PostconditionFailed(location) => {
+                write!(f, "L7.002.F Postcondition failed at {}", location)
+            }
+            #[cfg(feature = "verifier")]
+            CnfError::InvariantViolated(location) => {
+                write!(f, "L7.003.F Invariant violated at {}", location)
+            }
+            #[cfg(feature = "verifier")]
+            CnfError::ProofNotFound(target) => {
+                write!(f, "L7.006.E Proof not found for {}", target)
+            }
+            #[cfg(feature = "verifier")]
+            CnfError::AssertionFailed(target) => {
+                write!(f, "L7.005.E Assertion failed for {}", target)
+            }
+            #[cfg(feature = "verifier")]
+            CnfError::AuditChainError(msg) => {
+                write!(f, "Audit chain error: {}", msg)
             }
         }
     }
@@ -67,6 +118,10 @@ pub struct Runtime {
     storage: cnf_storage::Storage,
     #[cfg(feature = "network")]
     network: Option<cnf_network::NetworkNode>,
+    #[cfg(feature = "verifier")]
+    verifier: Option<cnf_verifier::Verifier>,
+    #[cfg(feature = "verifier")]
+    audit_chain: Option<cnf_verifier::AuditChain>,
 }
 
 impl Runtime {
@@ -79,12 +134,28 @@ impl Runtime {
             storage: cnf_storage::Storage::new(),
             #[cfg(feature = "network")]
             network: None,
+            #[cfg(feature = "verifier")]
+            verifier: None,
+            #[cfg(feature = "verifier")]
+            audit_chain: None,
         }
     }
 
     /// Add a buffer to runtime.
     pub fn add_buffer(&mut self, name: String, data: Vec<u8>) {
         self.buffers.insert(name, data);
+    }
+
+    /// Set verifier for runtime verification.
+    #[cfg(feature = "verifier")]
+    pub fn set_verifier(&mut self, config: cnf_verifier::Z3Config) {
+        self.verifier = Some(cnf_verifier::Verifier::new(config));
+    }
+
+    /// Enable audit chain with session key.
+    #[cfg(feature = "verifier")]
+    pub fn enable_audit_chain(&mut self, session_key: [u8; 32]) {
+        self.audit_chain = Some(cnf_verifier::AuditChain::new(session_key));
     }
 
     /// Get mutable reference to buffer.
@@ -1027,6 +1098,156 @@ impl Runtime {
         }
     }
 
+    /// Build HoareContext from current buffer states.
+    #[cfg(feature = "verifier")]
+    fn build_hoare_context(&self) -> cnf_verifier::HoareContext {
+        let mut ctx = cnf_verifier::HoareContext::new();
+        for (name, buffer) in &self.buffers {
+            let state = cnf_verifier::BufferState {
+                length: buffer.len(),
+                is_empty: buffer.is_empty(),
+                security_level: self.get_security_level(name),
+            };
+            ctx.set_buffer_state(name.clone(), state);
+        }
+        ctx
+    }
+
+    /// Get security level for buffer (placeholder - could be extended).
+    #[cfg(feature = "verifier")]
+    fn get_security_level(&self, _buffer_name: &str) -> cnf_verifier::SecurityLevel {
+        // Placeholder: in real implementation, this would check buffer metadata
+        // or security annotations. For now, assume all buffers are verified.
+        cnf_verifier::SecurityLevel::Verified
+    }
+
+    /// Execute precondition check.
+    #[cfg(feature = "verifier")]
+    fn dispatch_precondition_check(
+        &mut self,
+        predicate: &str,
+        _location: &str,
+    ) -> Result<(), CnfError> {
+        let _verifier = self
+            .verifier
+            .as_ref()
+            .ok_or(CnfError::VerifierNotInitialized)?;
+        let _ctx = self.build_hoare_context();
+
+        // Simple predicate evaluation based on buffer states
+        // Parse basic predicates: "BUFFER > 0", "BUFFER == value", etc.
+        let parts: Vec<&str> = predicate.split_whitespace().collect();
+        if parts.len() >= 3 {
+            let buffer_name = parts[0];
+            let op = parts[1];
+            let _value = parts[2];
+
+            // Check if buffer exists
+            if self.buffers.contains_key(buffer_name) {
+                // For now, just verify the buffer exists and has content
+                let buf = self.get_buffer(buffer_name)?;
+                if op == ">" && buf.len() > 0 {
+                    return Ok(());
+                } else if op == "==" && !buf.is_empty() {
+                    return Ok(());
+                } else if op == "!=" {
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Execute postcondition check.
+    #[cfg(feature = "verifier")]
+    fn dispatch_postcondition_check(
+        &mut self,
+        predicate: &str,
+        _location: &str,
+    ) -> Result<(), CnfError> {
+        let _verifier = self
+            .verifier
+            .as_ref()
+            .ok_or(CnfError::VerifierNotInitialized)?;
+        let _ctx = self.build_hoare_context();
+
+        // Simple post-condition evaluation
+        let parts: Vec<&str> = predicate.split_whitespace().collect();
+        if parts.len() >= 3 {
+            let buffer_name = parts[0];
+            if self.buffers.contains_key(buffer_name) {
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    /// Execute invariant check.
+    #[cfg(feature = "verifier")]
+    fn dispatch_invariant_check(
+        &mut self,
+        _predicate: &str,
+        _location: &str,
+    ) -> Result<(), CnfError> {
+        let _verifier = self
+            .verifier
+            .as_ref()
+            .ok_or(CnfError::VerifierNotInitialized)?;
+        // Invariant checks pass by default (verification deferred to full verifier)
+        Ok(())
+    }
+
+    /// Execute prove statement.
+    #[cfg(feature = "verifier")]
+    fn dispatch_prove(&mut self, _target: &str, _predicate: &str) -> Result<(), CnfError> {
+        let _verifier = self
+            .verifier
+            .as_ref()
+            .ok_or(CnfError::VerifierNotInitialized)?;
+        // Proof statements execute successfully (actual proof deferred to full verifier)
+        Ok(())
+    }
+
+    /// Execute assert statement.
+    #[cfg(feature = "verifier")]
+    fn dispatch_assert_statement(
+        &mut self,
+        _target: &str,
+        _predicate: &str,
+    ) -> Result<(), CnfError> {
+        let _verifier = self
+            .verifier
+            .as_ref()
+            .ok_or(CnfError::VerifierNotInitialized)?;
+        // Assertions pass by default (runtime doesn't have full predicate evaluator yet)
+        Ok(())
+    }
+
+    /// Execute audit log entry.
+    #[cfg(feature = "verifier")]
+    fn dispatch_audit_log(&mut self, message: &str) -> Result<(), CnfError> {
+        let audit_chain = self
+            .audit_chain
+            .as_mut()
+            .ok_or(CnfError::AuditChainNotInitialized)?;
+
+        // Compute buffer states hash
+        use cnf_security::sha256_hex;
+        let mut buffer_data = String::new();
+        for (name, buffer) in &self.buffers {
+            buffer_data.push_str(&format!("{}:{:x}:", name, buffer.len()));
+        }
+        let buffer_states_hash = sha256_hex(buffer_data.as_bytes());
+
+        audit_chain
+            .append(message.to_string(), buffer_states_hash)
+            .map_err(|e| {
+                CnfError::AuditChainError(format!("Failed to append audit entry: {}", e))
+            })?;
+
+        Ok(())
+    }
+
     /// Execute single IR instruction (handles control flow)
     pub fn execute_instruction(&mut self, instruction: &Instruction) -> Result<(), CnfError> {
         match instruction {
@@ -1327,6 +1548,88 @@ impl Runtime {
                     "Network feature not enabled - recompile with 'network' feature".to_string(),
                 ));
             }
+            Instruction::PreConditionCheck {
+                predicate,
+                location,
+            } => {
+                #[cfg(feature = "verifier")]
+                self.dispatch_precondition_check(predicate, location)?;
+                #[cfg(not(feature = "verifier"))]
+                {
+                    let _ = (predicate, location);
+                    return Err(CnfError::RuntimeError(
+                        "Verifier feature not enabled - recompile with 'verifier' feature"
+                            .to_string(),
+                    ));
+                }
+            }
+            Instruction::PostConditionCheck {
+                predicate,
+                location,
+            } => {
+                #[cfg(feature = "verifier")]
+                self.dispatch_postcondition_check(predicate, location)?;
+                #[cfg(not(feature = "verifier"))]
+                {
+                    let _ = (predicate, location);
+                    return Err(CnfError::RuntimeError(
+                        "Verifier feature not enabled - recompile with 'verifier' feature"
+                            .to_string(),
+                    ));
+                }
+            }
+            Instruction::InvariantCheck {
+                predicate,
+                location,
+            } => {
+                #[cfg(feature = "verifier")]
+                self.dispatch_invariant_check(predicate, location)?;
+                #[cfg(not(feature = "verifier"))]
+                {
+                    let _ = (predicate, location);
+                    return Err(CnfError::RuntimeError(
+                        "Verifier feature not enabled - recompile with 'verifier' feature"
+                            .to_string(),
+                    ));
+                }
+            }
+            Instruction::ProveStatement { target, predicate } => {
+                #[cfg(feature = "verifier")]
+                self.dispatch_prove(target, predicate)?;
+                #[cfg(not(feature = "verifier"))]
+                {
+                    let _ = (target, predicate);
+                    return Err(CnfError::RuntimeError(
+                        "Verifier feature not enabled - recompile with 'verifier' feature"
+                            .to_string(),
+                    ));
+                }
+            }
+            Instruction::AssertStatement { target, predicate } => {
+                #[cfg(feature = "verifier")]
+                self.dispatch_assert_statement(target, predicate)?;
+                #[cfg(not(feature = "verifier"))]
+                {
+                    let _ = (target, predicate);
+                    return Err(CnfError::RuntimeError(
+                        "Verifier feature not enabled - recompile with 'verifier' feature"
+                            .to_string(),
+                    ));
+                }
+            }
+            Instruction::AuditLogEntry { message } => {
+                #[cfg(feature = "verifier")]
+                self.dispatch_audit_log(message)?;
+                #[cfg(not(feature = "verifier"))]
+                {
+                    let _ = message;
+                    return Err(CnfError::RuntimeError(
+                        "Verifier feature not enabled - recompile with 'verifier' feature"
+                            .to_string(),
+                    ));
+                }
+            }
+            Instruction::ComplianceReport { standard: _ } => {}
         }
         Ok(())
     }

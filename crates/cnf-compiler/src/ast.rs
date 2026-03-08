@@ -11,6 +11,7 @@ pub struct Program {
     pub identification: IdentificationDivision,
     pub environment: EnvironmentDivision,
     pub network: Option<NetworkDivision>,
+    pub verification: Option<VerificationDivision>,
     pub data: DataDivision,
     pub procedure: ProcedureDivision,
 }
@@ -33,6 +34,18 @@ pub struct NetworkDivision {
     pub self_node: String,
     pub topology: Topology,
     pub timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VerificationDivision {
+    pub theorems: Vec<TheoremDeclaration>,
+    pub compliance_targets: Vec<String>, // "SOC2" | "PCI-DSS" | "HIPAA"
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TheoremDeclaration {
+    pub name: String,
+    pub statement: String, // raw predicate string, akan di-parse
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -296,6 +309,26 @@ pub enum ProcedureStatement {
         function_name: String,
         args: Vec<String>,
         output: String,
+    },
+    PreCondition {
+        predicate: String,
+    },
+    PostCondition {
+        predicate: String,
+    },
+    Invariant {
+        predicate: String,
+    },
+    Prove {
+        target: String,
+        predicate: String,
+    },
+    AssertStatement {
+        target: String,
+        predicate: String,
+    },
+    AuditLog {
+        message: String,
     },
 }
 

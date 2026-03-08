@@ -33,6 +33,9 @@ pub enum CnfVerifierError {
     #[error("L7.007.E AuditChainBroken: audit chain broken at entry {entry_seq}: {reason}")]
     AuditChainBroken { entry_seq: u64, reason: String },
 
+    #[error("L7.009.E AuditChainError: audit chain operation failed: {message}")]
+    AuditChainError { message: String },
+
     #[error("L7.008.E SmtEncodingFailed: SMT encoding failed: {reason}")]
     SmtEncodingFailed { reason: String },
 }

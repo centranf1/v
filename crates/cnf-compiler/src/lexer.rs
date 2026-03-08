@@ -33,6 +33,17 @@ pub enum Token {
     EnvironmentDiv,
     DataDiv,
     ProcedureDiv,
+    VerificationDiv,
+
+    // Verification keywords
+    PreCondition,
+    PostCondition,
+    Invariant,
+    Prove,
+    AssertKw,
+    Satisfies,
+    AuditLog,
+    ComplianceReport,
 
     // Keywords
     Division,
@@ -287,6 +298,15 @@ fn keyword_to_token(s: &str) -> Token {
         "ENVIRONMENT" => Token::EnvironmentDiv,
         "DATA" => Token::DataDiv,
         "PROCEDURE" => Token::ProcedureDiv,
+        "VERIFICATION" => Token::VerificationDiv,
+        "PRE-CONDITION" => Token::PreCondition,
+        "POST-CONDITION" => Token::PostCondition,
+        "INVARIANT" => Token::Invariant,
+        "PROVE" => Token::Prove,
+        "ASSERT" => Token::AssertKw,
+        "SATISFIES" => Token::Satisfies,
+        "AUDIT-LOG" => Token::AuditLog,
+        "COMPLIANCE-REPORT" => Token::ComplianceReport,
         "DIVISION" => Token::Division,
         "PROGRAM-ID" => Token::ProgramId,
         "AUTHOR" => Token::Author,

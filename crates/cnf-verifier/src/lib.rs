@@ -1,9 +1,11 @@
 pub mod assertion;
+pub mod audit_chain;
 pub mod error;
 pub mod hoare;
 pub mod z3_bridge;
 
 pub use assertion::{AssertionKind, CmpOp, HoareAnnotation, Predicate, SecurityLevel};
+pub use audit_chain::AuditChain;
 pub use error::CnfVerifierError;
 pub use hoare::{BufferState, HoareContext, HoareTriple};
 pub use z3_bridge::{VerificationResult, Z3Config, Z3Solver};

@@ -636,6 +636,80 @@ impl Parser {
         })
     }
 
+    fn parse_verification(&mut self) -> Result<VerificationDivision, String> {
+        self.expect(Token::VerificationDiv)?;
+        self.expect(Token::Division)?;
+        self.expect(Token::Period)?;
+
+        let mut theorems = Vec::new();
+        let mut compliance_targets = Vec::new();
+
+        while self.current() != &Token::DataDiv && self.current() != &Token::Eof {
+            match self.current() {
+                Token::Identifier(name) => {
+                    let theorem_name = name.clone();
+                    self.advance();
+                    self.expect(Token::Satisfies)?;
+                    // Parse the predicate string (can be a complex expression)
+                    let predicate = self.parse_predicate_string()?;
+                    self.expect(Token::Period)?;
+                    theorems.push(TheoremDeclaration {
+                        name: theorem_name,
+                        statement: predicate,
+                    });
+                }
+                Token::ComplianceReport => {
+                    self.advance();
+                    if let Token::String(standard) = self.current() {
+                        let std = standard.clone();
+                        self.advance();
+                        compliance_targets.push(std);
+                    } else {
+                        return Err("Expected compliance standard string".to_string());
+                    }
+                    self.expect(Token::Period)?;
+                }
+                Token::Eof => {
+                    return Err("Unexpected EOF in VERIFICATION DIVISION".to_string());
+                }
+                _ => {
+                    return Err(format!(
+                        "Unexpected token in VERIFICATION DIVISION: {}",
+                        self.current()
+                    ));
+                }
+            }
+        }
+
+        Ok(VerificationDivision {
+            theorems,
+            compliance_targets,
+        })
+    }
+
+    fn parse_predicate_string(&mut self) -> Result<String, String> {
+        let mut predicate_parts = Vec::new();
+
+        // Collect tokens that form the predicate string
+        while self.current() != &Token::Period && self.current() != &Token::Eof {
+            match self.current() {
+                Token::String(s) => {
+                    predicate_parts.push(s.clone());
+                    self.advance();
+                }
+                Token::Identifier(s) => {
+                    predicate_parts.push(s.clone());
+                    self.advance();
+                }
+                _ => {
+                    return Err(format!("Unexpected token in predicate: {}", self.current()));
+                }
+            }
+        }
+
+        Ok(predicate_parts.join(" "))
+    }
+
     fn parse_data(&mut self) -> Result<DataDivision, String> {
         self.expect_division(Token::DataDiv, "DATA DIVISION")?;
         self.expect(Token::Division)?;
@@ -1114,6 +1188,79 @@ impl Parser {
                     self.expect(Token::Period)?;
                     ProcedureStatement::FunctionCall { name, arguments }
                 }
+                Token::PreCondition => {
+                    self.advance();
+                    self.expect(Token::Period)?;
+                    let predicate = if let Token::String(s) = self.current() {
+                        let p = s.clone();
+                        self.advance();
+                        p
+                    } else {
+                        return Err("Expected predicate string for PRE-CONDITION".to_string());
+                    };
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::PreCondition { predicate }
+                }
+                Token::PostCondition => {
+                    self.advance();
+                    self.expect(Token::Period)?;
+                    let predicate = if let Token::String(s) = self.current() {
+                        let p = s.clone();
+                        self.advance();
+                        p
+                    } else {
+                        return Err("Expected predicate string for POST-CONDITION".to_string());
+                    };
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::PostCondition { predicate }
+                }
+                Token::Invariant => {
+                    self.advance();
+                    self.expect(Token::Period)?;
+                    let predicate = if let Token::String(s) = self.current() {
+                        let p = s.clone();
+                        self.advance();
+                        p
+                    } else {
+                        return Err("Expected predicate string for INVARIANT".to_string());
+                    };
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Invariant { predicate }
+                }
+                Token::Prove => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::Satisfies)?;
+                    let predicate = if let Token::String(s) = self.current() {
+                        let p = s.clone();
+                        self.advance();
+                        p
+                    } else {
+                        return Err("Expected predicate string for PROVE".to_string());
+                    };
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::Prove { target, predicate }
+                }
+                Token::AssertKw => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::Satisfies)?;
+                    let predicate = if let Token::String(s) = self.current() {
+                        let p = s.clone();
+                        self.advance();
+                        p
+                    } else {
+                        return Err("Expected predicate string for ASSERT".to_string());
+                    };
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::AssertStatement { target, predicate }
+                }
+                Token::AuditLog => {
+                    self.advance();
+                    let message = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::AuditLog { message }
+                }
                 Token::Eof => break,
                 _ => {
                     return Err(format!("Unknown procedure statement: {}", self.current()));
@@ -1136,6 +1283,13 @@ impl Parser {
             None
         };
 
+        // VERIFICATION DIVISION is optional
+        let verification = if self.current() == &Token::VerificationDiv {
+            Some(self.parse_verification()?)
+        } else {
+            None
+        };
+
         let data = self.parse_data()?;
         let procedure = self.parse_procedure()?;
 
@@ -1147,6 +1301,7 @@ impl Parser {
             identification,
             environment,
             network,
+            verification,
             data,
             procedure,
         })

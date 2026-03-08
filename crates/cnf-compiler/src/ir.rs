@@ -190,6 +190,32 @@ pub enum Instruction {
         args: Vec<String>,
         output: String,
     },
+    PreConditionCheck {
+        predicate: String,
+        location: String,
+    },
+    PostConditionCheck {
+        predicate: String,
+        location: String,
+    },
+    InvariantCheck {
+        predicate: String,
+        location: String,
+    },
+    ProveStatement {
+        target: String,
+        predicate: String,
+    },
+    AssertStatement {
+        target: String,
+        predicate: String,
+    },
+    AuditLogEntry {
+        message: String,
+    },
+    ComplianceReport {
+        standard: String,
+    },
 }
 
 impl std::fmt::Display for Instruction {
@@ -428,6 +454,36 @@ impl std::fmt::Display for Instruction {
                     "CALL_REMOTE({}:{}({:?}) -> {})",
                     node, function_name, args, output
                 )
+            }
+            Instruction::PreConditionCheck {
+                predicate,
+                location,
+            } => {
+                write!(f, "PRECONDITION_CHECK({} @ {})", predicate, location)
+            }
+            Instruction::PostConditionCheck {
+                predicate,
+                location,
+            } => {
+                write!(f, "POSTCONDITION_CHECK({} @ {})", predicate, location)
+            }
+            Instruction::InvariantCheck {
+                predicate,
+                location,
+            } => {
+                write!(f, "INVARIANT_CHECK({} @ {})", predicate, location)
+            }
+            Instruction::ProveStatement { target, predicate } => {
+                write!(f, "PROVE({} SATISFIES {})", target, predicate)
+            }
+            Instruction::AssertStatement { target, predicate } => {
+                write!(f, "ASSERT({} SATISFIES {})", target, predicate)
+            }
+            Instruction::AuditLogEntry { message } => {
+                write!(f, "AUDIT_LOG({})", message)
+            }
+            Instruction::ComplianceReport { standard } => {
+                write!(f, "COMPLIANCE_REPORT({})", standard)
             }
         }
     }
@@ -1396,6 +1452,47 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     function_name: function_name.clone(),
                     args: args.clone(),
                     output: output.clone(),
+                });
+            }
+            ProcedureStatement::PreCondition { predicate } => {
+                instructions.push(Instruction::PreConditionCheck {
+                    predicate: predicate.clone(),
+                    location: "unknown".to_string(),
+                });
+            }
+            ProcedureStatement::PostCondition { predicate } => {
+                instructions.push(Instruction::PostConditionCheck {
+                    predicate: predicate.clone(),
+                    location: "unknown".to_string(),
+                });
+            }
+            ProcedureStatement::Invariant { predicate } => {
+                instructions.push(Instruction::InvariantCheck {
+                    predicate: predicate.clone(),
+                    location: "unknown".to_string(),
+                });
+            }
+            ProcedureStatement::Prove { target, predicate } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Target '{}' not declared in DATA DIVISION", target));
+                }
+                instructions.push(Instruction::ProveStatement {
+                    target: target.clone(),
+                    predicate: predicate.clone(),
+                });
+            }
+            ProcedureStatement::AssertStatement { target, predicate } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Target '{}' not declared in DATA DIVISION", target));
+                }
+                instructions.push(Instruction::AssertStatement {
+                    target: target.clone(),
+                    predicate: predicate.clone(),
+                });
+            }
+            ProcedureStatement::AuditLog { message } => {
+                instructions.push(Instruction::AuditLogEntry {
+                    message: message.clone(),
                 });
             }
         }

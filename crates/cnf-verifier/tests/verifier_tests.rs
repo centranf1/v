@@ -1,6 +1,6 @@
 use cnf_verifier::{
-    AssertionKind, BufferState, CmpOp, CnfVerifierError, HoareAnnotation, HoareContext, Predicate,
-    SecurityLevel, VerificationResult, Verifier, Z3Config, Z3Solver,
+    AssertionKind, BufferState, CmpOp, CnfVerifierError, HoareAnnotation, HoareContext,
+    HoareTriple, Predicate, SecurityLevel, VerificationResult, Verifier, Z3Config, Z3Solver,
 };
 
 #[test]
@@ -19,7 +19,7 @@ fn test_predicate_false_verifies_to_refuted() {
     assert_eq!(
         result,
         VerificationResult::Refuted {
-            counterexample: "false predicate".to_string()
+            counterexample: "predicate false does not hold in context".to_string(),
         }
     );
 }
@@ -32,8 +32,8 @@ fn test_predicate_and_true_false_refuted() {
     let result = solver.verify_predicate(&pred, &ctx).unwrap();
     assert_eq!(
         result,
-        VerificationResult::Unknown {
-            reason: "stub implementation".to_string()
+        VerificationResult::Refuted {
+            counterexample: "predicate (and true false) does not hold in context".to_string()
         }
     );
 }
@@ -44,12 +44,7 @@ fn test_predicate_not_false_proved() {
     let ctx = HoareContext::new();
     let pred = Predicate::Not(Box::new(Predicate::False));
     let result = solver.verify_predicate(&pred, &ctx).unwrap();
-    assert_eq!(
-        result,
-        VerificationResult::Unknown {
-            reason: "stub implementation".to_string()
-        }
-    );
+    assert_eq!(result, VerificationResult::Proved);
 }
 
 #[test]
@@ -62,8 +57,8 @@ fn test_buffer_non_empty_unknown_stub() {
     let result = solver.verify_predicate(&pred, &ctx).unwrap();
     assert_eq!(
         result,
-        VerificationResult::Unknown {
-            reason: "stub implementation".to_string()
+        VerificationResult::Refuted {
+            counterexample: "predicate (> (str.len buf) 0) does not hold in context".to_string()
         }
     );
 }
@@ -249,9 +244,263 @@ fn test_cnf_verifier_error_audit_chain_broken() {
 }
 
 #[test]
-fn test_cnf_verifier_error_smt_encoding_failed() {
-    let err = CnfVerifierError::SmtEncodingFailed {
-        reason: "unsupported construct".to_string(),
+fn test_z3_solver_buffer_non_empty_with_ctx_proved() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf".to_string(),
+        BufferState {
+            length: 10,
+            security_level: SecurityLevel::Plain,
+            is_empty: false,
+        },
+    );
+    let pred = Predicate::BufferNonEmpty {
+        buffer: "buf".to_string(),
     };
-    assert!(format!("{}", err).contains("L7.008.E"));
+    let result = solver.verify_predicate(&pred, &ctx).unwrap();
+    assert_eq!(result, VerificationResult::Proved);
+}
+
+#[test]
+fn test_z3_solver_buffer_non_empty_without_ctx_refuted() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let ctx = HoareContext::new();
+    let pred = Predicate::BufferNonEmpty {
+        buffer: "buf".to_string(),
+    };
+    let result = solver.verify_predicate(&pred, &ctx).unwrap();
+    assert_eq!(
+        result,
+        VerificationResult::Refuted {
+            counterexample: "predicate (> (str.len buf) 0) does not hold in context".to_string(),
+        }
+    );
+}
+
+#[test]
+fn test_z3_solver_buffer_length_gt_proved() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf".to_string(),
+        BufferState {
+            length: 20,
+            security_level: SecurityLevel::Plain,
+            is_empty: false,
+        },
+    );
+    let pred = Predicate::BufferLength {
+        buffer: "buf".to_string(),
+        op: CmpOp::Gt,
+        value: 10,
+    };
+    let result = solver.verify_predicate(&pred, &ctx).unwrap();
+    assert_eq!(result, VerificationResult::Proved);
+}
+
+#[test]
+fn test_z3_solver_buffer_length_lt_refuted() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf".to_string(),
+        BufferState {
+            length: 5,
+            security_level: SecurityLevel::Plain,
+            is_empty: false,
+        },
+    );
+    let pred = Predicate::BufferLength {
+        buffer: "buf".to_string(),
+        op: CmpOp::Gt,
+        value: 10,
+    };
+    let result = solver.verify_predicate(&pred, &ctx).unwrap();
+    assert_eq!(
+        result,
+        VerificationResult::Refuted {
+            counterexample: "predicate (> (str.len buf) 10) does not hold in context".to_string(),
+        }
+    );
+}
+
+#[test]
+fn test_z3_solver_security_type_proved() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf".to_string(),
+        BufferState {
+            length: 10,
+            security_level: SecurityLevel::Encrypted,
+            is_empty: false,
+        },
+    );
+    let pred = Predicate::SecurityType {
+        buffer: "buf".to_string(),
+        expected: SecurityLevel::Encrypted,
+    };
+    let result = solver.verify_predicate(&pred, &ctx).unwrap();
+    assert_eq!(result, VerificationResult::Proved);
+}
+
+#[test]
+fn test_z3_solver_and_true_false_refuted() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf1".to_string(),
+        BufferState {
+            length: 10,
+            security_level: SecurityLevel::Plain,
+            is_empty: false,
+        },
+    );
+    ctx.set_buffer_state(
+        "buf2".to_string(),
+        BufferState {
+            length: 0,
+            security_level: SecurityLevel::Plain,
+            is_empty: true,
+        },
+    );
+    let pred = Predicate::And(
+        Box::new(Predicate::BufferNonEmpty {
+            buffer: "buf1".to_string(),
+        }),
+        Box::new(Predicate::BufferNonEmpty {
+            buffer: "buf2".to_string(),
+        }),
+    );
+    let result = solver.verify_predicate(&pred, &ctx).unwrap();
+    assert_eq!(
+        result,
+        VerificationResult::Refuted {
+            counterexample:
+                "predicate (and (> (str.len buf1) 0) (> (str.len buf2) 0)) does not hold in context"
+                    .to_string(),
+        }
+    );
+}
+
+#[test]
+fn test_z3_solver_or_true_false_proved() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf1".to_string(),
+        BufferState {
+            length: 10,
+            security_level: SecurityLevel::Plain,
+            is_empty: false,
+        },
+    );
+    ctx.set_buffer_state(
+        "buf2".to_string(),
+        BufferState {
+            length: 0,
+            security_level: SecurityLevel::Plain,
+            is_empty: true,
+        },
+    );
+    let pred = Predicate::Or(
+        Box::new(Predicate::BufferNonEmpty {
+            buffer: "buf1".to_string(),
+        }),
+        Box::new(Predicate::BufferNonEmpty {
+            buffer: "buf2".to_string(),
+        }),
+    );
+    let result = solver.verify_predicate(&pred, &ctx).unwrap();
+    assert_eq!(result, VerificationResult::Proved);
+}
+
+#[test]
+fn test_z3_solver_not_false_proved() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf".to_string(),
+        BufferState {
+            length: 0,
+            security_level: SecurityLevel::Plain,
+            is_empty: true,
+        },
+    );
+    let pred = Predicate::Not(Box::new(Predicate::BufferNonEmpty {
+        buffer: "buf".to_string(),
+    }));
+    let result = solver.verify_predicate(&pred, &ctx).unwrap();
+    assert_eq!(result, VerificationResult::Proved);
+}
+
+#[test]
+fn test_z3_solver_numeric_bound_proved() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf".to_string(),
+        BufferState {
+            length: 15,
+            security_level: SecurityLevel::Plain,
+            is_empty: false,
+        },
+    );
+    let pred = Predicate::NumericBound {
+        variable: "buf".to_string(),
+        op: CmpOp::Ge,
+        value: 10,
+    };
+    let result = solver.verify_predicate(&pred, &ctx).unwrap();
+    assert_eq!(result, VerificationResult::Proved);
+}
+
+#[test]
+fn test_z3_solver_triple_precondition_failed() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf".to_string(),
+        BufferState {
+            length: 0,
+            security_level: SecurityLevel::Plain,
+            is_empty: true,
+        },
+    );
+    let triple = HoareTriple {
+        pre: Predicate::BufferNonEmpty {
+            buffer: "buf".to_string(),
+        },
+        body_description: "test procedure".to_string(),
+        post: Predicate::True,
+    };
+    let result = solver.verify_triple(&triple, &ctx);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(format!("{}", err).contains("L7.001.F"));
+    assert!(format!("{}", err).contains("PreconditionFailed"));
+}
+
+#[test]
+fn test_z3_solver_triple_proved() {
+    let solver = Z3Solver::new(Z3Config::default());
+    let mut ctx = HoareContext::new();
+    ctx.set_buffer_state(
+        "buf".to_string(),
+        BufferState {
+            length: 10,
+            security_level: SecurityLevel::Plain,
+            is_empty: false,
+        },
+    );
+    let triple = HoareTriple {
+        pre: Predicate::BufferNonEmpty {
+            buffer: "buf".to_string(),
+        },
+        body_description: "test procedure".to_string(),
+        post: Predicate::True,
+    };
+    let result = solver.verify_triple(&triple, &ctx).unwrap();
+    assert_eq!(result, VerificationResult::Proved);
 }
