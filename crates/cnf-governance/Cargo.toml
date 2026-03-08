@@ -1,6 +1,6 @@
 [package]
 name = "cnf-governance"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["CENTRA-NF Team"]
 edition = "2021"
 

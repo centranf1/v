@@ -213,7 +213,7 @@ dependencies = [
 
 [[package]]
 name = "centra-nf-cli"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "centra-nf-lsp"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "cnf-compiler",
  "cnf-runtime",
@@ -341,7 +341,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cnf-compiler"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "cnf-runtime",
  "criterion",
@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-governance"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "hex",
  "hmac",
@@ -361,7 +361,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-network"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "cnf-compiler",
  "cnf-storage",
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-quantum"
-version = "0.8.0"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "hex",
@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-runtime"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "cnf-compiler",
  "cnf-network",
@@ -410,7 +410,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-security"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "hex",
@@ -419,7 +419,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-stdlib"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "cnf-security",
  "cobol-protocol-v153",
@@ -427,7 +427,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-storage"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "cnf-security",
  "crc32fast",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "cnf-verifier"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "cnf-compiler",
  "cnf-storage",
@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "cobol-protocol-v153"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "flate2",
 ]

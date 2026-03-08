@@ -147,6 +147,13 @@ pub struct Runtime {
     audit_chain: Option<cnf_verifier::AuditChain>,
     #[cfg(feature = "quantum")]
     quantum_keys: std::collections::HashMap<String, QuantumKeyEntry>,
+    // Governance state
+    policies: HashMap<String, String>,
+    regulations: HashMap<String, String>,
+    data_sovereignty_rules: Vec<(String, String)>,
+    access_controls: Vec<(String, String, String)>,
+    audit_ledger: Vec<String>,
+    decision_quorum: Option<(String, String)>,
 }
 
 impl Runtime {
@@ -165,6 +172,12 @@ impl Runtime {
             audit_chain: None,
             #[cfg(feature = "quantum")]
             quantum_keys: std::collections::HashMap::new(),
+            policies: HashMap::new(),
+            regulations: HashMap::new(),
+            data_sovereignty_rules: Vec::new(),
+            access_controls: Vec::new(),
+            audit_ledger: Vec::new(),
+            decision_quorum: None,
         }
     }
 
@@ -202,6 +215,8 @@ impl Runtime {
 
     /// Execute COMPRESS instruction.
     fn dispatch_compress(&mut self, target: &str) -> Result<(), CnfError> {
+        self.check_access_control(target, "COMPRESS")?;
+
         let buf = self
             .get_buffer_mut(target)
             .map_err(|e| CnfError::CompressionFailed(e.to_string()))?;
@@ -215,6 +230,8 @@ impl Runtime {
 
     /// Execute VERIFY-INTEGRITY instruction.
     fn dispatch_verify(&self, target: &str) -> Result<String, CnfError> {
+        self.check_access_control(target, "VERIFY")?;
+
         let buf = self
             .get_buffer(target)
             .map_err(|e| CnfError::VerificationFailed(e.to_string()))?;
@@ -225,6 +242,8 @@ impl Runtime {
 
     /// Execute ENCRYPT instruction.
     fn dispatch_encrypt(&mut self, target: &str) -> Result<(), CnfError> {
+        self.check_access_control(target, "ENCRYPT")?;
+
         let buf = self
             .get_buffer_mut(target)
             .map_err(|e| CnfError::EncryptionFailed(e.to_string()))?;
@@ -235,6 +254,8 @@ impl Runtime {
 
     /// Execute DECRYPT instruction.
     fn dispatch_decrypt(&mut self, target: &str) -> Result<(), CnfError> {
+        self.check_access_control(target, "DECRYPT")?;
+
         let buf = self
             .get_buffer_mut(target)
             .map_err(|e| CnfError::DecryptionFailed(e.to_string()))?;
@@ -2111,12 +2132,49 @@ impl Runtime {
                     return Err(CnfError::QuantumNotEnabled);
                 }
             }
+            Instruction::Policy { name, formula } => {
+                self.policies.insert(name.clone(), formula.clone());
+            }
+            Instruction::Regulation { standard, clause } => {
+                self.regulations.insert(standard.clone(), clause.clone());
+            }
+            Instruction::DataSovereignty { from, to } => {
+                self.data_sovereignty_rules.push((from.clone(), to.clone()));
+            }
+            Instruction::AccessControl { user, resource, action } => {
+                self.access_controls.push((user.clone(), resource.clone(), action.clone()));
+            }
+            Instruction::AuditLedger { message } => {
+                self.audit_ledger.push(message.clone());
+            }
+            Instruction::DecisionQuorum { votes, threshold } => {
+                self.decision_quorum = Some((votes.clone(), threshold.clone()));
+            }
             _ => {
                 // Governance instructions are no-ops until runtime support added
                 // This keeps the compiler crates independent of runtime logic.
             }
         }
         Ok(())
+    }
+
+    /// Check if access is allowed for a given user, resource, action.
+    /// For v1.0.0, assume user is "default" if not specified.
+    fn check_access_control(&self, resource: &str, action: &str) -> Result<(), CnfError> {
+        if self.access_controls.is_empty() {
+            // No access controls defined, allow
+            return Ok(());
+        }
+        let user = "default"; // Assume default user
+        for (u, r, a) in &self.access_controls {
+            if u == user && r == resource && a == action {
+                return Ok(());
+            }
+        }
+        Err(CnfError::RuntimeError(format!(
+            "Access denied: user '{}' cannot perform '{}' on '{}'",
+            user, action, resource
+        )))
     }
 
     /// Dispatch single instruction.
