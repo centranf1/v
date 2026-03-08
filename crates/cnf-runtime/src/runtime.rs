@@ -10,19 +10,10 @@ use std::collections::HashMap;
 
 #[cfg(feature = "quantum")]
 use cnf_quantum::{
-    generate_kyber_keypair,
-    generate_dilithium_keypair,
-    generate_sphincs_keypair,
-    dilithium_sign,
-    dilithium_verify,
-    sphincs_sign,
-    sphincs_verify,
-    quantum_encrypt,
-    quantum_decrypt,
-    quantum_sign_and_encrypt,
-    quantum_verify_and_decrypt,
+    dilithium_sign, dilithium_verify, generate_dilithium_keypair, generate_kyber_keypair,
+    generate_sphincs_keypair, quantum_decrypt, quantum_encrypt, quantum_sign_and_encrypt,
+    quantum_verify_and_decrypt, sphincs_sign, sphincs_verify, DilithiumSignature,
     QuantumEncryptedBlob,
-    DilithiumSignature,
 };
 
 #[cfg(feature = "network")]
@@ -74,7 +65,9 @@ impl std::fmt::Display for CnfError {
             CnfError::IoError(msg) => write!(f, "I/O error: {}", msg),
             CnfError::UnknownAlgorithm(algo) => write!(f, "Unknown algorithm: {}", algo),
             CnfError::QuantumNotEnabled => write!(f, "Quantum feature not enabled"),
-            CnfError::SignatureVerificationFailed(msg) => write!(f, "Quantum signature verification failed: {}", msg),
+            CnfError::SignatureVerificationFailed(msg) => {
+                write!(f, "Quantum signature verification failed: {}", msg)
+            }
             #[cfg(feature = "network")]
             CnfError::NetworkNotInitialized => {
                 write!(f, "Network not initialized - enable 'network' feature")
@@ -133,6 +126,7 @@ impl From<cnf_network::CnfNetworkError> for CnfError {
     }
 }
 
+#[cfg(feature = "quantum")]
 pub enum QuantumKeyEntry {
     Kem(cnf_quantum::KyberKeyPair),
     Dsa(cnf_quantum::DilithiumKeyPair),
@@ -1549,7 +1543,7 @@ impl Runtime {
         Err(CnfError::QuantumNotEnabled)
     }
 
-    #[cfg(feature = "quantum")]    
+    #[cfg(feature = "quantum")]
     fn dispatch_generate_keypair(
         &mut self,
         algorithm: &str,
@@ -1592,7 +1586,7 @@ impl Runtime {
         Err(CnfError::QuantumNotEnabled)
     }
 
-    #[cfg(feature = "quantum")]    
+    #[cfg(feature = "quantum")]
     fn dispatch_long_term_sign(
         &mut self,
         source: &str,
@@ -2658,14 +2652,10 @@ mod tests {
             QuantumKeyEntry::Kem(_)
         ));
         runtime.add_buffer("buf".to_string(), b"hello".to_vec());
-        runtime
-            .dispatch_quantum_encrypt("buf", "kem1")
-            .unwrap();
+        runtime.dispatch_quantum_encrypt("buf", "kem1").unwrap();
         let cipher = runtime.get_output("buf").unwrap();
         assert_ne!(cipher, b"hello".to_vec());
-        runtime
-            .dispatch_quantum_decrypt("buf", "kem1")
-            .unwrap();
+        runtime.dispatch_quantum_decrypt("buf", "kem1").unwrap();
         assert_eq!(runtime.get_output("buf").unwrap(), b"hello".to_vec());
     }
 

@@ -438,7 +438,10 @@ mod tests {
             signing_key: "sender_private_key".to_string(),
             output: "encrypted_signed".to_string(),
         };
-        assert!(matches!(stmt, ProcedureStatement::QuantumSignEncrypt { .. }));
+        assert!(matches!(
+            stmt,
+            ProcedureStatement::QuantumSignEncrypt { .. }
+        ));
     }
 
     #[test]
@@ -448,7 +451,10 @@ mod tests {
             recipient_key: "recipient_private_key".to_string(),
             output: "plaintext_verified".to_string(),
         };
-        assert!(matches!(stmt, ProcedureStatement::QuantumVerifyDecrypt { .. }));
+        assert!(matches!(
+            stmt,
+            ProcedureStatement::QuantumVerifyDecrypt { .. }
+        ));
     }
 
     #[test]

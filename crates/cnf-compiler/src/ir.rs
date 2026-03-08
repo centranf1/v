@@ -534,7 +534,11 @@ impl std::fmt::Display for Instruction {
                 signing_key,
                 output,
             } => {
-                write!(f, "QUANTUM_SIGN({} WITH {} AS {})", source, signing_key, output)
+                write!(
+                    f,
+                    "QUANTUM_SIGN({} WITH {} AS {})",
+                    source, signing_key, output
+                )
             }
             Instruction::QuantumVerifySig {
                 source,
@@ -574,14 +578,22 @@ impl std::fmt::Display for Instruction {
                 algorithm,
                 output_name,
             } => {
-                write!(f, "GENERATE_KEYPAIR(ALGORITHM {} AS {})", algorithm, output_name)
+                write!(
+                    f,
+                    "GENERATE_KEYPAIR(ALGORITHM {} AS {})",
+                    algorithm, output_name
+                )
             }
             Instruction::LongTermSign {
                 source,
                 signing_key,
                 output,
             } => {
-                write!(f, "LONG_TERM_SIGN({} WITH {} AS {})", source, signing_key, output)
+                write!(
+                    f,
+                    "LONG_TERM_SIGN({} WITH {} AS {})",
+                    source, signing_key, output
+                )
             }
         }
     }
@@ -1595,7 +1607,10 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
             }
             ProcedureStatement::QuantumEncrypt { target, key_name } => {
                 if !declared_vars.contains(target) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
                 }
                 instructions.push(Instruction::QuantumEncrypt {
                     source: target.clone(),
@@ -1604,7 +1619,10 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
             }
             ProcedureStatement::QuantumDecrypt { target, key_name } => {
                 if !declared_vars.contains(target) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
                 }
                 instructions.push(Instruction::QuantumDecrypt {
                     target: target.clone(),
@@ -1617,10 +1635,16 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 output,
             } => {
                 if !declared_vars.contains(target) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
                 }
                 if !declared_vars.contains(output) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", output));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        output
+                    ));
                 }
                 instructions.push(Instruction::QuantumSign {
                     source: target.clone(),
@@ -1634,7 +1658,10 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 signature_ref,
             } => {
                 if !declared_vars.contains(target) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
                 }
                 instructions.push(Instruction::QuantumVerifySig {
                     source: target.clone(),
@@ -1649,10 +1676,16 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 output,
             } => {
                 if !declared_vars.contains(target) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
                 }
                 if !declared_vars.contains(output) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", output));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        output
+                    ));
                 }
                 instructions.push(Instruction::QuantumSignEncrypt {
                     source: target.clone(),
@@ -1667,10 +1700,16 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 output,
             } => {
                 if !declared_vars.contains(target) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
                 }
                 if !declared_vars.contains(output) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", output));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        output
+                    ));
                 }
                 instructions.push(Instruction::QuantumVerifyDecrypt {
                     source: target.clone(),
@@ -1699,10 +1738,16 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 output,
             } => {
                 if !declared_vars.contains(target) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        target
+                    ));
                 }
                 if !declared_vars.contains(output) {
-                    return Err(format!("Variable '{}' not declared in DATA DIVISION", output));
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        output
+                    ));
                 }
                 instructions.push(Instruction::LongTermSign {
                     source: target.clone(),

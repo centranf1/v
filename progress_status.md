@@ -5478,7 +5478,8 @@ CI Gates: ✅ ALL PASSING
 - 4 cryptographic data structures (KyberKeyPair, QuantumEncryptedBlob, DilithiumKeyPair, DilithiumSignature, SphincsKeyPair, SphincsSignature, SignedEncryptedBlob)
 - Zero unsafe code
 - Zero clippy warnings
-- 12 CI gates: ALL PASSING
+- 14 CI gates: ALL PASSING
+- Documentation: added FIPS_COMPLIANCE.md and extended CI with gates 13/14
 
 **L8 Quantum Layer Features:**
 - ✅ Key encapsulation mechanism (ML-KEM-768 / Kyber768)
