@@ -216,6 +216,44 @@ pub enum Instruction {
     ComplianceReport {
         standard: String,
     },
+    QuantumEncrypt {
+        source: String,
+        key_name: String,
+    },
+    QuantumDecrypt {
+        target: String,
+        key_name: String,
+    },
+    QuantumSign {
+        source: String,
+        signing_key: String,
+        output: String,
+    },
+    QuantumVerifySig {
+        source: String,
+        verification_key: String,
+        signature_ref: String,
+    },
+    QuantumSignEncrypt {
+        source: String,
+        recipient_key: String,
+        signing_key: String,
+        output: String,
+    },
+    QuantumVerifyDecrypt {
+        source: String,
+        recipient_key: String,
+        output: String,
+    },
+    GenerateKeyPair {
+        algorithm: String,
+        output_name: String,
+    },
+    LongTermSign {
+        source: String,
+        signing_key: String,
+        output: String,
+    },
 }
 
 impl std::fmt::Display for Instruction {
@@ -484,6 +522,66 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::ComplianceReport { standard } => {
                 write!(f, "COMPLIANCE_REPORT({})", standard)
+            }
+            Instruction::QuantumEncrypt { source, key_name } => {
+                write!(f, "QUANTUM_ENCRYPT({} WITH {})", source, key_name)
+            }
+            Instruction::QuantumDecrypt { target, key_name } => {
+                write!(f, "QUANTUM_DECRYPT({} WITH {})", target, key_name)
+            }
+            Instruction::QuantumSign {
+                source,
+                signing_key,
+                output,
+            } => {
+                write!(f, "QUANTUM_SIGN({} WITH {} AS {})", source, signing_key, output)
+            }
+            Instruction::QuantumVerifySig {
+                source,
+                verification_key,
+                signature_ref,
+            } => {
+                write!(
+                    f,
+                    "QUANTUM_VERIFY_SIG({} WITH {} SIGNATURE {})",
+                    source, verification_key, signature_ref
+                )
+            }
+            Instruction::QuantumSignEncrypt {
+                source,
+                recipient_key,
+                signing_key,
+                output,
+            } => {
+                write!(
+                    f,
+                    "QUANTUM_SIGN_ENCRYPT({} FOR {} SIGNED_BY {} AS {})",
+                    source, recipient_key, signing_key, output
+                )
+            }
+            Instruction::QuantumVerifyDecrypt {
+                source,
+                recipient_key,
+                output,
+            } => {
+                write!(
+                    f,
+                    "QUANTUM_VERIFY_DECRYPT({} WITH {} AS {})",
+                    source, recipient_key, output
+                )
+            }
+            Instruction::GenerateKeyPair {
+                algorithm,
+                output_name,
+            } => {
+                write!(f, "GENERATE_KEYPAIR(ALGORITHM {} AS {})", algorithm, output_name)
+            }
+            Instruction::LongTermSign {
+                source,
+                signing_key,
+                output,
+            } => {
+                write!(f, "LONG_TERM_SIGN({} WITH {} AS {})", source, signing_key, output)
             }
         }
     }
@@ -1495,6 +1593,123 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                     message: message.clone(),
                 });
             }
+            ProcedureStatement::QuantumEncrypt { target, key_name } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                }
+                instructions.push(Instruction::QuantumEncrypt {
+                    source: target.clone(),
+                    key_name: key_name.clone(),
+                });
+            }
+            ProcedureStatement::QuantumDecrypt { target, key_name } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                }
+                instructions.push(Instruction::QuantumDecrypt {
+                    target: target.clone(),
+                    key_name: key_name.clone(),
+                });
+            }
+            ProcedureStatement::QuantumSign {
+                target,
+                signing_key,
+                output,
+            } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                }
+                if !declared_vars.contains(output) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", output));
+                }
+                instructions.push(Instruction::QuantumSign {
+                    source: target.clone(),
+                    signing_key: signing_key.clone(),
+                    output: output.clone(),
+                });
+            }
+            ProcedureStatement::QuantumVerifySig {
+                target,
+                verification_key,
+                signature_ref,
+            } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                }
+                instructions.push(Instruction::QuantumVerifySig {
+                    source: target.clone(),
+                    verification_key: verification_key.clone(),
+                    signature_ref: signature_ref.clone(),
+                });
+            }
+            ProcedureStatement::QuantumSignEncrypt {
+                target,
+                recipient_key,
+                signing_key,
+                output,
+            } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                }
+                if !declared_vars.contains(output) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", output));
+                }
+                instructions.push(Instruction::QuantumSignEncrypt {
+                    source: target.clone(),
+                    recipient_key: recipient_key.clone(),
+                    signing_key: signing_key.clone(),
+                    output: output.clone(),
+                });
+            }
+            ProcedureStatement::QuantumVerifyDecrypt {
+                target,
+                recipient_key,
+                output,
+            } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                }
+                if !declared_vars.contains(output) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", output));
+                }
+                instructions.push(Instruction::QuantumVerifyDecrypt {
+                    source: target.clone(),
+                    recipient_key: recipient_key.clone(),
+                    output: output.clone(),
+                });
+            }
+            ProcedureStatement::GenerateKeyPair {
+                algorithm,
+                output_name,
+            } => {
+                if !declared_vars.contains(output_name) {
+                    return Err(format!(
+                        "Variable '{}' not declared in DATA DIVISION",
+                        output_name
+                    ));
+                }
+                instructions.push(Instruction::GenerateKeyPair {
+                    algorithm: algorithm.clone(),
+                    output_name: output_name.clone(),
+                });
+            }
+            ProcedureStatement::LongTermSign {
+                target,
+                signing_key,
+                output,
+            } => {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", target));
+                }
+                if !declared_vars.contains(output) {
+                    return Err(format!("Variable '{}' not declared in DATA DIVISION", output));
+                }
+                instructions.push(Instruction::LongTermSign {
+                    source: target.clone(),
+                    signing_key: signing_key.clone(),
+                    output: output.clone(),
+                });
+            }
         }
     }
 
@@ -1773,6 +1988,120 @@ fn lower_single_statement(
                 target: target.clone(),
             })
         }
+        ProcedureStatement::QuantumEncrypt { target, key_name } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::QuantumEncrypt {
+                source: target.clone(),
+                key_name: key_name.clone(),
+            })
+        }
+        ProcedureStatement::QuantumDecrypt { target, key_name } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::QuantumDecrypt {
+                target: target.clone(),
+                key_name: key_name.clone(),
+            })
+        }
+        ProcedureStatement::QuantumSign {
+            target,
+            signing_key,
+            output,
+        } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            if !declared_vars.contains(output) {
+                return Err(format!("Variable '{}' not declared", output));
+            }
+            Ok(Instruction::QuantumSign {
+                source: target.clone(),
+                signing_key: signing_key.clone(),
+                output: output.clone(),
+            })
+        }
+        ProcedureStatement::QuantumVerifySig {
+            target,
+            verification_key,
+            signature_ref,
+        } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::QuantumVerifySig {
+                source: target.clone(),
+                verification_key: verification_key.clone(),
+                signature_ref: signature_ref.clone(),
+            })
+        }
+        ProcedureStatement::QuantumSignEncrypt {
+            target,
+            recipient_key,
+            signing_key,
+            output,
+        } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            if !declared_vars.contains(output) {
+                return Err(format!("Variable '{}' not declared", output));
+            }
+            Ok(Instruction::QuantumSignEncrypt {
+                source: target.clone(),
+                recipient_key: recipient_key.clone(),
+                signing_key: signing_key.clone(),
+                output: output.clone(),
+            })
+        }
+        ProcedureStatement::QuantumVerifyDecrypt {
+            target,
+            recipient_key,
+            output,
+        } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            if !declared_vars.contains(output) {
+                return Err(format!("Variable '{}' not declared", output));
+            }
+            Ok(Instruction::QuantumVerifyDecrypt {
+                source: target.clone(),
+                recipient_key: recipient_key.clone(),
+                output: output.clone(),
+            })
+        }
+        ProcedureStatement::GenerateKeyPair {
+            algorithm,
+            output_name,
+        } => {
+            if !declared_vars.contains(output_name) {
+                return Err(format!("Variable '{}' not declared", output_name));
+            }
+            Ok(Instruction::GenerateKeyPair {
+                algorithm: algorithm.clone(),
+                output_name: output_name.clone(),
+            })
+        }
+        ProcedureStatement::LongTermSign {
+            target,
+            signing_key,
+            output,
+        } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            if !declared_vars.contains(output) {
+                return Err(format!("Variable '{}' not declared", output));
+            }
+            Ok(Instruction::LongTermSign {
+                source: target.clone(),
+                signing_key: signing_key.clone(),
+                output: output.clone(),
+            })
+        }
         _ => Err("Unsupported nested statement".to_string()),
     }
 }
@@ -1844,5 +2173,107 @@ mod tests {
             target: "rs".to_string(),
         };
         assert_eq!(format!("{}", replay_instr), "REPLAY(rs)");
+    }
+
+    #[test]
+    fn test_quantum_encrypt_instruction() {
+        let instr = Instruction::QuantumEncrypt {
+            source: "plaintext".to_string(),
+            key_name: "encryption_key".to_string(),
+        };
+        assert_eq!(
+            format!("{}", instr),
+            "QUANTUM_ENCRYPT(plaintext WITH encryption_key)"
+        );
+    }
+
+    #[test]
+    fn test_quantum_decrypt_instruction() {
+        let instr = Instruction::QuantumDecrypt {
+            target: "ciphertext".to_string(),
+            key_name: "decryption_key".to_string(),
+        };
+        assert_eq!(
+            format!("{}", instr),
+            "QUANTUM_DECRYPT(ciphertext WITH decryption_key)"
+        );
+    }
+
+    #[test]
+    fn test_quantum_sign_instruction() {
+        let instr = Instruction::QuantumSign {
+            source: "message".to_string(),
+            signing_key: "private_key".to_string(),
+            output: "signature".to_string(),
+        };
+        assert_eq!(
+            format!("{}", instr),
+            "QUANTUM_SIGN(message WITH private_key AS signature)"
+        );
+    }
+
+    #[test]
+    fn test_quantum_verify_sig_instruction() {
+        let instr = Instruction::QuantumVerifySig {
+            source: "message".to_string(),
+            verification_key: "public_key".to_string(),
+            signature_ref: "sig_buffer".to_string(),
+        };
+        assert_eq!(
+            format!("{}", instr),
+            "QUANTUM_VERIFY_SIG(message WITH public_key SIGNATURE sig_buffer)"
+        );
+    }
+
+    #[test]
+    fn test_quantum_sign_encrypt_instruction() {
+        let instr = Instruction::QuantumSignEncrypt {
+            source: "plaintext".to_string(),
+            recipient_key: "recipient_pk".to_string(),
+            signing_key: "sender_sk".to_string(),
+            output: "encrypted_signed".to_string(),
+        };
+        assert_eq!(
+            format!("{}", instr),
+            "QUANTUM_SIGN_ENCRYPT(plaintext FOR recipient_pk SIGNED_BY sender_sk AS encrypted_signed)"
+        );
+    }
+
+    #[test]
+    fn test_quantum_verify_decrypt_instruction() {
+        let instr = Instruction::QuantumVerifyDecrypt {
+            source: "encrypted_signed".to_string(),
+            recipient_key: "recipient_sk".to_string(),
+            output: "plaintext".to_string(),
+        };
+        assert_eq!(
+            format!("{}", instr),
+            "QUANTUM_VERIFY_DECRYPT(encrypted_signed WITH recipient_sk AS plaintext)"
+        );
+    }
+
+    #[test]
+    fn test_generate_keypair_instruction() {
+        let instr = Instruction::GenerateKeyPair {
+            algorithm: "ML-KEM-768".to_string(),
+            output_name: "generated_keypair".to_string(),
+        };
+        assert_eq!(
+            format!("{}", instr),
+            "GENERATE_KEYPAIR(ALGORITHM ML-KEM-768 AS generated_keypair)"
+        );
+    }
+
+    #[test]
+    fn test_long_term_sign_instruction() {
+        let instr = Instruction::LongTermSign {
+            source: "document".to_string(),
+            signing_key: "long_term_key".to_string(),
+            output: "long_term_sig".to_string(),
+        };
+        assert_eq!(
+            format!("{}", instr),
+            "LONG_TERM_SIGN(document WITH long_term_key AS long_term_sig)"
+        );
     }
 }

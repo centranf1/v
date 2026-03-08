@@ -152,6 +152,22 @@ pub enum Token {
     FileHandle,
     RecordStream,
 
+    // Quantum operations (v0.8.0)
+    QuantumEncrypt,
+    QuantumDecrypt,
+    QuantumSign,
+    QuantumVerifySig,
+    QuantumSignEncrypt,
+    QuantumVerifyDecrypt,
+    GenerateKeypair,
+    LongTermSign,
+
+    // Signature-related
+    Signature,
+    Algorithm,
+    SignedBy,
+    With,
+
     // Literals and punctuation
     Identifier(String),
     String(String),
@@ -396,6 +412,18 @@ fn keyword_to_token(s: &str) -> Token {
         "REPLAY" => Token::Replay,
         "FILE-HANDLE" => Token::FileHandle,
         "RECORD-STREAM" => Token::RecordStream,
+        "QUANTUM-ENCRYPT" => Token::QuantumEncrypt,
+        "QUANTUM-DECRYPT" => Token::QuantumDecrypt,
+        "QUANTUM-SIGN" => Token::QuantumSign,
+        "QUANTUM-VERIFY-SIG" => Token::QuantumVerifySig,
+        "QUANTUM-SIGN-ENCRYPT" => Token::QuantumSignEncrypt,
+        "QUANTUM-VERIFY-DECRYPT" => Token::QuantumVerifyDecrypt,
+        "GENERATE-KEYPAIR" => Token::GenerateKeypair,
+        "LONG-TERM-SIGN" => Token::LongTermSign,
+        "SIGNATURE" => Token::Signature,
+        "ALGORITHM" => Token::Algorithm,
+        "SIGNED-BY" => Token::SignedBy,
+        "WITH" => Token::With,
         _ => Token::Identifier(s.to_string()),
     }
 }
@@ -450,5 +478,62 @@ mod tests {
         let tokens = tokenize("ENCRYPT BUFFER DECRYPT BUFFER").unwrap();
         assert_eq!(tokens[0], Token::Encrypt);
         assert_eq!(tokens[2], Token::Decrypt);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_quantum_encrypt() {
+        let tokens = tokenize("QUANTUM-ENCRYPT").unwrap();
+        assert_eq!(tokens[0], Token::QuantumEncrypt);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_quantum_decrypt() {
+        let tokens = tokenize("QUANTUM-DECRYPT").unwrap();
+        assert_eq!(tokens[0], Token::QuantumDecrypt);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_quantum_sign() {
+        let tokens = tokenize("QUANTUM-SIGN").unwrap();
+        assert_eq!(tokens[0], Token::QuantumSign);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_quantum_verify_sig() {
+        let tokens = tokenize("QUANTUM-VERIFY-SIG").unwrap();
+        assert_eq!(tokens[0], Token::QuantumVerifySig);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_quantum_sign_encrypt() {
+        let tokens = tokenize("QUANTUM-SIGN-ENCRYPT").unwrap();
+        assert_eq!(tokens[0], Token::QuantumSignEncrypt);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_quantum_verify_decrypt() {
+        let tokens = tokenize("QUANTUM-VERIFY-DECRYPT").unwrap();
+        assert_eq!(tokens[0], Token::QuantumVerifyDecrypt);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_generate_keypair() {
+        let tokens = tokenize("GENERATE-KEYPAIR").unwrap();
+        assert_eq!(tokens[0], Token::GenerateKeypair);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_long_term_sign() {
+        let tokens = tokenize("LONG-TERM-SIGN").unwrap();
+        assert_eq!(tokens[0], Token::LongTermSign);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_quantum_supporting_tokens() {
+        let tokens = tokenize("SIGNATURE ALGORITHM SIGNED-BY WITH").unwrap();
+        assert_eq!(tokens[0], Token::Signature);
+        assert_eq!(tokens[1], Token::Algorithm);
+        assert_eq!(tokens[2], Token::SignedBy);
+        assert_eq!(tokens[3], Token::With);
     }
 }

@@ -10,13 +10,17 @@ cnf-security = { path = "../cnf-security" }
 cnf-compiler = { path = "../cnf-compiler" }
 cnf-storage = { path = "../cnf-storage" }
 cnf-stdlib = { path = "../cnf-stdlib" }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 cnf-network = { path = "../cnf-network", optional = true }
 cnf-verifier = { path = "../cnf-verifier", optional = true }
+cnf-quantum = { path = "../cnf-quantum", optional = true }
 cobol-protocol-v153 = { path = "../cobol-protocol-v153" }
 
 [features]
 network = ["cnf-network"]
 verifier = ["cnf-verifier"]
+quantum = ["dep:cnf-quantum", "serde", "serde_json"]
 
 [dev-dependencies]
 criterion = "0.5"

@@ -407,6 +407,108 @@ impl Parser {
                 self.expect(Token::Period)?;
                 Ok(ProcedureStatement::Replay { target })
             }
+            // QUANTUM operations
+            Token::QuantumEncrypt => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::With)?;
+                let key_name = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::QuantumEncrypt { target, key_name })
+            }
+            Token::QuantumDecrypt => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::With)?;
+                let key_name = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::QuantumDecrypt { target, key_name })
+            }
+            Token::QuantumSign => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::With)?;
+                let signing_key = self.expect_variable_or_type()?;
+                self.expect(Token::As)?;
+                let output = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::QuantumSign {
+                    target,
+                    signing_key,
+                    output,
+                })
+            }
+            Token::QuantumVerifySig => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::With)?;
+                let verification_key = self.expect_variable_or_type()?;
+                self.expect(Token::Signature)?;
+                let signature_ref = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::QuantumVerifySig {
+                    target,
+                    verification_key,
+                    signature_ref,
+                })
+            }
+            Token::QuantumSignEncrypt => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::For)?;
+                let recipient_key = self.expect_variable_or_type()?;
+                self.expect(Token::SignedBy)?;
+                let signing_key = self.expect_variable_or_type()?;
+                self.expect(Token::As)?;
+                let output = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::QuantumSignEncrypt {
+                    target,
+                    recipient_key,
+                    signing_key,
+                    output,
+                })
+            }
+            Token::QuantumVerifyDecrypt => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::With)?;
+                let recipient_key = self.expect_variable_or_type()?;
+                self.expect(Token::As)?;
+                let output = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::QuantumVerifyDecrypt {
+                    target,
+                    recipient_key,
+                    output,
+                })
+            }
+            Token::GenerateKeypair => {
+                self.advance();
+                self.expect(Token::Algorithm)?;
+                let algorithm = self.expect_variable_or_type()?;
+                self.expect(Token::As)?;
+                let output_name = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::GenerateKeyPair {
+                    algorithm,
+                    output_name,
+                })
+            }
+            Token::LongTermSign => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::With)?;
+                let signing_key = self.expect_variable_or_type()?;
+                self.expect(Token::As)?;
+                let output = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::LongTermSign {
+                    target,
+                    signing_key,
+                    output,
+                })
+            }
             Token::Send => {
                 self.advance();
                 let buffer = self.expect_variable_or_type()?;
@@ -1261,6 +1363,108 @@ impl Parser {
                     self.expect(Token::Period)?;
                     ProcedureStatement::AuditLog { message }
                 }
+                // quantum statements in top-level parse case
+                Token::QuantumEncrypt => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::With)?;
+                    let key_name = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::QuantumEncrypt { target, key_name }
+                }
+                Token::QuantumDecrypt => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::With)?;
+                    let key_name = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::QuantumDecrypt { target, key_name }
+                }
+                Token::QuantumSign => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::With)?;
+                    let signing_key = self.expect_variable_or_type()?;
+                    self.expect(Token::As)?;
+                    let output = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::QuantumSign {
+                        target,
+                        signing_key,
+                        output,
+                    }
+                }
+                Token::QuantumVerifySig => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::With)?;
+                    let verification_key = self.expect_variable_or_type()?;
+                    self.expect(Token::Signature)?;
+                    let signature_ref = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::QuantumVerifySig {
+                        target,
+                        verification_key,
+                        signature_ref,
+                    }
+                }
+                Token::QuantumSignEncrypt => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::For)?;
+                    let recipient_key = self.expect_variable_or_type()?;
+                    self.expect(Token::SignedBy)?;
+                    let signing_key = self.expect_variable_or_type()?;
+                    self.expect(Token::As)?;
+                    let output = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::QuantumSignEncrypt {
+                        target,
+                        recipient_key,
+                        signing_key,
+                        output,
+                    }
+                }
+                Token::QuantumVerifyDecrypt => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::With)?;
+                    let recipient_key = self.expect_variable_or_type()?;
+                    self.expect(Token::As)?;
+                    let output = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::QuantumVerifyDecrypt {
+                        target,
+                        recipient_key,
+                        output,
+                    }
+                }
+                Token::GenerateKeypair => {
+                    self.advance();
+                    self.expect(Token::Algorithm)?;
+                    let algorithm = self.expect_variable_or_type()?;
+                    self.expect(Token::As)?;
+                    let output_name = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::GenerateKeyPair {
+                        algorithm,
+                        output_name,
+                    }
+                }
+                Token::LongTermSign => {
+                    self.advance();
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::With)?;
+                    let signing_key = self.expect_variable_or_type()?;
+                    self.expect(Token::As)?;
+                    let output = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::LongTermSign {
+                        target,
+                        signing_key,
+                        output,
+                    }
+                }
                 Token::Eof => break,
                 _ => {
                     return Err(format!("Unknown procedure statement: {}", self.current()));
@@ -1415,5 +1619,32 @@ mod tests {
             ProcedureStatement::Decrypt { target } => assert_eq!(target, "BINARY-BLOB"),
             _ => panic!("second statement should be Decrypt"),
         }
+    }
+
+    #[test]
+    fn test_parser_quantum_operations() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. QuantumTest.
+            ENVIRONMENT DIVISION.
+                OS "Linux".
+            DATA DIVISION.
+                INPUT BINARY-BLOB.
+                INPUT BINARY-BLOB AS ciphertext.
+                INPUT BINARY-BLOB AS sig.
+                INPUT BINARY-BLOB AS result.
+            PROCEDURE DIVISION.
+                QUANTUM-ENCRYPT BINARY-BLOB WITH ciphertext.
+                QUANTUM-DECRYPT ciphertext WITH ciphertext.
+                QUANTUM-SIGN BINARY-BLOB WITH ciphertext AS sig.
+                QUANTUM-VERIFY-SIG BINARY-BLOB WITH ciphertext SIGNATURE sig.
+                QUANTUM-SIGN-ENCRYPT BINARY-BLOB FOR ciphertext SIGNED-BY sig AS result.
+                QUANTUM-VERIFY-DECRYPT ciphertext WITH ciphertext AS result.
+                GENERATE-KEYPAIR ALGORITHM algo AS result.
+                LONG-TERM-SIGN BINARY-BLOB WITH ciphertext AS result.
+        "#;
+        let tokens = tokenize(source).unwrap();
+        let prog = parse(tokens).expect("should parse quantum ops");
+        assert_eq!(prog.procedure.statements.len(), 8);
     }
 }

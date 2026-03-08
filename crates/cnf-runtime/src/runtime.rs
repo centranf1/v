@@ -8,6 +8,23 @@ use crate::scheduler::Scheduler;
 use cnf_compiler::ir::Instruction;
 use std::collections::HashMap;
 
+#[cfg(feature = "quantum")]
+use cnf_quantum::{
+    generate_kyber_keypair,
+    generate_dilithium_keypair,
+    generate_sphincs_keypair,
+    dilithium_sign,
+    dilithium_verify,
+    sphincs_sign,
+    sphincs_verify,
+    quantum_encrypt,
+    quantum_decrypt,
+    quantum_sign_and_encrypt,
+    quantum_verify_and_decrypt,
+    QuantumEncryptedBlob,
+    DilithiumSignature,
+};
+
 #[cfg(feature = "network")]
 use cnf_network::NetworkNode;
 
@@ -21,6 +38,9 @@ pub enum CnfError {
     InvalidInstruction(String),
     RuntimeError(String),
     IoError(String),
+    UnknownAlgorithm(String),
+    QuantumNotEnabled,
+    SignatureVerificationFailed(String),
     #[cfg(feature = "network")]
     NetworkNotInitialized,
     #[cfg(feature = "verifier")]
@@ -52,6 +72,9 @@ impl std::fmt::Display for CnfError {
             CnfError::DecryptionFailed(msg) => write!(f, "Decryption failed: {}", msg),
             CnfError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
             CnfError::IoError(msg) => write!(f, "I/O error: {}", msg),
+            CnfError::UnknownAlgorithm(algo) => write!(f, "Unknown algorithm: {}", algo),
+            CnfError::QuantumNotEnabled => write!(f, "Quantum feature not enabled"),
+            CnfError::SignatureVerificationFailed(msg) => write!(f, "Quantum signature verification failed: {}", msg),
             #[cfg(feature = "network")]
             CnfError::NetworkNotInitialized => {
                 write!(f, "Network not initialized - enable 'network' feature")
@@ -110,6 +133,12 @@ impl From<cnf_network::CnfNetworkError> for CnfError {
     }
 }
 
+pub enum QuantumKeyEntry {
+    Kem(cnf_quantum::KyberKeyPair),
+    Dsa(cnf_quantum::DilithiumKeyPair),
+    Sphincs(cnf_quantum::SphincsKeyPair),
+}
+
 pub struct Runtime {
     buffers: HashMap<String, Vec<u8>>,
     dag: Dag,
@@ -122,6 +151,8 @@ pub struct Runtime {
     verifier: Option<cnf_verifier::Verifier>,
     #[cfg(feature = "verifier")]
     audit_chain: Option<cnf_verifier::AuditChain>,
+    #[cfg(feature = "quantum")]
+    quantum_keys: std::collections::HashMap<String, QuantumKeyEntry>,
 }
 
 impl Runtime {
@@ -138,6 +169,8 @@ impl Runtime {
             verifier: None,
             #[cfg(feature = "verifier")]
             audit_chain: None,
+            #[cfg(feature = "quantum")]
+            quantum_keys: std::collections::HashMap::new(),
         }
     }
 
@@ -1248,6 +1281,348 @@ impl Runtime {
         Ok(())
     }
 
+    /// Dispatch QUANTUM-ENCRYPT operation
+    #[cfg(not(feature = "quantum"))]
+    fn dispatch_quantum_encrypt(&mut self, _source: &str, _key_name: &str) -> Result<(), CnfError> {
+        Err(CnfError::QuantumNotEnabled)
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_encrypt(&mut self, source: &str, key_name: &str) -> Result<(), CnfError> {
+        let data = self
+            .buffers
+            .get(source)
+            .ok_or(CnfError::BufferNotFound(source.to_string()))?;
+        let entry = self
+            .quantum_keys
+            .get(key_name)
+            .ok_or(CnfError::BufferNotFound(key_name.to_string()))?;
+        let kp = match entry {
+            QuantumKeyEntry::Kem(k) => k,
+            _ => {
+                return Err(CnfError::RuntimeError(
+                    "Key is not a KEM keypair".to_string(),
+                ))
+            }
+        };
+        // perform encryption
+        let blob = quantum_encrypt(data, &kp.encapsulation_key)
+            .map_err(|e| CnfError::RuntimeError(format!("Quantum encrypt failed: {:?}", e)))?;
+        let json = serde_json::to_vec(&blob)
+            .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?;
+        self.buffers.insert(source.to_string(), json);
+        Ok(())
+    }
+
+    /// Dispatch QUANTUM-DECRYPT operation
+    #[cfg(not(feature = "quantum"))]
+    fn dispatch_quantum_decrypt(&mut self, _target: &str, _key_name: &str) -> Result<(), CnfError> {
+        Err(CnfError::QuantumNotEnabled)
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_decrypt(&mut self, target: &str, key_name: &str) -> Result<(), CnfError> {
+        let data = self
+            .buffers
+            .get(target)
+            .ok_or(CnfError::BufferNotFound(target.to_string()))?;
+        let blob: QuantumEncryptedBlob = serde_json::from_slice(data).map_err(|e| {
+            CnfError::RuntimeError(format!("Failed to deserialize encrypted blob: {}", e))
+        })?;
+        let entry = self
+            .quantum_keys
+            .get(key_name)
+            .ok_or(CnfError::BufferNotFound(key_name.to_string()))?;
+        let kp = match entry {
+            QuantumKeyEntry::Kem(k) => k,
+            _ => {
+                return Err(CnfError::RuntimeError(
+                    "Key is not a KEM keypair".to_string(),
+                ))
+            }
+        };
+        let plaintext = quantum_decrypt(&kp.decapsulation_key, &blob)
+            .map_err(|e| CnfError::RuntimeError(format!("Quantum decrypt failed: {:?}", e)))?;
+        self.buffers.insert(target.to_string(), plaintext);
+        Ok(())
+    }
+
+    /// Dispatch QUANTUM-SIGN operation
+    #[cfg(not(feature = "quantum"))]
+    fn dispatch_quantum_sign(
+        &mut self,
+        _source: &str,
+        _signing_key: &str,
+        _output: &str,
+    ) -> Result<(), CnfError> {
+        Err(CnfError::QuantumNotEnabled)
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_sign(
+        &mut self,
+        source: &str,
+        signing_key: &str,
+        output: &str,
+    ) -> Result<(), CnfError> {
+        let data = self
+            .buffers
+            .get(source)
+            .ok_or(CnfError::BufferNotFound(source.to_string()))?;
+        let entry = self
+            .quantum_keys
+            .get(signing_key)
+            .ok_or(CnfError::BufferNotFound(signing_key.to_string()))?;
+        let sk = match entry {
+            QuantumKeyEntry::Dsa(k) => &k.signing_key,
+            _ => {
+                return Err(CnfError::RuntimeError(
+                    "Key is not a DSA signing key".to_string(),
+                ))
+            }
+        };
+        let sig = dilithium_sign(sk, data)
+            .map_err(|e| CnfError::RuntimeError(format!("Signing failed: {:?}", e)))?;
+        let json = serde_json::to_vec(&sig)
+            .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?;
+        self.buffers.insert(output.to_string(), json);
+        Ok(())
+    }
+
+    /// Dispatch QUANTUM-VERIFY-SIG operation
+    #[cfg(not(feature = "quantum"))]
+    fn dispatch_quantum_verify_sig(
+        &mut self,
+        _source: &str,
+        _vk: &str,
+        _sig_ref: &str,
+    ) -> Result<(), CnfError> {
+        Err(CnfError::QuantumNotEnabled)
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_verify_sig(
+        &mut self,
+        source: &str,
+        vk: &str,
+        sig_ref: &str,
+    ) -> Result<(), CnfError> {
+        let data = self
+            .buffers
+            .get(source)
+            .ok_or(CnfError::BufferNotFound(source.to_string()))?;
+        let sig: DilithiumSignature = serde_json::from_slice(
+            self.buffers
+                .get(sig_ref)
+                .ok_or(CnfError::BufferNotFound(sig_ref.to_string()))?,
+        )
+        .map_err(|e| CnfError::RuntimeError(format!("Sig deserialize failed: {}", e)))?;
+        let entry = self
+            .quantum_keys
+            .get(vk)
+            .ok_or(CnfError::BufferNotFound(vk.to_string()))?;
+        let pubk = match entry {
+            QuantumKeyEntry::Dsa(k) => &k.verification_key,
+            _ => {
+                return Err(CnfError::RuntimeError(
+                    "Key is not a DSA verification key".to_string(),
+                ))
+            }
+        };
+        let valid = dilithium_verify(pubk, data, &sig)
+            .map_err(|e| CnfError::RuntimeError(format!("Verify call failed: {:?}", e)))?;
+        if valid {
+            Ok(())
+        } else {
+            Err(CnfError::SignatureVerificationFailed(
+                "Signature mismatch".to_string(),
+            ))
+        }
+    }
+
+    /// Dispatch QUANTUM-SIGN-ENCRYPT operation
+    #[cfg(not(feature = "quantum"))]
+    fn dispatch_quantum_sign_encrypt(
+        &mut self,
+        _source: &str,
+        _rk: &str,
+        _sk: &str,
+        _output: &str,
+    ) -> Result<(), CnfError> {
+        Err(CnfError::QuantumNotEnabled)
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_sign_encrypt(
+        &mut self,
+        source: &str,
+        rk: &str,
+        sk: &str,
+        output: &str,
+    ) -> Result<(), CnfError> {
+        let data = self
+            .buffers
+            .get(source)
+            .ok_or(CnfError::BufferNotFound(source.to_string()))?;
+        // require KEM recipient public key and DSA signing key
+        let rk_entry = self
+            .quantum_keys
+            .get(rk)
+            .ok_or(CnfError::BufferNotFound(rk.to_string()))?;
+        let enc_key = match rk_entry {
+            QuantumKeyEntry::Kem(k) => &k.encapsulation_key,
+            _ => {
+                return Err(CnfError::RuntimeError(
+                    "Recipient key is not KEM public key".to_string(),
+                ))
+            }
+        };
+        let sk_entry = self
+            .quantum_keys
+            .get(sk)
+            .ok_or(CnfError::BufferNotFound(sk.to_string()))?;
+        let sign_key = match sk_entry {
+            QuantumKeyEntry::Dsa(k) => &k.signing_key,
+            _ => {
+                return Err(CnfError::RuntimeError(
+                    "Signing key is not DSA key".to_string(),
+                ))
+            }
+        };
+        let blob = quantum_sign_and_encrypt(data, enc_key, sign_key)
+            .map_err(|e| CnfError::RuntimeError(format!("Sign-encrypt failed: {:?}", e)))?;
+        let json = serde_json::to_vec(&blob)
+            .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?;
+        self.buffers.insert(output.to_string(), json);
+        Ok(())
+    }
+
+    /// Dispatch QUANTUM-VERIFY-DECRYPT operation
+    #[cfg(not(feature = "quantum"))]
+    fn dispatch_quantum_verify_decrypt(
+        &mut self,
+        _source: &str,
+        _rk: &str,
+        _output: &str,
+    ) -> Result<(), CnfError> {
+        Err(CnfError::QuantumNotEnabled)
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_verify_decrypt(
+        &mut self,
+        source: &str,
+        rk: &str,
+        output: &str,
+    ) -> Result<(), CnfError> {
+        let data = self
+            .buffers
+            .get(source)
+            .ok_or(CnfError::BufferNotFound(source.to_string()))?;
+        let blob: cnf_quantum::SignedEncryptedBlob = serde_json::from_slice(data)
+            .map_err(|e| CnfError::RuntimeError(format!("Deserialize failed: {}", e)))?;
+        let rk_entry = self
+            .quantum_keys
+            .get(rk)
+            .ok_or(CnfError::BufferNotFound(rk.to_string()))?;
+        let dk = match rk_entry {
+            QuantumKeyEntry::Kem(k) => &k.decapsulation_key,
+            _ => {
+                return Err(CnfError::RuntimeError(
+                    "Recipient key is not KEM private key".to_string(),
+                ))
+            }
+        };
+        let plaintext = quantum_verify_and_decrypt(&blob, dk)
+            .map_err(|e| CnfError::RuntimeError(format!("Verify-decrypt failed: {:?}", e)))?;
+        self.buffers.insert(output.to_string(), plaintext);
+        Ok(())
+    }
+
+    /// Dispatch GENERATE-KEYPAIR operation
+    #[cfg(not(feature = "quantum"))]
+    fn dispatch_generate_keypair(
+        &mut self,
+        _algorithm: &str,
+        _output_name: &str,
+    ) -> Result<(), CnfError> {
+        Err(CnfError::QuantumNotEnabled)
+    }
+
+    #[cfg(feature = "quantum")]    
+    fn dispatch_generate_keypair(
+        &mut self,
+        algorithm: &str,
+        output_name: &str,
+    ) -> Result<(), CnfError> {
+        match algorithm {
+            "ML-KEM-768" => {
+                let kp = generate_kyber_keypair()
+                    .map_err(|e| CnfError::RuntimeError(format!("Keypair gen failed: {:?}", e)))?;
+                self.quantum_keys
+                    .insert(output_name.to_string(), QuantumKeyEntry::Kem(kp));
+                Ok(())
+            }
+            "ML-DSA-65" => {
+                let kp = generate_dilithium_keypair()
+                    .map_err(|e| CnfError::RuntimeError(format!("Keypair gen failed: {:?}", e)))?;
+                self.quantum_keys
+                    .insert(output_name.to_string(), QuantumKeyEntry::Dsa(kp));
+                Ok(())
+            }
+            "SLH-DSA" => {
+                let kp = generate_sphincs_keypair()
+                    .map_err(|e| CnfError::RuntimeError(format!("Keypair gen failed: {:?}", e)))?;
+                self.quantum_keys
+                    .insert(output_name.to_string(), QuantumKeyEntry::Sphincs(kp));
+                Ok(())
+            }
+            other => Err(CnfError::UnknownAlgorithm(other.to_string())),
+        }
+    }
+
+    /// Dispatch LONG-TERM-SIGN operation
+    #[cfg(not(feature = "quantum"))]
+    fn dispatch_long_term_sign(
+        &mut self,
+        _source: &str,
+        _signing_key: &str,
+        _output: &str,
+    ) -> Result<(), CnfError> {
+        Err(CnfError::QuantumNotEnabled)
+    }
+
+    #[cfg(feature = "quantum")]    
+    fn dispatch_long_term_sign(
+        &mut self,
+        source: &str,
+        signing_key: &str,
+        output: &str,
+    ) -> Result<(), CnfError> {
+        let data = self
+            .buffers
+            .get(source)
+            .ok_or(CnfError::BufferNotFound(source.to_string()))?;
+        let entry = self
+            .quantum_keys
+            .get(signing_key)
+            .ok_or(CnfError::BufferNotFound(signing_key.to_string()))?;
+        let sk = match entry {
+            QuantumKeyEntry::Sphincs(k) => &k.signing_key,
+            _ => {
+                return Err(CnfError::RuntimeError(
+                    "Key is not a SPHINCS signing key".to_string(),
+                ))
+            }
+        };
+        let sig = sphincs_sign(sk, data)
+            .map_err(|e| CnfError::RuntimeError(format!("SPHINCS sign failed: {:?}", e)))?;
+        let json = serde_json::to_vec(&sig)
+            .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?;
+        self.buffers.insert(output.to_string(), json);
+        Ok(())
+    }
+
     /// Execute single IR instruction (handles control flow)
     pub fn execute_instruction(&mut self, instruction: &Instruction) -> Result<(), CnfError> {
         match instruction {
@@ -1630,6 +2005,118 @@ impl Runtime {
                 }
             }
             Instruction::ComplianceReport { standard: _ } => {}
+            Instruction::QuantumEncrypt { source, key_name } => {
+                #[cfg(feature = "quantum")]
+                {
+                    self.dispatch_quantum_encrypt(source, key_name)?;
+                }
+                #[cfg(not(feature = "quantum"))]
+                {
+                    let _ = (source, key_name);
+                    return Err(CnfError::QuantumNotEnabled);
+                }
+            }
+            Instruction::QuantumDecrypt { target, key_name } => {
+                #[cfg(feature = "quantum")]
+                {
+                    self.dispatch_quantum_decrypt(target, key_name)?;
+                }
+                #[cfg(not(feature = "quantum"))]
+                {
+                    let _ = (target, key_name);
+                    return Err(CnfError::QuantumNotEnabled);
+                }
+            }
+            Instruction::QuantumSign {
+                source,
+                signing_key,
+                output,
+            } => {
+                #[cfg(feature = "quantum")]
+                {
+                    self.dispatch_quantum_sign(source, signing_key, output)?;
+                }
+                #[cfg(not(feature = "quantum"))]
+                {
+                    let _ = (source, signing_key, output);
+                    return Err(CnfError::QuantumNotEnabled);
+                }
+            }
+            Instruction::QuantumVerifySig {
+                source,
+                verification_key,
+                signature_ref,
+            } => {
+                #[cfg(feature = "quantum")]
+                {
+                    self.dispatch_quantum_verify_sig(source, verification_key, signature_ref)?;
+                }
+                #[cfg(not(feature = "quantum"))]
+                {
+                    let _ = (source, verification_key, signature_ref);
+                    return Err(CnfError::QuantumNotEnabled);
+                }
+            }
+            Instruction::QuantumSignEncrypt {
+                source,
+                recipient_key,
+                signing_key,
+                output,
+            } => {
+                #[cfg(feature = "quantum")]
+                {
+                    self.dispatch_quantum_sign_encrypt(source, recipient_key, signing_key, output)?;
+                }
+                #[cfg(not(feature = "quantum"))]
+                {
+                    let _ = (source, recipient_key, signing_key, output);
+                    return Err(CnfError::QuantumNotEnabled);
+                }
+            }
+            Instruction::QuantumVerifyDecrypt {
+                source,
+                recipient_key,
+                output,
+            } => {
+                #[cfg(feature = "quantum")]
+                {
+                    self.dispatch_quantum_verify_decrypt(source, recipient_key, output)?;
+                }
+                #[cfg(not(feature = "quantum"))]
+                {
+                    let _ = (source, recipient_key, output);
+                    return Err(CnfError::QuantumNotEnabled);
+                }
+            }
+            Instruction::GenerateKeyPair {
+                algorithm,
+                output_name,
+            } => {
+                #[cfg(feature = "quantum")]
+                {
+                    self.dispatch_generate_keypair(algorithm, output_name)?;
+                }
+                #[cfg(not(feature = "quantum"))]
+                {
+                    let _ = (algorithm, output_name);
+                    return Err(CnfError::QuantumNotEnabled);
+                }
+            }
+            Instruction::LongTermSign {
+                source,
+                signing_key,
+                output,
+            } => {
+                #[cfg(feature = "quantum")]
+                {
+                    self.dispatch_long_term_sign(source, signing_key, output)?;
+                }
+                #[cfg(not(feature = "quantum"))]
+                {
+                    let _ = (source, signing_key, output);
+                    return Err(CnfError::QuantumNotEnabled);
+                }
+            }
         }
         Ok(())
     }
@@ -2155,6 +2642,99 @@ mod tests {
         // Should have executed compression (then branch)
         let output = runtime.get_output("input").unwrap();
         assert_ne!(output, b"test data".to_vec()); // Data should be compressed
+    }
+
+    // --- quantum tests ----------------------------------------------------
+
+    #[test]
+    #[cfg(feature = "quantum")]
+    fn test_dispatch_generate_keypair_and_encrypt_decrypt() {
+        let mut runtime = Runtime::new();
+        runtime
+            .dispatch_generate_keypair("ML-KEM-768", "kem1")
+            .unwrap();
+        assert!(matches!(
+            runtime.quantum_keys.get("kem1").unwrap(),
+            QuantumKeyEntry::Kem(_)
+        ));
+        runtime.add_buffer("buf".to_string(), b"hello".to_vec());
+        runtime
+            .dispatch_quantum_encrypt("buf", "kem1")
+            .unwrap();
+        let cipher = runtime.get_output("buf").unwrap();
+        assert_ne!(cipher, b"hello".to_vec());
+        runtime
+            .dispatch_quantum_decrypt("buf", "kem1")
+            .unwrap();
+        assert_eq!(runtime.get_output("buf").unwrap(), b"hello".to_vec());
+    }
+
+    #[test]
+    #[cfg(feature = "quantum")]
+    fn test_dispatch_generate_keypair_unknown_algo() {
+        let mut runtime = Runtime::new();
+        let err = runtime.dispatch_generate_keypair("BAD-ALG", "k");
+        assert!(matches!(err, Err(CnfError::UnknownAlgorithm(_))));
+    }
+
+    #[test]
+    #[cfg(not(feature = "quantum"))]
+    fn test_quantum_not_enabled_error() {
+        let mut runtime = Runtime::new();
+        let err = runtime.dispatch_quantum_encrypt("a", "k");
+        assert!(matches!(err, Err(CnfError::QuantumNotEnabled)));
+    }
+
+    #[test]
+    #[cfg(feature = "quantum")]
+    fn test_dispatch_quantum_sign_and_verify() {
+        let mut runtime = Runtime::new();
+        runtime
+            .dispatch_generate_keypair("ML-DSA-65", "dsa1")
+            .unwrap();
+        runtime.add_buffer("msg".to_string(), b"data".to_vec());
+        runtime
+            .dispatch_quantum_sign("msg", "dsa1", "sigbuf")
+            .unwrap();
+        // verify using public key
+        runtime
+            .dispatch_quantum_verify_sig("msg", "dsa1", "sigbuf")
+            .unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "quantum")]
+    fn test_dispatch_quantum_sign_encrypt_and_verify_decrypt() {
+        let mut runtime = Runtime::new();
+        runtime
+            .dispatch_generate_keypair("ML-KEM-768", "kem1")
+            .unwrap();
+        runtime
+            .dispatch_generate_keypair("ML-DSA-65", "dsa1")
+            .unwrap();
+        runtime.add_buffer("plain".to_string(), b"secret".to_vec());
+        runtime
+            .dispatch_quantum_sign_encrypt("plain", "kem1", "dsa1", "blob")
+            .unwrap();
+        // decrypt back
+        runtime
+            .dispatch_quantum_verify_decrypt("blob", "kem1", "out")
+            .unwrap();
+        assert_eq!(runtime.get_output("out").unwrap(), b"secret".to_vec());
+    }
+
+    #[test]
+    #[cfg(feature = "quantum")]
+    fn test_dispatch_long_term_sign() {
+        let mut runtime = Runtime::new();
+        runtime
+            .dispatch_generate_keypair("SLH-DSA", "sph1")
+            .unwrap();
+        runtime.add_buffer("doc".to_string(), b"docdata".to_vec());
+        runtime
+            .dispatch_long_term_sign("doc", "sph1", "sigout")
+            .unwrap();
+        assert!(!runtime.get_output("sigout").unwrap().is_empty());
     }
 
     #[test]

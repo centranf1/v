@@ -330,6 +330,44 @@ pub enum ProcedureStatement {
     AuditLog {
         message: String,
     },
+    QuantumEncrypt {
+        target: String,
+        key_name: String,
+    },
+    QuantumDecrypt {
+        target: String,
+        key_name: String,
+    },
+    QuantumSign {
+        target: String,
+        signing_key: String,
+        output: String,
+    },
+    QuantumVerifySig {
+        target: String,
+        verification_key: String,
+        signature_ref: String,
+    },
+    QuantumSignEncrypt {
+        target: String,
+        recipient_key: String,
+        signing_key: String,
+        output: String,
+    },
+    QuantumVerifyDecrypt {
+        target: String,
+        recipient_key: String,
+        output: String,
+    },
+    GenerateKeyPair {
+        algorithm: String,
+        output_name: String,
+    },
+    LongTermSign {
+        target: String,
+        signing_key: String,
+        output: String,
+    },
 }
 
 pub enum Division {
@@ -347,5 +385,88 @@ impl std::fmt::Display for Division {
             Division::Data => write!(f, "DATA DIVISION"),
             Division::Procedure => write!(f, "PROCEDURE DIVISION"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_quantum_encrypt_statement() {
+        let stmt = ProcedureStatement::QuantumEncrypt {
+            target: "data_buffer".to_string(),
+            key_name: "encryption_key".to_string(),
+        };
+        assert!(matches!(stmt, ProcedureStatement::QuantumEncrypt { .. }));
+    }
+
+    #[test]
+    fn test_quantum_decrypt_statement() {
+        let stmt = ProcedureStatement::QuantumDecrypt {
+            target: "encrypted_buffer".to_string(),
+            key_name: "decryption_key".to_string(),
+        };
+        assert!(matches!(stmt, ProcedureStatement::QuantumDecrypt { .. }));
+    }
+
+    #[test]
+    fn test_quantum_sign_statement() {
+        let stmt = ProcedureStatement::QuantumSign {
+            target: "message".to_string(),
+            signing_key: "private_key".to_string(),
+            output: "signature".to_string(),
+        };
+        assert!(matches!(stmt, ProcedureStatement::QuantumSign { .. }));
+    }
+
+    #[test]
+    fn test_quantum_verify_sig_statement() {
+        let stmt = ProcedureStatement::QuantumVerifySig {
+            target: "message".to_string(),
+            verification_key: "public_key".to_string(),
+            signature_ref: "sig_buffer".to_string(),
+        };
+        assert!(matches!(stmt, ProcedureStatement::QuantumVerifySig { .. }));
+    }
+
+    #[test]
+    fn test_quantum_sign_encrypt_statement() {
+        let stmt = ProcedureStatement::QuantumSignEncrypt {
+            target: "plaintext".to_string(),
+            recipient_key: "recipient_public_key".to_string(),
+            signing_key: "sender_private_key".to_string(),
+            output: "encrypted_signed".to_string(),
+        };
+        assert!(matches!(stmt, ProcedureStatement::QuantumSignEncrypt { .. }));
+    }
+
+    #[test]
+    fn test_quantum_verify_decrypt_statement() {
+        let stmt = ProcedureStatement::QuantumVerifyDecrypt {
+            target: "encrypted_signed".to_string(),
+            recipient_key: "recipient_private_key".to_string(),
+            output: "plaintext_verified".to_string(),
+        };
+        assert!(matches!(stmt, ProcedureStatement::QuantumVerifyDecrypt { .. }));
+    }
+
+    #[test]
+    fn test_generate_keypair_statement() {
+        let stmt = ProcedureStatement::GenerateKeyPair {
+            algorithm: "ML-KEM-768".to_string(),
+            output_name: "generated_keypair".to_string(),
+        };
+        assert!(matches!(stmt, ProcedureStatement::GenerateKeyPair { .. }));
+    }
+
+    #[test]
+    fn test_long_term_sign_statement() {
+        let stmt = ProcedureStatement::LongTermSign {
+            target: "document".to_string(),
+            signing_key: "long_term_key".to_string(),
+            output: "long_term_signature".to_string(),
+        };
+        assert!(matches!(stmt, ProcedureStatement::LongTermSign { .. }));
     }
 }
