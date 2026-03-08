@@ -789,6 +789,91 @@ impl Parser {
         })
     }
 
+    fn parse_governance(&mut self) -> Result<GovernanceDivision, String> {
+        self.expect_division(Token::GovernanceDiv, "GOVERNANCE DIVISION")?;
+        self.expect(Token::Division)?;
+        self.expect(Token::Period)?;
+
+        let mut statements = Vec::new();
+
+        while self.current() != &Token::DataDiv && self.current() != &Token::Eof {
+            match self.current() {
+                Token::Policy => {
+                    self.advance();
+                    // name may follow as identifier
+                    let name = self.expect_identifier()?;
+                    self.expect(Token::Formula)?;
+                    let formula = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                    statements.push(GovernanceStatement::Policy { name, formula });
+                }
+                Token::Regulation => {
+                    self.advance();
+                    // standard can be identifier or string
+                    let standard = if let Token::Identifier(s) = self.current() {
+                        let s2 = s.clone();
+                        self.advance();
+                        s2
+                    } else if let Token::String(s) = self.current() {
+                        let s2 = s.clone();
+                        self.advance();
+                        s2
+                    } else {
+                        return Err("Expected regulation standard".to_string());
+                    };
+                    self.expect(Token::Clause)?;
+                    let clause = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                    statements.push(GovernanceStatement::Regulation { standard, clause });
+                }
+                Token::DataSovereignty => {
+                    self.advance();
+                    self.expect(Token::From)?;
+                    let from = self.expect_string()?;
+                    self.expect(Token::To)?;
+                    let to = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                    statements.push(GovernanceStatement::DataSovereignty { from, to });
+                }
+                Token::AccessControl => {
+                    self.advance();
+                    self.expect(Token::User)?;
+                    let user = self.expect_string()?;
+                    self.expect(Token::Resource)?;
+                    let resource = self.expect_string()?;
+                    self.expect(Token::Action)?;
+                    let action = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                    statements.push(GovernanceStatement::AccessControl { user, resource, action });
+                }
+                Token::AuditLedger => {
+                    self.advance();
+                    let entry = self.expect_string()?;
+                    self.expect(Token::Period)?;
+                    statements.push(GovernanceStatement::AuditLedger { entry });
+                }
+                Token::DecisionQuorum => {
+                    self.advance();
+                    self.expect(Token::Votes)?;
+                    let votes = self.expect_identifier()?;
+                    self.expect(Token::Threshold)?;
+                    let threshold = self.expect_identifier()?;
+                    self.expect(Token::Period)?;
+                    statements.push(GovernanceStatement::DecisionQuorum { votes, threshold });
+                }
+                Token::Eof => {
+                    return Err("Unexpected EOF in GOVERNANCE DIVISION".to_string());
+                }
+                _ => {
+                    // skip unrecognized tokens to surface errors later
+                    self.advance();
+                }
+            }
+        }
+
+        Ok(GovernanceDivision { statements })
+    }
+
     fn parse_predicate_string(&mut self) -> Result<String, String> {
         let mut predicate_parts = Vec::new();
 
@@ -1494,6 +1579,13 @@ impl Parser {
             None
         };
 
+        // GOVERNANCE DIVISION is optional (v0.9.0)
+        let governance = if self.current() == &Token::GovernanceDiv {
+            Some(self.parse_governance()?)
+        } else {
+            None
+        };
+
         let data = self.parse_data()?;
         let procedure = self.parse_procedure()?;
 
@@ -1506,6 +1598,7 @@ impl Parser {
             environment,
             network,
             verification,
+            governance,
             data,
             procedure,
         })
@@ -1592,6 +1685,39 @@ mod tests {
         let error = result.unwrap_err();
         // Error should explain the required order
         assert!(error.contains("IDENTIFICATION → ENVIRONMENT → DATA → PROCEDURE"));
+    }
+
+    #[test]
+    fn test_parser_accepts_empty_governance() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. p.
+            ENVIRONMENT DIVISION.
+            DATA DIVISION.
+            PROCEDURE DIVISION.
+        "#;
+        let tokens = tokenize(source).unwrap();
+        let program = parse(tokens).unwrap();
+        assert!(program.governance.is_none());
+    }
+
+    #[test]
+    fn test_parser_parses_simple_governance() {
+        let source = r#"
+            IDENTIFICATION DIVISION.
+                PROGRAM-ID. p.
+            ENVIRONMENT DIVISION.
+            GOVERNANCE DIVISION.
+                POLICY policy1 FORMULA "G(a)".
+                AUDIT-LEDGER "log1".
+            DATA DIVISION.
+            PROCEDURE DIVISION.
+        "#;
+        let tokens = tokenize(source).unwrap();
+        let program = parse(tokens).unwrap();
+        assert!(program.governance.is_some());
+        let gov = program.governance.unwrap();
+        assert_eq!(gov.statements.len(), 2);
     }
 
     #[test]

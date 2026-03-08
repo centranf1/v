@@ -348,6 +348,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cnf-governance"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "hmac",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+]
+
+[[package]]
 name = "cnf-network"
 version = "0.6.0"
 dependencies = [

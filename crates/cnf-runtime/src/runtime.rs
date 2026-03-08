@@ -2111,6 +2111,10 @@ impl Runtime {
                     return Err(CnfError::QuantumNotEnabled);
                 }
             }
+            _ => {
+                // Governance instructions are no-ops until runtime support added
+                // This keeps the compiler crates independent of runtime logic.
+            }
         }
         Ok(())
     }

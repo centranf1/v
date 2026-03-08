@@ -254,6 +254,31 @@ pub enum Instruction {
         signing_key: String,
         output: String,
     },
+    // Governance instructions (v0.9.0)
+    Policy {
+        name: String,
+        formula: String,
+    },
+    Regulation {
+        standard: String,
+        clause: String,
+    },
+    DataSovereignty {
+        from: String,
+        to: String,
+    },
+    AccessControl {
+        user: String,
+        resource: String,
+        action: String,
+    },
+    AuditLedger {
+        message: String,
+    },
+    DecisionQuorum {
+        votes: String,
+        threshold: String,
+    },
 }
 
 impl std::fmt::Display for Instruction {
@@ -595,6 +620,24 @@ impl std::fmt::Display for Instruction {
                     source, signing_key, output
                 )
             }
+            Instruction::Policy { name, formula } => {
+                write!(f, "POLICY({} FORMULA {})", name, formula)
+            }
+            Instruction::Regulation { standard, clause } => {
+                write!(f, "REGULATION({} CLAUSE {})", standard, clause)
+            }
+            Instruction::DataSovereignty { from, to } => {
+                write!(f, "DATA_SOVEREIGNTY({} -> {})", from, to)
+            }
+            Instruction::AccessControl { user, resource, action } => {
+                write!(f, "ACCESS_CONTROL({} {} {})", user, resource, action)
+            }
+            Instruction::AuditLedger { message } => {
+                write!(f, "AUDIT_LEDGER({})", message)
+            }
+            Instruction::DecisionQuorum { votes, threshold } => {
+                write!(f, "DECISION_QUORUM({} votes, {} threshold)", votes, threshold)
+            }
         }
     }
 }
@@ -680,6 +723,55 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
         } = stmt
         {
             signatures.insert(name.clone(), parameters.len());
+        }
+    }
+
+    // Lower governance statements first so that policies/regulations appear before
+    // any procedure instructions in the IR stream.
+    if let Some(gov) = &program.governance {
+        for gstmt in &gov.statements {
+            match gstmt {
+                crate::ast::GovernanceStatement::Policy { name, formula } => {
+                    instructions.push(Instruction::Policy {
+                        name: name.clone(),
+                        formula: formula.clone(),
+                    });
+                }
+                crate::ast::GovernanceStatement::Regulation { standard, clause } => {
+                    instructions.push(Instruction::Regulation {
+                        standard: standard.clone(),
+                        clause: clause.clone(),
+                    });
+                }
+                crate::ast::GovernanceStatement::DataSovereignty { from, to } => {
+                    instructions.push(Instruction::DataSovereignty {
+                        from: from.clone(),
+                        to: to.clone(),
+                    });
+                }
+                crate::ast::GovernanceStatement::AccessControl {
+                    user,
+                    resource,
+                    action,
+                } => {
+                    instructions.push(Instruction::AccessControl {
+                        user: user.clone(),
+                        resource: resource.clone(),
+                        action: action.clone(),
+                    });
+                }
+                crate::ast::GovernanceStatement::AuditLedger { entry } => {
+                    instructions.push(Instruction::AuditLedger {
+                        message: entry.clone(),
+                    });
+                }
+                crate::ast::GovernanceStatement::DecisionQuorum { votes, threshold } => {
+                    instructions.push(Instruction::DecisionQuorum {
+                        votes: votes.clone(),
+                        threshold: threshold.clone(),
+                    });
+                }
+            }
         }
     }
 
@@ -2321,4 +2413,62 @@ mod tests {
             "LONG_TERM_SIGN(document WITH long_term_key AS long_term_sig)"
         );
     }
+
+    #[test]
+    fn test_governance_instructions_display() {
+        let p = Instruction::Policy {
+            name: "allow".to_string(),
+            formula: "G(a)".to_string(),
+        };
+        assert_eq!(format!("{}", p), "POLICY(allow FORMULA G(a))");
+
+        let r = Instruction::Regulation {
+            standard: "GDPR".to_string(),
+            clause: "no export".to_string(),
+        };
+        assert_eq!(format!("{}", r), "REGULATION(GDPR CLAUSE no export)");
+
+        let d = Instruction::DataSovereignty {
+            from: "EU".to_string(),
+            to: "US".to_string(),
+        };
+        assert_eq!(format!("{}", d), "DATA_SOVEREIGNTY(EU -> US)");
+
+        let a = Instruction::AccessControl {
+            user: "alice".to_string(),
+            resource: "file1".to_string(),
+            action: "read".to_string(),
+        };
+        assert_eq!(format!("{}", a), "ACCESS_CONTROL(alice file1 read)");
+
+        let al = Instruction::AuditLedger {
+            message: "entry".to_string(),
+        };
+        assert_eq!(format!("{}", al), "AUDIT_LEDGER(entry)");
+
+        let q = Instruction::DecisionQuorum {
+            votes: "5".to_string(),
+            threshold: "3".to_string(),
+        };
+        assert_eq!(format!("{}", q), "DECISION_QUORUM(5 votes, 3 threshold)");
+    }
+
+    #[test]
+    fn test_lower_governance_division() {
+        use crate::ast::{Program, IdentificationDivision, EnvironmentDivision, DataDivision, ProcedureDivision, GovernanceDivision, GovernanceStatement};
+        let prog = Program {
+            identification: IdentificationDivision { program_id: "p".to_string(), author: None, version: None },
+            environment: EnvironmentDivision { config: std::collections::HashMap::new() },
+            network: None,
+            verification: None,
+            governance: Some(GovernanceDivision { statements: vec![
+                GovernanceStatement::AuditLedger { entry: "log1".to_string() },
+            ]}),
+            data: DataDivision { variables: vec![] },
+            procedure: ProcedureDivision { statements: vec![] },
+        };
+        let instrs = lower(prog).unwrap();
+        assert_eq!(instrs, vec![Instruction::AuditLedger { message: "log1".to_string() }]);
+    }
 }
+

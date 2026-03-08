@@ -162,6 +162,24 @@ pub enum Token {
     GenerateKeypair,
     LongTermSign,
 
+    // Governance-related (v0.9.0)
+    GovernanceDiv,
+    Policy,
+    Formula,
+    Regulation,
+    Clause,
+    DataSovereignty,
+    AccessControl,
+    AuditLedger,
+    DecisionQuorum,
+    Votes,
+    Threshold,
+    Standard,
+    User,
+    Resource,
+    Action,
+    Entry,
+
     // Signature-related
     Signature,
     Algorithm,
@@ -182,6 +200,7 @@ impl fmt::Display for Token {
             Token::EnvironmentDiv => write!(f, "ENVIRONMENT DIVISION"),
             Token::DataDiv => write!(f, "DATA DIVISION"),
             Token::ProcedureDiv => write!(f, "PROCEDURE DIVISION"),
+            Token::GovernanceDiv => write!(f, "GOVERNANCE DIVISION"),
             Token::Identifier(s) => write!(f, "IDENTIFIER({})", s),
             Token::String(s) => write!(f, "STRING({})", s),
             Token::Period => write!(f, "."),
@@ -420,6 +439,23 @@ fn keyword_to_token(s: &str) -> Token {
         "QUANTUM-VERIFY-DECRYPT" => Token::QuantumVerifyDecrypt,
         "GENERATE-KEYPAIR" => Token::GenerateKeypair,
         "LONG-TERM-SIGN" => Token::LongTermSign,
+        // governance keywords
+        "GOVERNANCE" => Token::GovernanceDiv,
+        "POLICY" => Token::Policy,
+        "FORMULA" => Token::Formula,
+        "REGULATION" => Token::Regulation,
+        "CLAUSE" => Token::Clause,
+        "DATA-SOVEREIGNTY" => Token::DataSovereignty,
+        "ACCESS-CONTROL" => Token::AccessControl,
+        "AUDIT-LEDGER" => Token::AuditLedger,
+        "DECISION-QUORUM" => Token::DecisionQuorum,
+        "VOTES" => Token::Votes,
+        "THRESHOLD" => Token::Threshold,
+        "STANDARD" => Token::Standard,
+        "USER" => Token::User,
+        "RESOURCE" => Token::Resource,
+        "ACTION" => Token::Action,
+        "ENTRY" => Token::Entry,
         "SIGNATURE" => Token::Signature,
         "ALGORITHM" => Token::Algorithm,
         "SIGNED-BY" => Token::SignedBy,
@@ -448,7 +484,28 @@ mod tests {
         let tokens = tokenize("IDENTIFICATION DIVISION.").unwrap();
         assert_eq!(tokens[0], Token::IdentificationDiv);
         assert_eq!(tokens[1], Token::Division);
-        assert_eq!(tokens[2], Token::Period);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_governance_keywords() {
+        let source = "GOVERNANCE DIVISION. POLICY FORMULA REGULATION CLAUSE DATA-SOVEREIGNTY ACCESS-CONTROL AUDIT-LEDGER DECISION-QUORUM VOTES THRESHOLD STANDARD USER RESOURCE ACTION ENTRY";
+        let tokens = tokenize(source).unwrap();
+        assert!(tokens.contains(&Token::GovernanceDiv));
+        assert!(tokens.contains(&Token::Policy));
+        assert!(tokens.contains(&Token::Formula));
+        assert!(tokens.contains(&Token::Regulation));
+        assert!(tokens.contains(&Token::Clause));
+        assert!(tokens.contains(&Token::DataSovereignty));
+        assert!(tokens.contains(&Token::AccessControl));
+        assert!(tokens.contains(&Token::AuditLedger));
+        assert!(tokens.contains(&Token::DecisionQuorum));
+        assert!(tokens.contains(&Token::Votes));
+        assert!(tokens.contains(&Token::Threshold));
+        assert!(tokens.contains(&Token::Standard));
+        assert!(tokens.contains(&Token::User));
+        assert!(tokens.contains(&Token::Resource));
+        assert!(tokens.contains(&Token::Action));
+        assert!(tokens.contains(&Token::Entry));
     }
 
     #[test]

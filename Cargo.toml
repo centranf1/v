@@ -11,6 +11,7 @@ members = [
     "crates/cobol-protocol-v153",
     "crates/centra-nf-cli",
     "crates/centra-nf-lsp",
+    "crates/cnf-governance",
 ]
 resolver = "2"
 

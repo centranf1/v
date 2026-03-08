@@ -12,6 +12,7 @@ pub struct Program {
     pub environment: EnvironmentDivision,
     pub network: Option<NetworkDivision>,
     pub verification: Option<VerificationDivision>,
+    pub governance: Option<GovernanceDivision>,
     pub data: DataDivision,
     pub procedure: ProcedureDivision,
 }
@@ -69,6 +70,39 @@ impl std::fmt::Display for Topology {
             Topology::Star => write!(f, "STAR"),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GovernanceDivision {
+    pub statements: Vec<GovernanceStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GovernanceStatement {
+    Policy {
+        name: String,
+        formula: String,
+    },
+    Regulation {
+        standard: String,
+        clause: String,
+    },
+    DataSovereignty {
+        from: String,
+        to: String,
+    },
+    AccessControl {
+        user: String,
+        resource: String,
+        action: String,
+    },
+    AuditLedger {
+        entry: String,
+    },
+    DecisionQuorum {
+        votes: String,
+        threshold: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -399,6 +433,15 @@ mod tests {
             key_name: "encryption_key".to_string(),
         };
         assert!(matches!(stmt, ProcedureStatement::QuantumEncrypt { .. }));
+    }
+
+    #[test]
+    fn test_governance_statement_enum() {
+        let stmt = GovernanceStatement::AuditLedger { entry: "foo".to_string() };
+        match stmt {
+            GovernanceStatement::AuditLedger { entry } => assert_eq!(entry, "foo"),
+            _ => panic!("expected AuditLedger variant"),
+        }
     }
 
     #[test]
