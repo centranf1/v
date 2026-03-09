@@ -166,6 +166,7 @@ pub struct GovernanceContext {
 pub struct Runtime {
     buffers: HashMap<String, Vec<u8>>,
     dag: Dag,
+    instruction_map: HashMap<String, Instruction>,
     call_stack: CallStack,
     scope_manager: ScopeManager,
     storage: cnf_storage::Storage,
@@ -195,6 +196,7 @@ impl Runtime {
         Runtime {
             buffers: HashMap::new(),
             dag: Dag::initialize_layers(),
+            instruction_map: HashMap::new(),
             call_stack: CallStack::new(),
             scope_manager: ScopeManager::new(),
             storage: cnf_storage::Storage::new(),
@@ -214,6 +216,18 @@ impl Runtime {
             audit_ledger: Vec::new(),
             decision_quorum: None,
             csm_dict: None,
+        }
+        /// Load IR instructions into DAG and instruction_map.
+        /// Each instruction is assigned to a layer (default: 0, can be improved for real dependencies).
+        pub fn load_ir_pipeline(&mut self, instructions: &[Instruction]) {
+            self.dag = Dag::initialize_layers();
+            self.instruction_map.clear();
+            for (idx, instr) in instructions.iter().enumerate() {
+                let key = format!("{}", idx); // Use index as unique key
+                // Assign all to layer 0 for now (improve for real dependency graph)
+                self.dag.assign_to_layer(0, key.clone());
+                self.instruction_map.insert(key, instr.clone());
+            }
         }
     }
 
@@ -2403,11 +2417,16 @@ impl Runtime {
     }
 
     /// Execute all instructions via scheduler.
+    /// Execute all instructions in DAG using Scheduler, resolving string to IR Instruction.
     pub fn execute(&mut self) -> Result<(), CnfError> {
         let dag = self.dag.clone();
-        let mut executor =
-            |instr: &str| self.dispatch_instruction(instr).map_err(|e| e.to_string());
-
+        let instruction_map = self.instruction_map.clone();
+        let mut this = self;
+        let mut executor = |instr_key: &str| {
+            let instr = instruction_map.get(instr_key)
+                .ok_or_else(|| format!("Instruction key '{}' not found in map", instr_key))?;
+            this.execute_instruction(instr).map_err(|e| e.to_string())
+        };
         Scheduler::execute_all_layers(&dag, &mut executor).map_err(CnfError::InvalidInstruction)
     }
 

@@ -254,6 +254,39 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
 
     while let Some(&ch) = chars.peek() {
         match ch {
+            // Single-line comment: # ... or // ... or * ...
+            '#' => {
+                // Skip until end of line
+                while let Some(&c) = chars.peek() {
+                    chars.next();
+                    if c == '\n' { break; }
+                }
+                line += 1;
+                col = 1;
+            }
+            '/' => {
+                chars.next();
+                if let Some(&'/') = chars.peek() {
+                    // Found //, skip rest of line
+                    while let Some(&c) = chars.peek() {
+                        chars.next();
+                        if c == '\n' { break; }
+                    }
+                    line += 1;
+                    col = 1;
+                } else {
+                    return Err(format!("Unrecognized character '/' at line {}:{}", line, col));
+                }
+            }
+            '*' => {
+                // COBOL-style comment: skip rest of line
+                while let Some(&c) = chars.peek() {
+                    chars.next();
+                    if c == '\n' { break; }
+                }
+                line += 1;
+                col = 1;
+            }
             // Whitespace
             ' ' | '\t' => {
                 chars.next();
@@ -335,6 +368,12 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
 
 /// Convert identifier string to keyword token, or Identifier if not a keyword.
 fn keyword_to_token(s: &str) -> Token {
+        // CSM protocol v154 keywords
+        "MAP-CSM" => Token::MapCsm,
+        "DATA-DENSE" => Token::DataDense,
+        "COMPRESS-CSM" => Token::CompressCsm,
+        "DECOMPRESS-CSM" => Token::DecompressCsm,
+        "CSM-OUTPUT" => Token::CsmOutput,
     match s.to_uppercase().as_str() {
         "IDENTIFICATION" => Token::IdentificationDiv,
         "ENVIRONMENT" => Token::EnvironmentDiv,

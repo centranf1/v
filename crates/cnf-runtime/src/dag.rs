@@ -37,11 +37,12 @@ impl Dag {
         dag
     }
 
-    /// Assign instruction to layer.
-    pub fn assign_to_layer(&mut self, layer_id: usize, instruction: String) {
+    /// Assign instruction key (string) to layer.
+    /// Used for mapping IR instructions via unique string keys.
+    pub fn assign_to_layer(&mut self, layer_id: usize, instruction_key: String) {
         if layer_id < self.layers.len() {
-            self.layers[layer_id].instructions.push(instruction.clone());
-            self.dependency_map.insert(instruction, layer_id);
+            self.layers[layer_id].instructions.push(instruction_key.clone());
+            self.dependency_map.insert(instruction_key, layer_id);
         }
     }
 

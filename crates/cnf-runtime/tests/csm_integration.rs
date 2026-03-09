@@ -1,4 +1,32 @@
 #[test]
+fn test_csm_pipeline_dag_scheduler() {
+    use cobol_protocol_v154::CsmDictionary;
+    use cnf_compiler::ir::Instruction;
+    use cnf_runtime::Runtime;
+
+    let mut runtime = Runtime::new();
+    let mut dict = CsmDictionary::new();
+    dict.insert(1, b"foo");
+    dict.insert(2, b"bar");
+    runtime.csm_dict = Some(dict.clone());
+    runtime.add_buffer("SRC".to_string(), b"hello world".to_vec());
+
+    let instructions = vec![
+        Instruction::CompressCsm {
+            source: "SRC".to_string(),
+            target: "CSM_OUT".to_string(),
+        },
+        Instruction::DecompressCsm {
+            source: "CSM_OUT".to_string(),
+            target: "ROUNDTRIP".to_string(),
+        },
+    ];
+    runtime.load_ir_pipeline(&instructions);
+    runtime.execute().expect("pipeline execute ok");
+    let roundtrip = runtime.get_output("ROUNDTRIP").expect("output exists");
+    assert_eq!(roundtrip, b"hello world");
+}
+#[test]
 fn test_csm_template_compression_ratio() {
     let mut dict = CsmDictionary::new();
     let template = vec![0xAB; 10];
