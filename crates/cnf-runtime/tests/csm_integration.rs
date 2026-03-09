@@ -1,3 +1,37 @@
+#[test]
+fn test_csm_template_compression_ratio() {
+    let mut dict = CsmDictionary::new();
+    let template = vec![0xAB; 10];
+    dict.insert(1, &template);
+    let mut runtime = Runtime::new();
+    runtime.csm_dict = Some(dict.clone());
+    let input = vec![0xAB; 1000];
+    runtime.add_buffer("RAW".to_string(), input.clone());
+    let instr = Instruction::CompressCsm { source: "RAW".to_string(), target: "CSM".to_string() };
+    runtime.execute_instruction(&instr).unwrap();
+    let out = runtime.get_output("CSM").unwrap();
+    assert!(out.len() < 20, "Compression ratio > 50x, got {} bytes", out.len());
+}
+
+#[test]
+fn test_csm_bit_flip_atomic_integrity() {
+    let mut dict = CsmDictionary::new();
+    dict.insert(1, &[0xCD; 8]);
+    let mut runtime = Runtime::new();
+    runtime.csm_dict = Some(dict.clone());
+    let input = vec![0xCD; 32];
+    runtime.add_buffer("RAW".to_string(), input.clone());
+    let instr = Instruction::CompressCsm { source: "RAW".to_string(), target: "CSM".to_string() };
+    runtime.execute_instruction(&instr).unwrap();
+    let mut out = runtime.get_output("CSM").unwrap();
+    // Flip 1 bit in the stream (not in header)
+    let idx = 16.min(out.len()-5); // after header
+    out[idx] ^= 0x01;
+    runtime.add_buffer("FLIPPED".to_string(), out);
+    let instr = Instruction::DecompressCsm { source: "FLIPPED".to_string(), target: "FAIL".to_string() };
+    let err = runtime.execute_instruction(&instr).unwrap_err();
+    assert!(err.to_string().contains("Checksum"), "Expected atomic integrity error");
+}
 //! Integration tests for CSM compression pipeline
 
 use cobol_protocol_v154::CsmDictionary;
