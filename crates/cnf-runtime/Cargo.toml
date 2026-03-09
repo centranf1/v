@@ -12,6 +12,8 @@ cnf-storage = { path = "../cnf-storage" }
 cnf-stdlib = { path = "../cnf-stdlib" }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
+serde_main = { package = "serde", version = "1", features = ["derive"] }
+serde_json_main = { package = "serde_json", version = "1" }
 cnf-network = { path = "../cnf-network", optional = true }
 cnf-verifier = { path = "../cnf-verifier", optional = true }
 cnf-quantum = { path = "../cnf-quantum", optional = true }

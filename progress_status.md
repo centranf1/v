@@ -30,13 +30,52 @@ Status:
 
 Notes:
 - Memastikan file csm_demo.cnf dapat di-parse
-- Error message kini menampilkan nama token sesuai spesifikasi
 # CENTRA-NF Progress Status
----
+[2026-03-09]
+Change:
+- Perbaiki 5 temuan kritis:
+  - Hapus hardcoded AES key, gunakan KMS/env
+  - Ganti nonce deterministik dengan nonce acak (AES-GCM)
+  - Ganti panic!() di decrypt_aes256 dengan error terstruktur
+  - Implementasi evaluasi LTL di PolicyEngine.verify()
+  - Tambah TLS & autentikasi pada TcpTransport
+
+Scope:
+- crates/cnf-security/src/
+- crates/cnf-governance/src/policy_engine.rs
+- crates/cnf-network/src/
+- tests/
+- docs/specification.md
+- progress_status.md
+
+Status:
+- planned
+
+Notes:
+- Risiko: perubahan besar pada jalur kriptografi & jaringan, perlu regression test penuh.
+- Arsitektur: patuh FIPS, SOC2, ISO27001, boundary tetap terjaga.
 
 ## [1.0.0] – 2026-03-09 – Stable Release: Governance Runtime & Release Pipeline
 
+[2026-03-09]
 Change:
+- Memperbaiki tokenisasi 6 keyword CSM (MAP-CSM, COMPRESS-CSM, DECOMPRESS-CSM, DICTIONARY-REF, PROTOCOL-VERSION, DENSITY) agar terdaftar di keyword_to_token()
+- Menambah dukungan komentar gaya COBOL (--) dan shell (#)
+- Menambah Display impl eksplisit untuk seluruh 80+ variant token agar error message lebih jelas
+
+Scope:
+- crates/cnf-compiler/src/lexer.rs
+- crates/cnf-compiler/tests/integration.rs
+- progress_status.md
+
+Status:
+- planned
+
+Notes:
+- Memastikan file csm_demo.cnf dapat di-parse
+- Error message kini menampilkan nama token sesuai spesifikasi
+
+
 - Integrasi governance runtime ke cnf-runtime (GovernanceContext, dispatch, trace, error handling)
 - Penambahan 2 e2e governance tests
 - Penambahan contoh pipeline governed_pipeline.cnf
@@ -61,7 +100,26 @@ Notes:
 - Hanya integrasi governance & infrastruktur rilis
 - Semua kode harus lolos clippy, test, tanpa unsafe
 - 9-layer system, 520+ tests, 16 CI gates, zero unsafe code
+
 **Single source of truth for all development activities.**
+
+[2026-03-09]
+Change:
+- Update dan validasi test untuk eksekusi fungsi nyata, type checking, dan konversi data TRANSCODE/CONVERT
+- Update dokumentasi agar sesuai perilaku baru
+
+Scope:
+- crates/cnf-runtime/
+- crates/cnf-compiler/
+- crates/cnf-stdlib/
+- docs/specification.md
+- tests/
+
+Status:
+- planned
+
+Notes:
+- Memastikan seluruh fitur baru (type checking, function execution, data conversion) tervalidasi end-to-end dan terdokumentasi resmi
 
 Last updated: 2026-03-08 (Session 25: cnf-quantum L8 Cryptography Layer + KEM)
 

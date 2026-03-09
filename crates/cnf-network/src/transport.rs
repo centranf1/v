@@ -9,8 +9,39 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+// TLS support (kerangka, implementasi menyusul)
+#[allow(unused_imports)]
+use tokio_rustls::rustls::{ClientConfig, ServerConfig};
+#[allow(unused_imports)]
+use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
+#[allow(unused_imports)]
+use std::sync::Arc as StdArc;
+
+/// Jenis koneksi stream (plain TCP atau TLS)
+pub enum StreamType {
+    Plain(TcpStream),
+    #[allow(dead_code)]
+    Tls(tokio_rustls::server::TlsStream<TcpStream>),
+}
+// Implement std::io::Write for StreamType
+impl Write for StreamType {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            StreamType::Plain(ref mut s) => s.write(buf),
+            #[allow(unreachable_patterns)]
+            _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "TLS not implemented")),
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            StreamType::Plain(ref mut s) => s.flush(),
+            #[allow(unreachable_patterns)]
+            _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "TLS not implemented")),
+        }
+    }
+}
 
 /// Network frame with length prefix, payload, and CRC32 checksum
 ///
@@ -140,7 +171,11 @@ pub struct TcpTransport {
     #[allow(dead_code)]
     node_id: NodeId,
     listener: Option<TcpListener>,
-    connections: Arc<Mutex<HashMap<NodeId, TcpStream>>>,
+    // Koneksi bisa TCP biasa atau TLS
+    connections: Arc<Mutex<HashMap<NodeId, StreamType>>>,
+    // Opsi TLS (belum diimplementasi penuh)
+    tls_server_config: Option<Arc<ServerConfig>>,
+    tls_client_config: Option<Arc<ClientConfig>>,
 }
 
 impl std::fmt::Debug for TcpTransport {
@@ -160,6 +195,8 @@ impl TcpTransport {
             node_id,
             listener: None,
             connections: Arc::new(Mutex::new(HashMap::new())),
+            tls_server_config: None,
+            tls_client_config: None,
         }
     }
 
@@ -179,7 +216,7 @@ impl TcpTransport {
         })?;
 
         let mut conns = self.connections.lock().unwrap();
-        conns.insert(node_id, stream);
+        conns.insert(node_id, StreamType::Plain(stream));
         Ok(())
     }
 

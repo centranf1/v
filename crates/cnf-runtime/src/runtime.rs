@@ -1,5 +1,10 @@
-use cobol_protocol_v154::{CsmDictionary, compress_csm, decompress_csm};
-    /// Execute COMPRESS-CSM instruction.
+use serde_json_main as serde_json;
+use serde_main as serde;
+use cobol_protocol_v154::compress_csm;
+use cobol_protocol_v154::decompress_csm;
+use cobol_protocol_v154::dictionary::CsmDictionary;
+// Execute COMPRESS-CSM instruction.
+impl Runtime {
     pub fn dispatch_compress_csm(&mut self, source: &str, target: &str) -> Result<(), CnfError> {
         let dict = self.csm_dict.as_ref().ok_or_else(|| CnfError::RuntimeError("CSM dictionary not loaded".to_string()))?;
         let buf = self.get_buffer(source)?;
@@ -8,7 +13,7 @@ use cobol_protocol_v154::{CsmDictionary, compress_csm, decompress_csm};
         Ok(())
     }
 
-    /// Execute DECOMPRESS-CSM instruction.
+    // Execute DECOMPRESS-CSM instruction.
     pub fn dispatch_decompress_csm(&mut self, source: &str, target: &str) -> Result<(), CnfError> {
         let dict = self.csm_dict.as_ref().ok_or_else(|| CnfError::RuntimeError("CSM dictionary not loaded".to_string()))?;
         let buf = self.get_buffer(source)?;
@@ -16,9 +21,10 @@ use cobol_protocol_v154::{CsmDictionary, compress_csm, decompress_csm};
         self.add_buffer(target.to_string(), decompressed);
         Ok(())
     }
-//! Runtime — Dispatch IR instructions to concrete operations.
-//!
-//! Main execution engine. Manages buffers and delegates to protocol/security crates.
+}
+// Runtime — Dispatch IR instructions to concrete operations.
+//
+// Main execution engine. Manages buffers and delegates to protocol/security crates.
 
 
 use crate::control_flow::{CallStack, Frame, ScopeManager};
@@ -164,6 +170,8 @@ pub struct GovernanceContext {
 }
 
 pub struct Runtime {
+        /// Map fungsi: nama -> (parameter, body instruksi)
+        functions: std::collections::HashMap<String, (Vec<String>, Vec<Instruction>)>,
     buffers: HashMap<String, Vec<u8>>,
     dag: Dag,
     instruction_map: HashMap<String, Instruction>,
@@ -217,17 +225,16 @@ impl Runtime {
             decision_quorum: None,
             csm_dict: None,
         }
-        /// Load IR instructions into DAG and instruction_map.
-        /// Each instruction is assigned to a layer (default: 0, can be improved for real dependencies).
-        pub fn load_ir_pipeline(&mut self, instructions: &[Instruction]) {
-            self.dag = Dag::initialize_layers();
-            self.instruction_map.clear();
-            for (idx, instr) in instructions.iter().enumerate() {
-                let key = format!("{}", idx); // Use index as unique key
-                // Assign all to layer 0 for now (improve for real dependency graph)
-                self.dag.assign_to_layer(0, key.clone());
-                self.instruction_map.insert(key, instr.clone());
-            }
+    }
+
+    pub fn load_ir_pipeline(&mut self, instructions: &[Instruction]) {
+        self.dag = Dag::initialize_layers();
+        self.instruction_map.clear();
+        for (idx, instr) in instructions.iter().enumerate() {
+            let key = format!("{}", idx); // Use index as unique key
+            // Assign all to layer 0 for now (improve for real dependency graph)
+            self.dag.assign_to_layer(0, key.clone());
+            self.instruction_map.insert(key, instr.clone());
         }
     }
 
@@ -338,37 +345,9 @@ impl Runtime {
 
     /// Get immutable reference to buffer.
     fn get_buffer(&self, name: &str) -> Result<&[u8], CnfError> {
-        self.buffers
-            .get(name)
-            .map(|v| v.as_slice())
+        self.buffers.get(name)
+            .map(|b| b.as_slice())
             .ok_or_else(|| CnfError::BufferNotFound(name.to_string()))
-    }
-
-    /// Execute COMPRESS instruction.
-    fn dispatch_compress(&mut self, target: &str) -> Result<(), CnfError> {
-        self.check_access_control(target, "COMPRESS")?;
-
-        let buf = self
-            .get_buffer_mut(target)
-            .map_err(|e| CnfError::CompressionFailed(e.to_string()))?;
-
-        let compressed = cobol_protocol_v154::compress_csm(std::mem::take(buf))
-            .map_err(CnfError::CompressionFailed)?;
-
-        *buf = compressed;
-        Ok(())
-    }
-
-    /// Execute VERIFY-INTEGRITY instruction.
-    fn dispatch_verify(&self, target: &str) -> Result<String, CnfError> {
-        self.check_access_control(target, "VERIFY")?;
-
-        let buf = self
-            .get_buffer(target)
-            .map_err(|e| CnfError::VerificationFailed(e.to_string()))?;
-
-        let digest = cnf_security::sha256_hex(buf);
-        Ok(digest)
     }
 
     /// Execute ENCRYPT instruction.
@@ -390,18 +369,61 @@ impl Runtime {
         let buf = self
             .get_buffer_mut(target)
             .map_err(|e| CnfError::DecryptionFailed(e.to_string()))?;
-        let result = cnf_security::decrypt_aes256(buf);
-        *buf = result;
+        let tmp = cnf_security::decrypt_aes256(buf)
+            .map_err(|e| CnfError::DecryptionFailed(format!("Crypto: {e:?}")))?;
+        *buf = tmp;
         Ok(())
     }
 
     /// Execute TRANSCODE instruction (placeholder).
     fn dispatch_transcode(&mut self, target: &str, output_type: &str) -> Result<(), CnfError> {
-        // This is a stub; real implementation would call a dedicated crate
-        // such as `cnf_transcode` and perform format conversion.
         let buf = self.get_buffer_mut(target)?;
-        // append format name for visibility
-        buf.extend_from_slice(output_type.as_bytes());
+        let input = String::from_utf8(buf.clone()).map_err(|_| CnfError::InvalidInstruction("non-utf8 buffer".into()))?;
+        let converted = match output_type.to_ascii_uppercase().as_str() {
+            "CSV" => {
+                // Dummy: JSON array of objects to CSV
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&input) {
+                    if let Some(arr) = json.as_array() {
+                        let mut csv = String::new();
+                        if let Some(first) = arr.first() {
+                            if let Some(obj) = first.as_object() {
+                                let headers: Vec<_> = obj.keys().collect();
+                                csv += &headers.join(",");
+                                csv += "\n";
+                                for row in arr {
+                                    if let Some(obj) = row.as_object() {
+                                        let vals: Vec<_> = headers.iter().map(|k| obj.get(*k).map(|v| v.to_string()).unwrap_or_default()).collect();
+                                        csv += &vals.join(",");
+                                        csv += "\n";
+                                    }
+                                }
+                                csv
+                            } else { input.clone() }
+                        } else { input.clone() }
+                    } else { input.clone() }
+                } else { input.clone() }
+            }
+            "JSON" => {
+                // Dummy: CSV to JSON array of objects (assume header row)
+                let mut lines = input.lines();
+                if let Some(header) = lines.next() {
+                    let keys: Vec<_> = header.split(',').collect();
+                    let mut arr = Vec::new();
+                    for line in lines {
+                        let vals: Vec<_> = line.split(',').collect();
+                        let mut obj = serde_json::Map::new();
+                        for (k, v) in keys.iter().zip(vals.iter()) {
+                            obj.insert((*k).to_string(), serde_json::Value::String((*v).to_string()));
+                        }
+                        arr.push(serde_json::Value::Object(obj));
+                    }
+                    serde_json::to_string(&arr).unwrap_or(input.clone())
+                } else { input.clone() }
+            }
+            _ => return Err(CnfError::InvalidInstruction(format!("TRANSCODE to '{}' not supported", output_type))),
+        };
+        buf.clear();
+        buf.extend_from_slice(converted.as_bytes());
         Ok(())
     }
 
@@ -822,10 +844,8 @@ impl Runtime {
 
     /// Execute CONVERT instruction (stub: append type info).
     fn dispatch_convert(&mut self, target: &str, output_type: &str) -> Result<(), CnfError> {
-        let buf = self.get_buffer_mut(target)?;
-        // Append type marker for visibility
-        buf.extend_from_slice(output_type.as_bytes());
-        Ok(())
+        // Untuk demo: CONVERT = panggil TRANSCODE
+        self.dispatch_transcode(target, output_type)
     }
 
     /// Execute SET instruction (assign string value to variable).
@@ -1957,26 +1977,27 @@ impl Runtime {
                 return_type: _,
                 instrs,
             } => {
-                // Store function definition (simplified - just name mapping)
-                // TODO: Full function storage in v0.5.0
-                self.set_variable(format!("func_{}", name), format!("{:?}", instrs));
+                // Simpan definisi fungsi ke map
+                self.functions.insert(name.clone(), (parameters.clone(), instrs.clone()));
             }
             Instruction::FunctionCall { name, arguments } => {
-                // Simple function call (push/pop frame)
-                let params = Vec::new();
-                let mut args = Vec::new();
-
-                for arg in arguments {
-                    if let Some(val) = self.get_variable(arg) {
-                        args.push(val);
-                    } else {
-                        args.push(arg.clone());
-                    }
+                // Lookup fungsi
+                let (params, body) = self.functions.get(name)
+                    .ok_or_else(|| CnfError::RuntimeError(format!("Function '{}' not defined", name)))?.clone();
+                if params.len() != arguments.len() {
+                    return Err(CnfError::RuntimeError(format!("Function '{}' expects {} args, got {}", name, params.len(), arguments.len())));
                 }
-
-                self.call_function(name.clone(), params, args)?;
-                // TODO: Execute function body in v0.5.0
-                self.return_from_function(None)?;
+                // Bind argumen ke parameter di scope baru
+                self.scope_manager.push_scope();
+                for (param, arg) in params.iter().zip(arguments.iter()) {
+                    let val = self.get_variable(arg).unwrap_or(arg.clone());
+                    self.set_variable(param.clone(), val);
+                }
+                // Eksekusi body fungsi
+                for instr in &body {
+                    self.execute_instruction(instr)?;
+                }
+                self.scope_manager.pop_scope();
             }
             Instruction::Open {
                 file_handle,

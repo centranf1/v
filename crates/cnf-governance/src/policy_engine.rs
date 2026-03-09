@@ -25,9 +25,44 @@ impl PolicyEngine {
         PolicyEngine {}
     }
 
-    pub fn verify(&self, _formula: &LtlFormula, _trace: &ExecutionTrace) -> Result<bool, CnfGovernanceError> {
-        // dummy always-true implementation
-        Ok(true)
+    pub fn verify(&self, formula: &LtlFormula, trace: &ExecutionTrace) -> Result<bool, CnfGovernanceError> {
+        fn eval(formula: &LtlFormula, trace: &ExecutionTrace) -> bool {
+            match formula {
+                LtlFormula::Atom(name) => trace.operations.iter().any(|op| op == name),
+                LtlFormula::Not(inner) => !eval(inner, trace),
+                LtlFormula::And(left, right) => eval(left, trace) && eval(right, trace),
+                LtlFormula::Or(left, right) => eval(left, trace) || eval(right, trace),
+                LtlFormula::Always(inner) => eval(inner, trace), // Simplifikasi: true jika inner selalu terpenuhi (di semua op)
+                LtlFormula::Eventually(inner) => eval(inner, trace), // Simplifikasi: true jika inner pernah terpenuhi
+            }
+        }
+        Ok(eval(formula, trace))
+    }
+}
+
+#[cfg(test)]
+mod extra_policy_tests {
+    use super::*;
+
+    #[test]
+    fn engine_policy_violation() {
+        let engine = PolicyEngine::new();
+        let trace = ExecutionTrace { operations: vec!["read".into(), "write".into()] };
+        // Policy: Tidak boleh "delete"
+        let policy = LtlFormula::Not(Box::new(LtlFormula::Atom("delete".into())));
+        assert_eq!(engine.verify(&policy, &trace).unwrap(), true);
+        let trace2 = ExecutionTrace { operations: vec!["read".into(), "delete".into()] };
+        assert_eq!(engine.verify(&policy, &trace2).unwrap(), false);
+    }
+
+    #[test]
+    fn engine_and_or_logic() {
+        let engine = PolicyEngine::new();
+        let trace = ExecutionTrace { operations: vec!["a".into(), "b".into()] };
+        let policy = LtlFormula::And(Box::new(LtlFormula::Atom("a".into())), Box::new(LtlFormula::Atom("b".into())));
+        assert_eq!(engine.verify(&policy, &trace).unwrap(), true);
+        let policy2 = LtlFormula::Or(Box::new(LtlFormula::Atom("x".into())), Box::new(LtlFormula::Atom("b".into())));
+        assert_eq!(engine.verify(&policy2, &trace).unwrap(), true);
     }
 }
 

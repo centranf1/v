@@ -11,4 +11,5 @@ hex = "0.4"
 
 # Real AES-256-GCM encryption
 aes-gcm = "0.10"
+rand = "0.8"
 

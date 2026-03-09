@@ -1,20 +1,29 @@
-//! cnf-security — Cryptographic operations.
-//!
-//! Responsibility: SHA-256 integrity verification and deterministic encryption.
-//! This is the ONLY crate that performs cryptographic operations.
-//!
-//! This crate MUST NOT:
-//! - Parse source code
-//! - Execute runtime instructions
-//! - Manage buffers beyond immediate computation
-//!
-//! This crate MUST:
-//! - Provide deterministic SHA-256 hex digests
-//! - Provide deterministic encryption/decryption
-//! - Be isolated and sealed
+#[derive(Debug)]
+pub enum CnfCryptoError {
+    KeyMissing,
+    KeyInvalid,
+    DataTooShort,
+    DecryptFailed,
+}
+
+// cnf-security — Cryptographic operations.
+//
+// Responsibility: SHA-256 integrity verification and deterministic encryption.
+// This is the ONLY crate that performs cryptographic operations.
+//
+// This crate MUST NOT:
+// - Parse source code
+// - Execute runtime instructions
+// - Manage buffers beyond immediate computation
+//
+// This crate MUST:
+// - Provide deterministic SHA-256 hex digests
+// - Provide deterministic encryption/decryption
+// - Be isolated and sealed
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
+use std::env;
 use sha2::{Digest, Sha256};
 
 /// Compute SHA-256 digest of buffer and return hex-encoded string.
@@ -33,20 +42,32 @@ pub fn sha256_hex(data: &[u8]) -> String {
 /// Nonce is derived deterministically from SHA-256 hash of input data.
 /// Returns: nonce (12 bytes) + ciphertext (includes authentication tag).
 pub fn encrypt_aes256(data: &[u8]) -> Vec<u8> {
-    // Fixed key for deterministic encryption (in production, use proper key management)
-    const KEY_BYTES: &[u8; 32] = b"CENTRA-NF-AES256-GCM-KEY-32BYTES";
-    let key = Key::<Aes256Gcm>::from_slice(KEY_BYTES);
+    // Key diambil dari environment variable CENTRA_NF_AES_KEY (fail-fast jika tidak ada/invalid)
+    let key_bytes = match env::var("CENTRA_NF_AES_KEY") {
+        Ok(val) => {
+            let bytes = val.as_bytes();
+            if bytes.len() != 32 {
+                panic!("CENTRA_NF_AES_KEY harus 32 byte, dapat {} byte", bytes.len());
+            }
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(bytes);
+            arr
+        }
+        Err(_) => panic!("CENTRA_NF_AES_KEY tidak ditemukan di environment!"),
+    };
+    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(key);
 
-    // Deterministic nonce: first 12 bytes of SHA-256 hash of input data
-    let hash = sha256_hex(data).into_bytes();
-    let nonce_bytes: [u8; 12] = hash[..12].try_into().unwrap();
+    // Nonce acak (12 byte) sesuai standar AES-GCM
+    use rand::RngCore;
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from(nonce_bytes);
 
     // Encrypt
     let ciphertext = cipher.encrypt(&nonce, data).expect("encryption failure");
 
-    // Prepend nonce to ciphertext for decryption
+    // Prepend nonce ke ciphertext untuk dekripsi
     let mut result = nonce_bytes.to_vec();
     result.extend_from_slice(&ciphertext);
     result
@@ -55,26 +76,40 @@ pub fn encrypt_aes256(data: &[u8]) -> Vec<u8> {
 /// Decrypt buffer that was produced by `encrypt_aes256`.
 ///
 /// Extracts nonce from the beginning of the encrypted data.
-pub fn decrypt_aes256(data: &[u8]) -> Vec<u8> {
+pub fn decrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
     if data.len() < 12 {
-        panic!("encrypted data too short");
+        return Err(CnfCryptoError::DataTooShort);
     }
-
-    // Fixed key (same as encryption)
-    const KEY_BYTES: &[u8; 32] = b"CENTRA-NF-AES256-GCM-KEY-32BYTES";
-    let key = Key::<Aes256Gcm>::from_slice(KEY_BYTES);
+    // Key diambil dari environment variable CENTRA_NF_AES_KEY
+    let key_bytes = match env::var("CENTRA_NF_AES_KEY") {
+        Ok(val) => {
+            let bytes = val.as_bytes();
+            if bytes.len() != 32 {
+                return Err(CnfCryptoError::KeyInvalid);
+            }
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(bytes);
+            arr
+        }
+        Err(_) => return Err(CnfCryptoError::KeyMissing),
+    };
+    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(key);
 
     // Extract nonce from beginning
-    let nonce_bytes: [u8; 12] = data[..12].try_into().unwrap();
+    let nonce_bytes: [u8; 12] = match data[..12].try_into() {
+        Ok(n) => n,
+        Err(_) => return Err(CnfCryptoError::DataTooShort),
+    };
     let nonce = Nonce::from(nonce_bytes);
 
     // Extract ciphertext (rest of the data)
     let ciphertext = &data[12..];
 
-    cipher
-        .decrypt(&nonce, ciphertext)
-        .expect("decryption failure")
+    match cipher.decrypt(&nonce, ciphertext) {
+        Ok(pt) => Ok(pt),
+        Err(_) => Err(CnfCryptoError::DecryptFailed),
+    }
 }
 
 #[cfg(test)]
@@ -114,25 +149,58 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
+        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
         let plaintext = b"secret data";
         let encrypted = encrypt_aes256(plaintext);
-        let decrypted = decrypt_aes256(&encrypted);
+        let decrypted = decrypt_aes256(&encrypted).unwrap();
         assert_eq!(plaintext.to_vec(), decrypted);
     }
 
     #[test]
-    fn test_encrypt_deterministic() {
-        let data = b"determinism test";
+    fn test_encrypt_random_nonce() {
+        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        let data = b"random nonce test";
         let enc1 = encrypt_aes256(data);
         let enc2 = encrypt_aes256(data);
-        assert_eq!(enc1, enc2);
+        assert_ne!(enc1, enc2, "Nonce acak harus menghasilkan ciphertext berbeda");
     }
 
     #[test]
     fn test_encrypt_decrypt_aes_gcm_roundtrip() {
+        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
         let plaintext = b"This is a test message for AES-GCM encryption";
         let encrypted = encrypt_aes256(plaintext);
-        let decrypted = decrypt_aes256(&encrypted);
+        let decrypted = decrypt_aes256(&encrypted).unwrap();
         assert_eq!(plaintext.to_vec(), decrypted);
+    }
+    #[test]
+    fn test_decrypt_error_too_short() {
+        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        let short = vec![1,2,3];
+        let res = decrypt_aes256(&short);
+        assert!(matches!(res, Err(super::CnfCryptoError::DataTooShort)));
+    }
+    #[test]
+    fn test_decrypt_error_key_missing() {
+        std::env::remove_var("CENTRA_NF_AES_KEY");
+        let data = encrypt_aes256(b"fail");
+        let res = decrypt_aes256(&data);
+        assert!(matches!(res, Err(super::CnfCryptoError::KeyMissing)));
+    }
+    #[test]
+    fn test_decrypt_error_key_invalid() {
+        std::env::set_var("CENTRA_NF_AES_KEY", "shortkey");
+        let data = encrypt_aes256(b"fail");
+        let res = decrypt_aes256(&data);
+        assert!(matches!(res, Err(super::CnfCryptoError::KeyInvalid)));
+    }
+    #[test]
+    fn test_decrypt_error_decrypt_failed() {
+        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        let mut data = encrypt_aes256(b"fail");
+        // Corrupt ciphertext
+        data[15] ^= 0xFF;
+        let res = decrypt_aes256(&data);
+        assert!(matches!(res, Err(super::CnfCryptoError::DecryptFailed)));
     }
 }

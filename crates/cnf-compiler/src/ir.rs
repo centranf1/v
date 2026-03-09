@@ -769,11 +769,34 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
         }
     }
 
+    // Kumpulkan tipe variabel dari DATA DIVISION
+    let mut var_types: std::collections::HashMap<String, crate::ast::DataType> = std::collections::HashMap::new();
+    for decl in &program.data.variables {
+        var_types.insert(decl.name.clone(), decl.data_type.clone());
+    }
+
     for stmt in &program.procedure.statements {
-        #[allow(clippy::match_single_binding)]
+        // Type checking untuk operasi yang relevan
         match stmt {
-            _ => todo!(),
+            ProcedureStatement::Compress { target }
+            | ProcedureStatement::Encrypt { target }
+            | ProcedureStatement::VerifyIntegrity { target }
+            | ProcedureStatement::Transcode { target, .. }
+            | ProcedureStatement::Convert { target, .. } => {
+                let ty = var_types.get(target).ok_or_else(|| format!("Variable '{}' not declared", target))?;
+                // COMPRESS: selalu true, TRANSCODE/CONVERT: cek via TypeValidator
+                if let ProcedureStatement::Transcode { .. } = stmt {
+                    if !TypeValidator::can_transcode(ty) {
+                        return Err(format!("TRANSCODE not allowed on type {:?}", ty));
+                    }
+                }
+                // (tambahkan rule lain sesuai kebutuhan)
+            }
+            _ => {}
         }
+        // Lower ke IR
+        let instr = lower_single_statement(stmt, &var_types.keys().cloned().collect(), &signatures)?;
+        instructions.push(instr);
     }
     Ok(instructions)
 }
