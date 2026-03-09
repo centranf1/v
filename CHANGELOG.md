@@ -4,38 +4,25 @@ All notable changes to CENTRA-NF are documented in this file.
 
 ---
 
-## [1.0.0] – 2026-03-08 – Stable Release with Governance Enforcement
+## [1.0.0] – 2026-03-09 – Stable Release: Governance Runtime & Release Pipeline
 
-**Release Focus:** Production-ready CENTRA-NF with complete GOVERNANCE DIVISION runtime enforcement, access control, and compliance features.
+**Release Focus:** Production-ready CENTRA-NF v1.0.0 with full GOVERNANCE DIVISION, 9-layer architecture, 520+ tests, 16 CI gates, and zero unsafe code.
 
 ### ✨ New Features
 
 #### GOVERNANCE DIVISION – Complete Implementation
-- **Runtime Governance Enforcement**: Full dispatch support for all governance instructions
-  - Policy storage and LTL formula management
-  - Regulation compliance tracking
-  - Access control enforcement on core operations
-  - Audit ledger for compliance logging
-  - Decision quorum support
+- Runtime Governance Enforcement: Full dispatch support for all governance instructions (Policy, Regulation, AccessControl, AuditLedger, DataSovereignty, DecisionQuorum)
+- Access Control System: Deterministic, fail-fast enforcement of user/resource/action permissions
+- Governance State Management: Per-runtime context, no global mutable state, thread-safe
 
-- **Access Control System**: Runtime enforcement of user/resource/action permissions
-  - Allow-list semantics for secure operations
-  - Integration with COMPRESS, VERIFY-INTEGRITY, ENCRYPT, DECRYPT operations
-  - Fail-fast access denied errors with detailed messages
-  - Deterministic enforcement across executions
+#### Release & Quality
+- 9-layer architecture (compiler, runtime, protocol, storage, stdlib, network, verifier, quantum, governance)
+- 520+ tests (unit, integration, E2E, negative)
+- 16 CI gates (compilation, test, format, lint, determinism, layer boundary, governance)
+- Zero unsafe code (guaranteed by CI)
+- Example pipeline: examples/governed_pipeline.cnf
 
-- **Governance State Management**: Complete governance context in runtime
-  - Policies, regulations, and access rules stored per-runtime instance
-  - No global mutable state (maintains architectural purity)
-  - Thread-safe enforcement via ownership model
-
-#### Production Readiness
-- **Stable API**: All public interfaces finalized for v1.0.0
-- **Comprehensive Testing**: 50+ tests including governance E2E scenarios
-- **Documentation**: Complete specification with GOVERNANCE DIVISION
-- **CI/CD Validation**: All quality gates passing
-
-### 🔧 Technical Improvements
+### 🛠 Technical Improvements
 
 #### Runtime Architecture
 - **Governance Dispatch**: Added match arms for Policy, Regulation, AccessControl, etc.

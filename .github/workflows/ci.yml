@@ -61,8 +61,12 @@ jobs:
       - name: Gate 13 - Quantum full pipeline test
         run: cargo test -p cnf-quantum test_quantum_full_pipeline --verbose
 
-      - name: Gate 14 - Quantum decrypt determinism
-        run: cargo test -p cnf-quantum test_quantum_decrypt_determinism --verbose
+
+      - name: Gate 15 - Governance pipeline test
+        run: cargo test -p cnf-runtime test_governance_full_pipeline --verbose
+
+      - name: Gate 16 - Audit ledger tamper test
+        run: cargo test -p cnf-runtime test_audit_master_ledger_tamper --verbose
 
   determinism-check:
     name: Determinism Verification

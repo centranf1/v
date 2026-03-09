@@ -1,0 +1,24 @@
+IDENTIFICATION DIVISION.
+    PROGRAM-ID. GOVERNED-PIPELINE.
+ENVIRONMENT DIVISION.
+    OS "Linux".
+    ARCH "x86_64".
+DATA DIVISION.
+    VAR input VIDEO-MP4.
+    VAR output IMAGE-JPG.
+    VAR log FINANCIAL-DECIMAL.
+GOVERNANCE DIVISION.
+    POLICY "no-tamper".
+    REGULATION "SOC2".
+    DATA-SOVEREIGNTY "EU" TO "EU".
+    ACCESS-CONTROL "admin" ON "compress".
+    AUDIT-LEDGER "start".
+    DECISION-QUORUM "majority".
+PROCEDURE DIVISION.
+    VALIDATE input "json".
+    ENCRYPT input.
+    AUDIT-LEDGER "encrypted".
+    COMPRESS input.
+    WRITE-FILE output input.
+    CHECKPOINT log.
+    AUDIT-LEDGER "end".

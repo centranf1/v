@@ -162,6 +162,14 @@ pub struct ProcedureDivision {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProcedureStatement {
+        CompressCsm {
+            source: String,
+            target: String,
+        },
+        DecompressCsm {
+            source: String,
+            target: String,
+        },
     Compress {
         target: String,
     },

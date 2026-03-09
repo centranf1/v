@@ -16,6 +16,9 @@ cnf-network = { path = "../cnf-network", optional = true }
 cnf-verifier = { path = "../cnf-verifier", optional = true }
 cnf-quantum = { path = "../cnf-quantum", optional = true }
 cobol-protocol-v153 = { path = "../cobol-protocol-v153" }
+cobol-protocol-v154 = { path = "../cobol-protocol-v154" }
+
+cnf-governance = { path = "../cnf-governance" }
 
 [features]
 network = ["cnf-network"]

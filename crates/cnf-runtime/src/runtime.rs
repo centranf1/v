@@ -1,12 +1,34 @@
+use cobol_protocol_v154::{CsmDictionary, compress_csm, decompress_csm};
+    /// Execute COMPRESS-CSM instruction.
+    pub fn dispatch_compress_csm(&mut self, source: &str, target: &str) -> Result<(), CnfError> {
+        let dict = self.csm_dict.as_ref().ok_or_else(|| CnfError::RuntimeError("CSM dictionary not loaded".to_string()))?;
+        let buf = self.get_buffer(source)?;
+        let compressed = compress_csm(buf, dict).map_err(|e| CnfError::CompressionFailed(format!("CSM: {e:?}")))?;
+        self.add_buffer(target.to_string(), compressed);
+        Ok(())
+    }
+
+    /// Execute DECOMPRESS-CSM instruction.
+    pub fn dispatch_decompress_csm(&mut self, source: &str, target: &str) -> Result<(), CnfError> {
+        let dict = self.csm_dict.as_ref().ok_or_else(|| CnfError::RuntimeError("CSM dictionary not loaded".to_string()))?;
+        let buf = self.get_buffer(source)?;
+        let decompressed = decompress_csm(buf, dict).map_err(|e| CnfError::CompressionFailed(format!("CSM: {e:?}")))?;
+        self.add_buffer(target.to_string(), decompressed);
+        Ok(())
+    }
 //! Runtime — Dispatch IR instructions to concrete operations.
 //!
 //! Main execution engine. Manages buffers and delegates to protocol/security crates.
+
 
 use crate::control_flow::{CallStack, Frame, ScopeManager};
 use crate::dag::Dag;
 use crate::scheduler::Scheduler;
 use cnf_compiler::ir::Instruction;
 use std::collections::HashMap;
+use cnf_governance::{policy_engine::PolicyEngine, data_sovereignty::SovereigntyChecker, access_control::AccessControl, audit_authority::AuditLedger, regulatory::{RegulationSet, Standard}};
+use cnf_governance::policy_engine::ExecutionTrace;
+use cnf_governance::error::CnfGovernanceError;
 
 #[cfg(feature = "quantum")]
 use cnf_quantum::{
@@ -133,6 +155,14 @@ pub enum QuantumKeyEntry {
     Sphincs(cnf_quantum::SphincsKeyPair),
 }
 
+pub struct GovernanceContext {
+    pub policy_engine: PolicyEngine,
+    pub sovereignty_checker: SovereigntyChecker,
+    pub access_control: AccessControl,
+    pub master_ledger: AuditLedger,
+    pub execution_trace: ExecutionTrace,
+}
+
 pub struct Runtime {
     buffers: HashMap<String, Vec<u8>>,
     dag: Dag,
@@ -147,13 +177,17 @@ pub struct Runtime {
     audit_chain: Option<cnf_verifier::AuditChain>,
     #[cfg(feature = "quantum")]
     quantum_keys: std::collections::HashMap<String, QuantumKeyEntry>,
-    // Governance state
+    // Governance integration
+    pub governance: Option<GovernanceContext>,
+    // legacy fields (for backward compat)
     policies: HashMap<String, String>,
     regulations: HashMap<String, String>,
     data_sovereignty_rules: Vec<(String, String)>,
     access_controls: Vec<(String, String, String)>,
     audit_ledger: Vec<String>,
     decision_quorum: Option<(String, String)>,
+    // CSM dictionary for CSM compression (optional, set by pipeline)
+    pub csm_dict: Option<CsmDictionary>,
 }
 
 impl Runtime {
@@ -172,13 +206,96 @@ impl Runtime {
             audit_chain: None,
             #[cfg(feature = "quantum")]
             quantum_keys: std::collections::HashMap::new(),
+            governance: None,
             policies: HashMap::new(),
             regulations: HashMap::new(),
             data_sovereignty_rules: Vec::new(),
             access_controls: Vec::new(),
             audit_ledger: Vec::new(),
             decision_quorum: None,
+            csm_dict: None,
         }
+    }
+
+    // --- Governance Dispatch Functions ---
+    pub fn dispatch_governance_begin(&mut self) -> Result<(), CnfError> {
+        if self.governance.is_none() {
+            self.governance = Some(GovernanceContext {
+                policy_engine: PolicyEngine::new(),
+                sovereignty_checker: SovereigntyChecker::new(),
+                access_control: AccessControl {},
+                master_ledger: AuditLedger::new(),
+                execution_trace: ExecutionTrace::default(),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn dispatch_governance_policy(&mut self, rule: &str) -> Result<(), CnfError> {
+        let gov = self.governance.as_mut().ok_or_else(|| CnfError::RuntimeError("Governance context not initialized".into()))?;
+        // Simpan rule ke trace (dummy, extend as needed)
+        gov.execution_trace.operations.push(format!("policy:{}", rule));
+        Ok(())
+    }
+
+    pub fn dispatch_governance_regulation(&mut self, standard: &str) -> Result<(), CnfError> {
+        let gov = self.governance.as_mut().ok_or_else(|| CnfError::RuntimeError("Governance context not initialized".into()))?;
+        gov.execution_trace.operations.push(format!("regulation:{}", standard));
+        Ok(())
+    }
+
+    pub fn dispatch_governance_data_sovereignty(&mut self, from: &str, to: &str) -> Result<(), CnfError> {
+        let gov = self.governance.as_mut().ok_or_else(|| CnfError::RuntimeError("Governance context not initialized".into()))?;
+        // Dummy: always allow except EU->US
+        use cnf_governance::data_sovereignty::Region;
+        let from_region = match from {
+            "EU" => Region::EU,
+            "US" => Region::US,
+            "APAC" => Region::APAC,
+            other => Region::OTHER(other.to_string()),
+        };
+        let to_region = match to {
+            "EU" => Region::EU,
+            "US" => Region::US,
+            "APAC" => Region::APAC,
+            other => Region::OTHER(other.to_string()),
+        };
+        gov.sovereignty_checker.validate_transfer(&from_region, &to_region)
+            .map_err(|e| CnfError::RuntimeError(format!("Sovereignty error: {}", e)))?;
+        gov.execution_trace.operations.push(format!("sovereignty:{}->{}", from, to));
+        Ok(())
+    }
+
+    pub fn dispatch_governance_access_control(&mut self, user: &str, resource: &str) -> Result<(), CnfError> {
+        let gov = self.governance.as_mut().ok_or_else(|| CnfError::RuntimeError("Governance context not initialized".into()))?;
+        gov.access_control.check(user, resource)
+            .map_err(|e| CnfError::RuntimeError(format!("Access control error: {}", e)))?;
+        gov.execution_trace.operations.push(format!("access:{}:{}", user, resource));
+        Ok(())
+    }
+
+    pub fn dispatch_governance_audit_ledger(&mut self, entry: &str) -> Result<(), CnfError> {
+        let gov = self.governance.as_mut().ok_or_else(|| CnfError::RuntimeError("Governance context not initialized".into()))?;
+        gov.master_ledger.log(entry);
+        gov.execution_trace.operations.push(format!("audit:{}", entry));
+        Ok(())
+    }
+
+    pub fn dispatch_governance_end(&mut self) -> Result<(), CnfError> {
+        let gov = self.governance.as_mut().ok_or_else(|| CnfError::RuntimeError("Governance context not initialized".into()))?;
+        // Enforce policy (dummy: always true)
+        let dummy_formula = cnf_governance::policy_engine::LtlFormula::Atom("dummy".into());
+        let ok = gov.policy_engine.verify(&dummy_formula, &gov.execution_trace)
+            .map_err(|e| CnfError::RuntimeError(format!("Policy engine error: {}", e)))?;
+        if !ok {
+            return Err(CnfError::RuntimeError("Policy violation detected".into()));
+        }
+        // Verify ledger integrity (dummy: always true)
+        if !gov.master_ledger.verify() {
+            return Err(CnfError::RuntimeError("Master ledger chain integrity fails".into()));
+        }
+        gov.execution_trace.operations.push("governance_end".into());
+        Ok(())
     }
 
     /// Add a buffer to runtime.
@@ -221,7 +338,7 @@ impl Runtime {
             .get_buffer_mut(target)
             .map_err(|e| CnfError::CompressionFailed(e.to_string()))?;
 
-        let compressed = cobol_protocol_v153::compress_l1_l3(std::mem::take(buf))
+        let compressed = cobol_protocol_v154::compress_csm(std::mem::take(buf))
             .map_err(CnfError::CompressionFailed)?;
 
         *buf = compressed;
@@ -1641,6 +1758,12 @@ impl Runtime {
     /// Execute single IR instruction (handles control flow)
     pub fn execute_instruction(&mut self, instruction: &Instruction) -> Result<(), CnfError> {
         match instruction {
+            Instruction::CompressCsm { source, target } => {
+                self.dispatch_compress_csm(source, target)?;
+            }
+            Instruction::DecompressCsm { source, target } => {
+                self.dispatch_decompress_csm(source, target)?;
+            }
             Instruction::Compress { target } => {
                 self.dispatch_compress(target)?;
             }

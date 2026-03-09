@@ -28,6 +28,13 @@ impl std::error::Error for LexError {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+        // CSM protocol (v154)
+        MapCsm,
+        CompressCsm,
+        DecompressCsm,
+        DictionaryRef,
+        ProtocolVersion,
+        Density,
     // Divisions
     IdentificationDiv,
     EnvironmentDiv,

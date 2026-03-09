@@ -8,6 +8,14 @@ use crate::ast::Program;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
+    CompressCsm {
+        source: String,
+        target: String,
+    },
+    DecompressCsm {
+        source: String,
+        target: String,
+    },
     Compress {
         target: String,
     },
@@ -1856,6 +1864,30 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
 /// Helper to lower a single procedure statement to instruction
 #[allow(clippy::only_used_in_recursion)]
 fn lower_single_statement(
+            ProcedureStatement::CompressCsm { source, target } => {
+                if !declared_vars.contains(source) {
+                    return Err(format!("Variable '{}' not declared", source));
+                }
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared", target));
+                }
+                Ok(Instruction::CompressCsm {
+                    source: source.clone(),
+                    target: target.clone(),
+                })
+            }
+            ProcedureStatement::DecompressCsm { source, target } => {
+                if !declared_vars.contains(source) {
+                    return Err(format!("Variable '{}' not declared", source));
+                }
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared", target));
+                }
+                Ok(Instruction::DecompressCsm {
+                    source: source.clone(),
+                    target: target.clone(),
+                })
+            }
     stmt: &ProcedureStatement,
     declared_vars: &std::collections::HashSet<String>,
     signatures: &std::collections::HashMap<String, usize>,
