@@ -20,7 +20,6 @@ pub enum CsmError {
     EncodingError,
 }
 
-pub use dictionary::CsmDictionary;
 
 /// Compress input using CSM protocol (dict-first, pointer compression)
 pub fn compress_csm(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>, CsmError> {

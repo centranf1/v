@@ -1,6 +1,6 @@
 //! Time utilities for CENTRA-NF
 
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{Utc, TimeZone};
 
 /// Timestamp (UTC, detik)
 pub fn now_timestamp() -> i64 {

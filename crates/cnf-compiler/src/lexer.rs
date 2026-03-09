@@ -386,12 +386,11 @@ impl fmt::Display for Token {
 pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut chars = source.chars().peekable();
-    let mut line = 1;
-    let mut col = 1;
 
     while let Some(&ch) = chars.peek() {
         match ch {
             // ...existing code...
+            _ => todo!(),
         }
     }
 
@@ -411,8 +410,6 @@ fn keyword_to_token(s: &str) -> Token {
         "DENSITY" => Token::Density,
         "IDENTIFICATION" => Token::IdentificationDiv,
         "ENVIRONMENT" => Token::EnvironmentDiv,
-            // Wildcard arm for unrecognized characters
-            _ => todo!(),
         "USER" => Token::User,
         "RESOURCE" => Token::Resource,
         "ACTION" => Token::Action,

@@ -17,16 +17,16 @@ where F: FnMut(&T) -> bool {
 }
 
 /// Map koleksi
-pub fn map<T, U, F>(items: &[T], mut f: F) -> Vec<U>
+pub fn map<T, U, F>(items: &[T], f: F) -> Vec<U>
 where F: FnMut(&T) -> U {
-    items.iter().map(|x| f(x)).collect()
+    items.iter().map(f).collect()
 }
 
 /// Unik (distinct)
 pub fn unique<T: Eq + std::hash::Hash + Clone>(items: &[T]) -> Vec<T> {
     use std::collections::HashSet;
     let mut seen = HashSet::new();
-    items.iter().cloned().filter(|x| seen.insert(x.clone())).collect()
+    items.iter().filter(|x| seen.insert((*x).clone())).cloned().collect()
 }
 
 /// Chunks (bagi slice jadi potongan)
