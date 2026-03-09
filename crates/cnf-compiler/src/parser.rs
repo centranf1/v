@@ -1008,32 +1008,29 @@ impl Parser {
     }
 
     fn parse_procedure(&mut self) -> Result<ProcedureDivision, String> {
-                while self.current() != &Token::Eof {
-                    let stmt = match self.current() {
-                        Token::CompressCsm => {
-                            self.advance();
-                            let source = self.expect_variable_or_type()?;
-                            self.expect_identifier()?; // INTO
-                            let target = self.expect_variable_or_type()?;
-                            self.expect(Token::Period)?;
-                            ProcedureStatement::CompressCsm { source, target }
-                        }
-                        Token::DecompressCsm => {
-                            self.advance();
-                            let source = self.expect_variable_or_type()?;
-                            self.expect_identifier()?; // INTO
-                            let target = self.expect_variable_or_type()?;
-                            self.expect(Token::Period)?;
-                            ProcedureStatement::DecompressCsm { source, target }
-                        }
         self.expect_division(Token::ProcedureDiv, "PROCEDURE DIVISION")?;
         self.expect(Token::Division)?;
         self.expect(Token::Period)?;
 
         let mut statements = Vec::new();
-
         while self.current() != &Token::Eof {
             let stmt = match self.current() {
+                Token::CompressCsm => {
+                    self.advance();
+                    let source = self.expect_variable_or_type()?;
+                    self.expect_identifier()?; // INTO
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::CompressCsm { source, target }
+                }
+                Token::DecompressCsm => {
+                    self.advance();
+                    let source = self.expect_variable_or_type()?;
+                    self.expect_identifier()?; // INTO
+                    let target = self.expect_variable_or_type()?;
+                    self.expect(Token::Period)?;
+                    ProcedureStatement::DecompressCsm { source, target }
+                }
                 Token::Compress => {
                     self.advance();
                     let target = self.expect_variable_or_type()?;
@@ -1575,7 +1572,6 @@ impl Parser {
             };
             statements.push(stmt);
         }
-
         Ok(ProcedureDivision { statements })
     }
 
@@ -1621,7 +1617,7 @@ impl Parser {
             procedure,
         })
     }
-}
+} // <--- Penutup impl Parser
 
 pub fn parse(tokens: Vec<Token>) -> Result<Program, String> {
     Parser::new(tokens).parse()

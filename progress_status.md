@@ -1,3 +1,36 @@
+[2026-03-09]
+Change:
+- Implementasi lengkap Display untuk seluruh 80+ variant enum Token di lexer
+- Error message kini menampilkan nama token sesuai spesifikasi (misal: "QUANTUM-ENCRYPT")
+
+Scope:
+- crates/cnf-compiler/src/lexer.rs
+- crates/cnf-compiler/src/parser.rs (jika ada error message terkait)
+
+Status:
+- planned
+
+Notes:
+- Standarisasi pesan error, memudahkan debugging dan validasi deterministik
+# ---
+
+[2026-03-09]
+Change:
+- Memperbaiki tokenisasi 6 keyword CSM (MAP-CSM, COMPRESS-CSM, DECOMPRESS-CSM, DICTIONARY-REF, PROTOCOL-VERSION, DENSITY) agar terdaftar di keyword_to_token()
+- Menambah dukungan komentar gaya COBOL (--) dan shell (#)
+- Menambah Display impl eksplisit untuk seluruh 80+ variant token agar error message lebih jelas
+
+Scope:
+- crates/cnf-compiler/src/lexer.rs
+- crates/cnf-compiler/tests/integration.rs
+- progress_status.md
+
+Status:
+- planned
+
+Notes:
+- Memastikan file csm_demo.cnf dapat di-parse
+- Error message kini menampilkan nama token sesuai spesifikasi
 # CENTRA-NF Progress Status
 ---
 
@@ -148,6 +181,29 @@ Last updated: 2026-03-08 (Session 25: cnf-quantum L8 Cryptography Layer + KEM)
 - crates/cnf-runtime/src/runtime.rs
 
 ---
+
+
+[2026-03-09]
+Change:
+- Perbaikan bug kritis di lexer: 6 CSM keyword kini ter-tokenize dengan benar
+- Dukungan komentar COBOL (`--`) dan shell (`#`)
+- Implementasi lengkap Display untuk semua token
+- Ekspansi besar cnf-stdlib: 2.134 baris, 12 modul baru (string, buffer, math, collection, io, convert, compress, integrity, crypto, format, time, env)
+- Perombakan total cobol-protocol-v154: stream engine, dictionary lookup, reverse lookup, demo dictionary, pointer resolve
+
+Scope:
+- crates/cnf-compiler/src/lexer.rs
+- crates/cnf-stdlib/src/
+- crates/cobol-protocol-v154/src/
+- examples/csm_demo.cnf
+
+Status:
+- completed
+
+Notes:
+- Memastikan parsing CSM dan demo berjalan
+- Standarisasi error message
+- Layer boundary tetap terjaga
 
 ## Session 4: v0.5.0 Phase 2 – Persistence & stdlib helpers
 

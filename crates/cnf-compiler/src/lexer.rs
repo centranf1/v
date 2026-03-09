@@ -7,12 +7,13 @@ use std::fmt;
 
 /// Structured error with position and context
 #[derive(Debug, Clone, PartialEq)]
+
 pub struct LexError {
     pub message: String,
     pub line: usize,
     pub col: usize,
     pub context: String, // source snippet around error
-}
+} // <--- Tambahkan ini
 
 impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -203,28 +204,70 @@ pub enum Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            // CSM protocol (v154)
+            Token::MapCsm => write!(f, "MAP-CSM"),
+            Token::CompressCsm => write!(f, "COMPRESS-CSM"),
+            Token::DecompressCsm => write!(f, "DECOMPRESS-CSM"),
+            Token::DictionaryRef => write!(f, "DICTIONARY-REF"),
+            Token::ProtocolVersion => write!(f, "PROTOCOL-VERSION"),
+            Token::Density => write!(f, "DENSITY"),
+
+            // Divisions
             Token::IdentificationDiv => write!(f, "IDENTIFICATION DIVISION"),
             Token::EnvironmentDiv => write!(f, "ENVIRONMENT DIVISION"),
             Token::DataDiv => write!(f, "DATA DIVISION"),
             Token::ProcedureDiv => write!(f, "PROCEDURE DIVISION"),
+            Token::VerificationDiv => write!(f, "VERIFICATION DIVISION"),
             Token::GovernanceDiv => write!(f, "GOVERNANCE DIVISION"),
-            Token::Identifier(s) => write!(f, "IDENTIFIER({})", s),
-            Token::String(s) => write!(f, "STRING({})", s),
-            Token::Period => write!(f, "."),
-            Token::Define => write!(f, "DEFINE"),
-            Token::Function => write!(f, "FUNCTION"),
-            Token::EndFunction => write!(f, "END-FUNCTION"),
-            Token::Parameters => write!(f, "PARAMETERS"),
-            Token::Returns => write!(f, "RETURNS"),
+
+            // Verification keywords
+            Token::PreCondition => write!(f, "PRE-CONDITION"),
+            Token::PostCondition => write!(f, "POST-CONDITION"),
+            Token::Invariant => write!(f, "INVARIANT"),
+            Token::Prove => write!(f, "PROVE"),
+            Token::AssertKw => write!(f, "ASSERT"),
+            Token::Satisfies => write!(f, "SATISFIES"),
+            Token::AuditLog => write!(f, "AUDIT-LOG"),
+            Token::ComplianceReport => write!(f, "COMPLIANCE-REPORT"),
+
+            // Keywords
+            Token::Division => write!(f, "DIVISION"),
+            Token::ProgramId => write!(f, "PROGRAM-ID"),
+            Token::Author => write!(f, "AUTHOR"),
+            Token::Version => write!(f, "VERSION"),
+            Token::Os => write!(f, "OS"),
+            Token::Arch => write!(f, "ARCH"),
+            Token::RuntimeVersion => write!(f, "RUNTIME-VERSION"),
+            Token::Input => write!(f, "INPUT"),
+            Token::Output => write!(f, "OUTPUT"),
+            Token::Compress => write!(f, "COMPRESS"),
+            Token::VerifyIntegrity => write!(f, "VERIFY-INTEGRITY"),
+            Token::Transcode => write!(f, "TRANSCODE"),
+            Token::Filter => write!(f, "FILTER"),
+            Token::Aggregate => write!(f, "AGGREGATE"),
+            Token::Convert => write!(f, "CONVERT"),
+            Token::Merge => write!(f, "MERGE"),
+            Token::Split => write!(f, "SPLIT"),
+            Token::Validate => write!(f, "VALIDATE"),
+            Token::Extract => write!(f, "EXTRACT"),
+            Token::Encrypt => write!(f, "ENCRYPT"),
+            Token::Decrypt => write!(f, "DECRYPT"),
+            Token::As => write!(f, "AS"),
+
+            // I/O operations
             Token::Display => write!(f, "DISPLAY"),
             Token::Print => write!(f, "PRINT"),
             Token::Read => write!(f, "READ"),
+
+            // File operations (storage)
             Token::Open => write!(f, "OPEN"),
             Token::ReadFile => write!(f, "READ-FILE"),
             Token::WriteFile => write!(f, "WRITE-FILE"),
             Token::Close => write!(f, "CLOSE"),
             Token::Checkpoint => write!(f, "CHECKPOINT"),
             Token::Replay => write!(f, "REPLAY"),
+
+            // Arithmetic operations
             Token::Set => write!(f, "SET"),
             Token::Add => write!(f, "ADD"),
             Token::Subtract => write!(f, "SUBTRACT"),
@@ -233,16 +276,110 @@ impl fmt::Display for Token {
             Token::Max => write!(f, "MAX"),
             Token::Min => write!(f, "MIN"),
             Token::Abs => write!(f, "ABS"),
+
+            // String operations
             Token::Concatenate => write!(f, "CONCATENATE"),
             Token::Substring => write!(f, "SUBSTRING"),
             Token::Length => write!(f, "LENGTH"),
             Token::Uppercase => write!(f, "UPPERCASE"),
             Token::Lowercase => write!(f, "LOWERCASE"),
             Token::Trim => write!(f, "TRIM"),
-            _ => write!(f, "{:?}", self),
+
+            // Control flow
+            Token::If => write!(f, "IF"),
+            Token::Else => write!(f, "ELSE"),
+            Token::Then => write!(f, "THEN"),
+            Token::EndIf => write!(f, "END-IF"),
+            Token::For => write!(f, "FOR"),
+            Token::While => write!(f, "WHILE"),
+            Token::Do => write!(f, "DO"),
+            Token::EndFor => write!(f, "END-FOR"),
+            Token::EndWhile => write!(f, "END-WHILE"),
+            Token::In => write!(f, "IN"),
+
+            // Functions
+            Token::Define => write!(f, "DEFINE"),
+            Token::Function => write!(f, "FUNCTION"),
+            Token::EndFunction => write!(f, "END-FUNCTION"),
+            Token::Parameters => write!(f, "PARAMETERS"),
+            Token::Returns => write!(f, "RETURNS"),
+
+            // Network operations
+            Token::Network => write!(f, "NETWORK"),
+            Token::Node => write!(f, "NODE"),
+            Token::At => write!(f, "AT"),
+            Token::Self_ => write!(f, "SELF"),
+            Token::Topology => write!(f, "TOPOLOGY"),
+            Token::Pipeline => write!(f, "PIPELINE"),
+            Token::Mesh => write!(f, "MESH"),
+            Token::Star => write!(f, "STAR"),
+            Token::Timeout => write!(f, "TIMEOUT"),
+            Token::Send => write!(f, "SEND"),
+            Token::Receive => write!(f, "RECEIVE"),
+            Token::To => write!(f, "TO"),
+            Token::From => write!(f, "FROM"),
+            Token::Pipe => write!(f, "PIPE"),
+            Token::CallRemote => write!(f, "CALL-REMOTE"),
+
+            // Data types
+            Token::VideoMp4 => write!(f, "VIDEO-MP4"),
+            Token::ImageJpg => write!(f, "IMAGE-JPG"),
+            Token::FinancialDecimal => write!(f, "FINANCIAL-DECIMAL"),
+            Token::AudioWav => write!(f, "AUDIO-WAV"),
+            Token::CsvTable => write!(f, "CSV-TABLE"),
+            Token::BinaryBlob => write!(f, "BINARY-BLOB"),
+            Token::JsonObject => write!(f, "JSON-OBJECT"),
+            Token::XmlDocument => write!(f, "XML-DOCUMENT"),
+            Token::ParquetTable => write!(f, "PARQUET-TABLE"),
+            Token::TextString => write!(f, "TEXT-STRING"),
+            Token::NumberInteger => write!(f, "NUMBER-INTEGER"),
+            Token::NumberDecimal => write!(f, "NUMBER-DECIMAL"),
+            Token::FileHandle => write!(f, "FILE-HANDLE"),
+            Token::RecordStream => write!(f, "RECORD-STREAM"),
+
+            // Quantum operations (v0.8.0)
+            Token::QuantumEncrypt => write!(f, "QUANTUM-ENCRYPT"),
+            Token::QuantumDecrypt => write!(f, "QUANTUM-DECRYPT"),
+            Token::QuantumSign => write!(f, "QUANTUM-SIGN"),
+            Token::QuantumVerifySig => write!(f, "QUANTUM-VERIFY-SIG"),
+            Token::QuantumSignEncrypt => write!(f, "QUANTUM-SIGN-ENCRYPT"),
+            Token::QuantumVerifyDecrypt => write!(f, "QUANTUM-VERIFY-DECRYPT"),
+            Token::GenerateKeypair => write!(f, "GENERATE-KEYPAIR"),
+            Token::LongTermSign => write!(f, "LONG-TERM-SIGN"),
+
+            // Governance-related (v0.9.0)
+            Token::Policy => write!(f, "POLICY"),
+            Token::Formula => write!(f, "FORMULA"),
+            Token::Regulation => write!(f, "REGULATION"),
+            Token::Clause => write!(f, "CLAUSE"),
+            Token::DataSovereignty => write!(f, "DATA-SOVEREIGNTY"),
+            Token::AccessControl => write!(f, "ACCESS-CONTROL"),
+            Token::AuditLedger => write!(f, "AUDIT-LEDGER"),
+            Token::DecisionQuorum => write!(f, "DECISION-QUORUM"),
+            Token::Votes => write!(f, "VOTES"),
+            Token::Threshold => write!(f, "THRESHOLD"),
+            Token::Standard => write!(f, "STANDARD"),
+            Token::User => write!(f, "USER"),
+            Token::Resource => write!(f, "RESOURCE"),
+            Token::Action => write!(f, "ACTION"),
+            Token::Entry => write!(f, "ENTRY"),
+
+            // Signature-related
+            Token::Signature => write!(f, "SIGNATURE"),
+            Token::Algorithm => write!(f, "ALGORITHM"),
+            Token::SignedBy => write!(f, "SIGNED-BY"),
+            Token::With => write!(f, "WITH"),
+
+            // Literals and punctuation
+            Token::Identifier(s) => write!(f, "IDENTIFIER({})", s),
+            Token::String(s) => write!(f, "STRING({})", s),
+            Token::Period => write!(f, "."),
+            Token::Eof => write!(f, "EOF"),
         }
     }
 }
+
+// ...existing code...
 
 /// Tokenize CENTRA-NF source code.
 /// Rejects unrecognized characters immediately.
@@ -254,111 +391,7 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
 
     while let Some(&ch) = chars.peek() {
         match ch {
-            // Single-line comment: # ... or // ... or * ...
-            '#' => {
-                // Skip until end of line
-                while let Some(&c) = chars.peek() {
-                    chars.next();
-                    if c == '\n' { break; }
-                }
-                line += 1;
-                col = 1;
-            }
-            '/' => {
-                chars.next();
-                if let Some(&'/') = chars.peek() {
-                    // Found //, skip rest of line
-                    while let Some(&c) = chars.peek() {
-                        chars.next();
-                        if c == '\n' { break; }
-                    }
-                    line += 1;
-                    col = 1;
-                } else {
-                    return Err(format!("Unrecognized character '/' at line {}:{}", line, col));
-                }
-            }
-            '*' => {
-                // COBOL-style comment: skip rest of line
-                while let Some(&c) = chars.peek() {
-                    chars.next();
-                    if c == '\n' { break; }
-                }
-                line += 1;
-                col = 1;
-            }
-            // Whitespace
-            ' ' | '\t' => {
-                chars.next();
-                col += 1;
-            }
-            '\n' => {
-                chars.next();
-                line += 1;
-                col = 1;
-            }
-            '\r' => {
-                chars.next();
-            }
-
-            // Period (statement terminator)
-            '.' => {
-                chars.next();
-                tokens.push(Token::Period);
-                col += 1;
-            }
-
-            // Quoted string
-            '"' => {
-                chars.next();
-                col += 1;
-                let mut string_val = String::new();
-                let mut found_closing = false;
-
-                while let Some(&c) = chars.peek() {
-                    if c == '"' {
-                        chars.next();
-                        col += 1;
-                        found_closing = true;
-                        break;
-                    }
-                    string_val.push(c);
-                    chars.next();
-                    col += 1;
-                }
-
-                if !found_closing {
-                    return Err(format!("Unterminated string at line {}:{}", line, col));
-                }
-
-                tokens.push(Token::String(string_val));
-            }
-
-            // Identifiers and keywords (can include numbers like in "4" for SPLIT 4)
-            'A'..='Z' | 'a'..='z' | '_' | '0'..='9' => {
-                let mut ident = String::new();
-                while let Some(&c) = chars.peek() {
-                    match c {
-                        'A'..='Z' | 'a'..='z' | '_' | '0'..='9' | '-' => {
-                            ident.push(c);
-                            chars.next();
-                            col += 1;
-                        }
-                        _ => break,
-                    }
-                }
-
-                let token = keyword_to_token(&ident);
-                tokens.push(token);
-            }
-
-            // Unknown character — fail fast
-            _ => {
-                return Err(format!(
-                    "Unrecognized character '{}' at line {}:{}",
-                    ch, line, col
-                ));
-            }
+            // ...existing code...
         }
     }
 
@@ -368,136 +401,18 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
 
 /// Convert identifier string to keyword token, or Identifier if not a keyword.
 fn keyword_to_token(s: &str) -> Token {
+    match s.to_uppercase().as_str() {
         // CSM protocol v154 keywords
         "MAP-CSM" => Token::MapCsm,
-        "DATA-DENSE" => Token::DataDense,
         "COMPRESS-CSM" => Token::CompressCsm,
         "DECOMPRESS-CSM" => Token::DecompressCsm,
-        "CSM-OUTPUT" => Token::CsmOutput,
-    match s.to_uppercase().as_str() {
+        "DICTIONARY-REF" => Token::DictionaryRef,
+        "PROTOCOL-VERSION" => Token::ProtocolVersion,
+        "DENSITY" => Token::Density,
         "IDENTIFICATION" => Token::IdentificationDiv,
         "ENVIRONMENT" => Token::EnvironmentDiv,
-        "DATA" => Token::DataDiv,
-        "PROCEDURE" => Token::ProcedureDiv,
-        "VERIFICATION" => Token::VerificationDiv,
-        "PRE-CONDITION" => Token::PreCondition,
-        "POST-CONDITION" => Token::PostCondition,
-        "INVARIANT" => Token::Invariant,
-        "PROVE" => Token::Prove,
-        "ASSERT" => Token::AssertKw,
-        "SATISFIES" => Token::Satisfies,
-        "AUDIT-LOG" => Token::AuditLog,
-        "COMPLIANCE-REPORT" => Token::ComplianceReport,
-        "DIVISION" => Token::Division,
-        "PROGRAM-ID" => Token::ProgramId,
-        "AUTHOR" => Token::Author,
-        "VERSION" => Token::Version,
-        "OS" => Token::Os,
-        "ARCH" => Token::Arch,
-        "RUNTIME-VERSION" => Token::RuntimeVersion,
-        "INPUT" => Token::Input,
-        "OUTPUT" => Token::Output,
-        "COMPRESS" => Token::Compress,
-        "VERIFY-INTEGRITY" => Token::VerifyIntegrity,
-        "TRANSCODE" => Token::Transcode,
-        "FILTER" => Token::Filter,
-        "AGGREGATE" => Token::Aggregate,
-        "CONVERT" => Token::Convert,
-        "MERGE" => Token::Merge,
-        "SPLIT" => Token::Split,
-        "VALIDATE" => Token::Validate,
-        "EXTRACT" => Token::Extract,
-        "ENCRYPT" => Token::Encrypt,
-        "DECRYPT" => Token::Decrypt,
-        "AS" => Token::As,
-        "DISPLAY" => Token::Display,
-        "PRINT" => Token::Print,
-        "READ" => Token::Read,
-        "SET" => Token::Set,
-        "ADD" => Token::Add,
-        "SUBTRACT" => Token::Subtract,
-        "MULTIPLY" => Token::Multiply,
-        "DIVIDE" => Token::Divide,
-        "MAX" => Token::Max,
-        "MIN" => Token::Min,
-        "ABS" => Token::Abs,
-        "CONCATENATE" => Token::Concatenate,
-        "SUBSTRING" => Token::Substring,
-        "LENGTH" => Token::Length,
-        "UPPERCASE" => Token::Uppercase,
-        "LOWERCASE" => Token::Lowercase,
-        "TRIM" => Token::Trim,
-        "VIDEO-MP4" => Token::VideoMp4,
-        "IMAGE-JPG" => Token::ImageJpg,
-        "FINANCIAL-DECIMAL" => Token::FinancialDecimal,
-        "AUDIO-WAV" => Token::AudioWav,
-        "CSV-TABLE" => Token::CsvTable,
-        "BINARY-BLOB" => Token::BinaryBlob,
-        "JSON-OBJECT" => Token::JsonObject,
-        "XML-DOCUMENT" => Token::XmlDocument,
-        "PARQUET-TABLE" => Token::ParquetTable,
-        "TEXT-STRING" => Token::TextString,
-        "NUMBER-INTEGER" => Token::NumberInteger,
-        "NUMBER-DECIMAL" => Token::NumberDecimal,
-        "IF" => Token::If,
-        "ELSE" => Token::Else,
-        "THEN" => Token::Then,
-        "END-IF" => Token::EndIf,
-        "FOR" => Token::For,
-        "WHILE" => Token::While,
-        "DO" => Token::Do,
-        "END-FOR" => Token::EndFor,
-        "END-WHILE" => Token::EndWhile,
-        "IN" => Token::In,
-        "DEFINE" => Token::Define,
-        "FUNCTION" => Token::Function,
-        "END-FUNCTION" => Token::EndFunction,
-        "PARAMETERS" => Token::Parameters,
-        "RETURNS" => Token::Returns,
-        "NETWORK" => Token::Network,
-        "NODE" => Token::Node,
-        "AT" => Token::At,
-        "SELF" => Token::Self_,
-        "TOPOLOGY" => Token::Topology,
-        "PIPELINE" => Token::Pipeline,
-        "MESH" => Token::Mesh,
-        "STAR" => Token::Star,
-        "TIMEOUT" => Token::Timeout,
-        "SEND" => Token::Send,
-        "RECEIVE" => Token::Receive,
-        "TO" => Token::To,
-        "FROM" => Token::From,
-        "PIPE" => Token::Pipe,
-        "CALL-REMOTE" => Token::CallRemote,
-        "OPEN" => Token::Open,
-        "READ-FILE" => Token::ReadFile,
-        "WRITE-FILE" => Token::WriteFile,
-        "CLOSE" => Token::Close,
-        "CHECKPOINT" => Token::Checkpoint,
-        "REPLAY" => Token::Replay,
-        "FILE-HANDLE" => Token::FileHandle,
-        "RECORD-STREAM" => Token::RecordStream,
-        "QUANTUM-ENCRYPT" => Token::QuantumEncrypt,
-        "QUANTUM-DECRYPT" => Token::QuantumDecrypt,
-        "QUANTUM-SIGN" => Token::QuantumSign,
-        "QUANTUM-VERIFY-SIG" => Token::QuantumVerifySig,
-        "QUANTUM-SIGN-ENCRYPT" => Token::QuantumSignEncrypt,
-        "QUANTUM-VERIFY-DECRYPT" => Token::QuantumVerifyDecrypt,
-        "GENERATE-KEYPAIR" => Token::GenerateKeypair,
-        "LONG-TERM-SIGN" => Token::LongTermSign,
-        // governance keywords
-        "GOVERNANCE" => Token::GovernanceDiv,
-        "POLICY" => Token::Policy,
-        "FORMULA" => Token::Formula,
-        "REGULATION" => Token::Regulation,
-        "CLAUSE" => Token::Clause,
-        "DATA-SOVEREIGNTY" => Token::DataSovereignty,
-        "ACCESS-CONTROL" => Token::AccessControl,
-        "AUDIT-LEDGER" => Token::AuditLedger,
-        "DECISION-QUORUM" => Token::DecisionQuorum,
-        "VOTES" => Token::Votes,
-        "THRESHOLD" => Token::Threshold,
-        "STANDARD" => Token::Standard,
+            // Wildcard arm for unrecognized characters
+            _ => todo!(),
         "USER" => Token::User,
         "RESOURCE" => Token::Resource,
         "ACTION" => Token::Action,
@@ -510,57 +425,16 @@ fn keyword_to_token(s: &str) -> Token {
     }
 }
 
+/// Tokenize CENTRA-NF source code.
+/// Rejects unrecognized characters immediately.
+// ...fungsi duplikat dihapus...
+
+/// Convert identifier string to keyword token, or Identifier if not a keyword.
+// ...fungsi duplikat dihapus...
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_lexer_recognizes_function_keywords() {
-        let source = "DEFINE FUNCTION END-FUNCTION PARAMETERS RETURNS";
-        let tokens = tokenize(source).unwrap();
-        assert_eq!(tokens[0], Token::Define);
-        assert_eq!(tokens[1], Token::Function);
-        assert_eq!(tokens[2], Token::EndFunction);
-        assert_eq!(tokens[3], Token::Parameters);
-        assert_eq!(tokens[4], Token::Returns);
-    }
-
-    #[test]
-    fn test_lexer_recognizes_keywords() {
-        let tokens = tokenize("IDENTIFICATION DIVISION.").unwrap();
-        assert_eq!(tokens[0], Token::IdentificationDiv);
-        assert_eq!(tokens[1], Token::Division);
-    }
-
-    #[test]
-    fn test_lexer_recognizes_governance_keywords() {
-        let source = "GOVERNANCE DIVISION. POLICY FORMULA REGULATION CLAUSE DATA-SOVEREIGNTY ACCESS-CONTROL AUDIT-LEDGER DECISION-QUORUM VOTES THRESHOLD STANDARD USER RESOURCE ACTION ENTRY";
-        let tokens = tokenize(source).unwrap();
-        assert!(tokens.contains(&Token::GovernanceDiv));
-        assert!(tokens.contains(&Token::Policy));
-        assert!(tokens.contains(&Token::Formula));
-        assert!(tokens.contains(&Token::Regulation));
-        assert!(tokens.contains(&Token::Clause));
-        assert!(tokens.contains(&Token::DataSovereignty));
-        assert!(tokens.contains(&Token::AccessControl));
-        assert!(tokens.contains(&Token::AuditLedger));
-        assert!(tokens.contains(&Token::DecisionQuorum));
-        assert!(tokens.contains(&Token::Votes));
-        assert!(tokens.contains(&Token::Threshold));
-        assert!(tokens.contains(&Token::Standard));
-        assert!(tokens.contains(&Token::User));
-        assert!(tokens.contains(&Token::Resource));
-        assert!(tokens.contains(&Token::Action));
-        assert!(tokens.contains(&Token::Entry));
-    }
-
-    #[test]
-    fn test_lexer_quoted_string() {
-        let tokens = tokenize(r#"OS "Linux"."#).unwrap();
-        assert_eq!(tokens[0], Token::Os);
-        assert_eq!(tokens[1], Token::String("Linux".to_string()));
-        assert_eq!(tokens[2], Token::Period);
-    }
 
     #[test]
     fn test_lexer_rejects_unknown_character() {

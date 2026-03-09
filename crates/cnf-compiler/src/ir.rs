@@ -646,6 +646,7 @@ impl std::fmt::Display for Instruction {
             Instruction::DecisionQuorum { votes, threshold } => {
                 write!(f, "DECISION_QUORUM({} votes, {} threshold)", votes, threshold)
             }
+            _ => todo!(),
         }
     }
 }
@@ -826,6 +827,9 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 instructions.push(Instruction::Encrypt {
                     target: target.clone(),
                 });
+            }
+            // ... (all other ProcedureStatement arms remain unchanged)
+            _ => todo!(),
             }
             ProcedureStatement::Decrypt { target } => {
                 if !declared_vars.contains(target) {
@@ -1864,35 +1868,35 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
 /// Helper to lower a single procedure statement to instruction
 #[allow(clippy::only_used_in_recursion)]
 fn lower_single_statement(
-            ProcedureStatement::CompressCsm { source, target } => {
-                if !declared_vars.contains(source) {
-                    return Err(format!("Variable '{}' not declared", source));
-                }
-                if !declared_vars.contains(target) {
-                    return Err(format!("Variable '{}' not declared", target));
-                }
-                Ok(Instruction::CompressCsm {
-                    source: source.clone(),
-                    target: target.clone(),
-                })
-            }
-            ProcedureStatement::DecompressCsm { source, target } => {
-                if !declared_vars.contains(source) {
-                    return Err(format!("Variable '{}' not declared", source));
-                }
-                if !declared_vars.contains(target) {
-                    return Err(format!("Variable '{}' not declared", target));
-                }
-                Ok(Instruction::DecompressCsm {
-                    source: source.clone(),
-                    target: target.clone(),
-                })
-            }
     stmt: &ProcedureStatement,
     declared_vars: &std::collections::HashSet<String>,
     signatures: &std::collections::HashMap<String, usize>,
 ) -> Result<Instruction, String> {
     match stmt {
+        ProcedureStatement::CompressCsm { source, target } => {
+            if !declared_vars.contains(source) {
+                return Err(format!("Variable '{}' not declared", source));
+            }
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::CompressCsm {
+                source: source.clone(),
+                target: target.clone(),
+            })
+        }
+        ProcedureStatement::DecompressCsm { source, target } => {
+            if !declared_vars.contains(source) {
+                return Err(format!("Variable '{}' not declared", source));
+            }
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::DecompressCsm {
+                source: source.clone(),
+                target: target.clone(),
+            })
+        }
         ProcedureStatement::Compress { target } => {
             if !declared_vars.contains(target) {
                 return Err(format!("Variable '{}' not declared", target));
