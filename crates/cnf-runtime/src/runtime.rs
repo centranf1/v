@@ -1,116 +1,119 @@
 use serde_json_main as serde_json;
 use serde_main as serde;
 use cobol_protocol_v154::compress_csm;
-use cobol_protocol_v154::decompress_csm;
-use cobol_protocol_v154::dictionary::CsmDictionary;
-// Execute COMPRESS-CSM instruction.
-impl Runtime {
-    pub fn dispatch_compress_csm(&mut self, source: &str, target: &str) -> Result<(), CnfError> {
-        let dict = self.csm_dict.as_ref().ok_or_else(|| CnfError::RuntimeError("CSM dictionary not loaded".to_string()))?;
-        let buf = self.get_buffer(source)?;
-        let compressed = compress_csm(buf, dict).map_err(|e| CnfError::CompressionFailed(format!("CSM: {e:?}")))?;
-        self.add_buffer(target.to_string(), compressed);
-        Ok(())
-    }
+// ...existing code...
 
-    // Execute DECOMPRESS-CSM instruction.
-    pub fn dispatch_decompress_csm(&mut self, source: &str, target: &str) -> Result<(), CnfError> {
-        let dict = self.csm_dict.as_ref().ok_or_else(|| CnfError::RuntimeError("CSM dictionary not loaded".to_string()))?;
-        let buf = self.get_buffer(source)?;
-        let decompressed = decompress_csm(buf, dict).map_err(|e| CnfError::CompressionFailed(format!("CSM: {e:?}")))?;
-        self.add_buffer(target.to_string(), decompressed);
+
+
+// === TypeValidator trait dan implementasi (module scope, benar-benar paling bawah file) ===
+pub trait TypeValidator {
+    fn validate(&self, data: &[u8]) -> Result<(), CnfError>;
+}
+
+pub struct JsonTypeValidator;
+pub struct CsvTypeValidator;
+pub struct XmlTypeValidator;
+
+impl TypeValidator for JsonTypeValidator {
+    fn validate(&self, data: &[u8]) -> Result<(), CnfError> {
+        let _text = std::str::from_utf8(data).map_err(|_| {
+            CnfError::InvalidInstruction("invalid UTF-8 for JSON validation".into())
+        })?;
+        let mut brace_depth = 0;
+        let mut in_string = false;
+        let mut escape_next = false;
+        for &byte in data {
+            if escape_next {
+                escape_next = false;
+                continue;
+            }
+            match byte {
+                b'\\' if in_string => escape_next = true,
+                b'"' if !escape_next => in_string = !in_string,
+                b'{' if !in_string => brace_depth += 1,
+                b'}' if !in_string => {
+                    brace_depth -= 1;
+                    if brace_depth < 0 {
+                        return Err(CnfError::InvalidInstruction("unmatched closing brace in JSON".into()));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if brace_depth != 0 {
+            return Err(CnfError::InvalidInstruction("unmatched opening brace in JSON".into()));
+        }
+        if in_string {
+            return Err(CnfError::InvalidInstruction("unterminated string in JSON".into()));
+        }
         Ok(())
     }
 }
-// Runtime — Dispatch IR instructions to concrete operations.
-//
-// Main execution engine. Manages buffers and delegates to protocol/security crates.
 
-
-use crate::control_flow::{CallStack, Frame, ScopeManager};
-use crate::dag::Dag;
-use crate::scheduler::Scheduler;
-use cnf_compiler::ir::Instruction;
-use std::collections::HashMap;
-use cnf_governance::{policy_engine::PolicyEngine, data_sovereignty::SovereigntyChecker, access_control::AccessControl, audit_authority::AuditLedger, regulatory::{RegulationSet, Standard}};
-use cnf_governance::policy_engine::ExecutionTrace;
-use cnf_governance::error::CnfGovernanceError;
-
-#[cfg(feature = "quantum")]
-use cnf_quantum::{
-    dilithium_sign, dilithium_verify, generate_dilithium_keypair, generate_kyber_keypair,
-    generate_sphincs_keypair, quantum_decrypt, quantum_encrypt, quantum_sign_and_encrypt,
-    quantum_verify_and_decrypt, sphincs_sign, sphincs_verify, DilithiumSignature,
-    QuantumEncryptedBlob,
-};
-
-#[cfg(feature = "network")]
-use cnf_network::NetworkNode;
-
-#[derive(Debug, Clone)]
-pub enum CnfError {
-    BufferNotFound(String),
-    CompressionFailed(String),
-    VerificationFailed(String),
-    EncryptionFailed(String),
-    DecryptionFailed(String),
-    InvalidInstruction(String),
-    RuntimeError(String),
-    IoError(String),
-    UnknownAlgorithm(String),
-    QuantumNotEnabled,
-    SignatureVerificationFailed(String),
-    #[cfg(feature = "network")]
-    NetworkNotInitialized,
-    #[cfg(feature = "verifier")]
-    VerifierNotInitialized,
-    #[cfg(feature = "verifier")]
-    AuditChainNotInitialized,
-    #[cfg(feature = "verifier")]
-    PreconditionFailed(String),
-    #[cfg(feature = "verifier")]
-    PostconditionFailed(String),
-    #[cfg(feature = "verifier")]
-    InvariantViolated(String),
-    #[cfg(feature = "verifier")]
-    ProofNotFound(String),
-    #[cfg(feature = "verifier")]
-    AssertionFailed(String),
-    #[cfg(feature = "verifier")]
-    AuditChainError(String),
+impl TypeValidator for CsvTypeValidator {
+    fn validate(&self, data: &[u8]) -> Result<(), CnfError> {
+        let text = std::str::from_utf8(data)
+            .map_err(|_| CnfError::InvalidInstruction("invalid UTF-8 for CSV validation".into()))?;
+        if let Some(first_line) = text.lines().next() {
+            if !first_line.contains(',') {
+                return Err(CnfError::InvalidInstruction("CSV missing header row with comma separator".into()));
+            }
+        } else {
+            return Err(CnfError::InvalidInstruction("CSV file is empty".into()));
+        }
+        Ok(())
+    }
 }
 
+impl TypeValidator for XmlTypeValidator {
+    fn validate(&self, data: &[u8]) -> Result<(), CnfError> {
+        let _text = std::str::from_utf8(data)
+            .map_err(|_| CnfError::InvalidInstruction("invalid UTF-8 for XML validation".into()))?;
+        let mut tag_stack = Vec::new();
+        let mut in_tag = false;
+        let mut current_tag = String::new();
+        for &byte in data {
+            match byte {
+                b'<' => {
+                    in_tag = true;
+                    current_tag.clear();
+                }
+                b'>' => {
+                    if in_tag {
+                        if current_tag.starts_with('/') {
+                            if let Some(expected_tag) = current_tag.strip_prefix('/') {
+                                let expected_tag = expected_tag.to_string();
+                                if let Some(opening_tag) = tag_stack.pop() {
+                                    if opening_tag != expected_tag {
+                                        return Err(CnfError::InvalidInstruction(format!("XML tag mismatch: expected </{}>, got </{}>", opening_tag, expected_tag)));
+                                    }
+                                } else {
+                                    return Err(CnfError::InvalidInstruction(format!("XML unexpected closing tag: </{}>", expected_tag)));
+                                }
+                            }
+                        } else if !current_tag.is_empty() && !current_tag.starts_with('!') && !current_tag.starts_with('?') {
+                            tag_stack.push(current_tag.clone());
+                        }
+                        in_tag = false;
+                    }
+                }
+                _ if in_tag => {
+                    if byte.is_ascii_alphanumeric() || byte == b'/' || byte == b'!' || byte == b'?'{
+                        current_tag.push(byte as char);
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !tag_stack.is_empty() {
+            return Err(CnfError::InvalidInstruction(format!("XML unclosed tags: {:?}", tag_stack)));
+        }
+        Ok(())
+    }
+}
 impl std::fmt::Display for CnfError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CnfError::BufferNotFound(name) => write!(f, "Buffer '{}' not found", name),
-            CnfError::CompressionFailed(msg) => write!(f, "Compression failed: {}", msg),
-            CnfError::VerificationFailed(msg) => write!(f, "Verification failed: {}", msg),
-            CnfError::InvalidInstruction(msg) => write!(f, "Invalid instruction: {}", msg),
-            CnfError::EncryptionFailed(msg) => write!(f, "Encryption failed: {}", msg),
-            CnfError::DecryptionFailed(msg) => write!(f, "Decryption failed: {}", msg),
-            CnfError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
-            CnfError::IoError(msg) => write!(f, "I/O error: {}", msg),
-            CnfError::UnknownAlgorithm(algo) => write!(f, "Unknown algorithm: {}", algo),
-            CnfError::QuantumNotEnabled => write!(f, "Quantum feature not enabled"),
-            CnfError::SignatureVerificationFailed(msg) => {
-                write!(f, "Quantum signature verification failed: {}", msg)
-            }
-            #[cfg(feature = "network")]
-            CnfError::NetworkNotInitialized => {
-                write!(f, "Network not initialized - enable 'network' feature")
-            }
-            #[cfg(feature = "verifier")]
-            CnfError::VerifierNotInitialized => {
-                write!(
-                    f,
-                    "Verifier not initialized - enable 'verifier' feature and call set_verifier()"
-                )
-            }
-            #[cfg(feature = "verifier")]
-            CnfError::AuditChainNotInitialized => {
-                write!(f, "Audit chain not initialized - call enable_audit_chain()")
-            }
             #[cfg(feature = "verifier")]
             CnfError::PreconditionFailed(location) => {
                 write!(f, "L7.001.F Precondition failed at {}", location)
@@ -135,6 +138,7 @@ impl std::fmt::Display for CnfError {
             CnfError::AuditChainError(msg) => {
                 write!(f, "Audit chain error: {}", msg)
             }
+            _ => write!(f, "{}", self),
         }
     }
 }
@@ -376,8 +380,13 @@ impl Runtime {
     }
 
     /// Execute TRANSCODE instruction (placeholder).
+    /// Zero-knowledge check stub: validasi buffer sebelum transcode.
     fn dispatch_transcode(&mut self, target: &str, output_type: &str) -> Result<(), CnfError> {
         let buf = self.get_buffer_mut(target)?;
+        // Zero-knowledge stub: fail-fast jika buffer terlalu besar (simulasi overflow)
+        if buf.len() > 1024 * 1024 {
+            return Err(CnfError::InvalidInstruction("Zero-knowledge: buffer terlalu besar, potensi overflow".into()));
+        }
         let input = String::from_utf8(buf.clone()).map_err(|_| CnfError::InvalidInstruction("non-utf8 buffer".into()))?;
         let converted = match output_type.to_ascii_uppercase().as_str() {
             "CSV" => {
@@ -470,9 +479,11 @@ impl Runtime {
     }
 
     /// Execute MERGE instruction by concatenating buffers.
+    ///
+    /// Memory safety: gunakan Vec<String> (owned) agar tidak ada borrow conflict dan overhead.
     fn dispatch_merge(&mut self, targets: &[String], output_name: &str) -> Result<(), CnfError> {
         let mut combined = Vec::new();
-        for t in targets {
+        for t in targets.iter() {
             let part = self.get_buffer(t)?;
             combined.extend_from_slice(part);
         }
@@ -533,23 +544,27 @@ impl Runtime {
         }
     }
 
-    /// Validate JSON format manually (no external crates).
-    fn validate_json(&self, data: &[u8]) -> Result<(), CnfError> {
+pub trait TypeValidator {
+    fn validate(&self, data: &[u8]) -> Result<(), CnfError>;
+}
+
+pub struct JsonTypeValidator;
+pub struct CsvTypeValidator;
+pub struct XmlTypeValidator;
+
+impl TypeValidator for JsonTypeValidator {
+    fn validate(&self, data: &[u8]) -> Result<(), CnfError> {
         let _text = std::str::from_utf8(data).map_err(|_| {
             CnfError::InvalidInstruction("invalid UTF-8 for JSON validation".into())
         })?;
-
-        // Simple JSON validation: check balanced braces and basic structure
         let mut brace_depth = 0;
         let mut in_string = false;
         let mut escape_next = false;
-
         for &byte in data {
             if escape_next {
                 escape_next = false;
                 continue;
             }
-
             match byte {
                 b'\\' if in_string => escape_next = true,
                 b'"' if !escape_next => in_string = !in_string,
@@ -557,59 +572,44 @@ impl Runtime {
                 b'}' if !in_string => {
                     brace_depth -= 1;
                     if brace_depth < 0 {
-                        return Err(CnfError::InvalidInstruction(
-                            "unmatched closing brace in JSON".into(),
-                        ));
+                        return Err(CnfError::InvalidInstruction("unmatched closing brace in JSON".into()));
                     }
                 }
                 _ => {}
             }
         }
-
         if brace_depth != 0 {
-            return Err(CnfError::InvalidInstruction(
-                "unmatched opening brace in JSON".into(),
-            ));
+            return Err(CnfError::InvalidInstruction("unmatched opening brace in JSON".into()));
         }
-
         if in_string {
-            return Err(CnfError::InvalidInstruction(
-                "unterminated string in JSON".into(),
-            ));
+            return Err(CnfError::InvalidInstruction("unterminated string in JSON".into()));
         }
-
         Ok(())
     }
+}
 
-    /// Validate CSV format manually (no external crates).
-    fn validate_csv(&self, data: &[u8]) -> Result<(), CnfError> {
+impl TypeValidator for CsvTypeValidator {
+    fn validate(&self, data: &[u8]) -> Result<(), CnfError> {
         let text = std::str::from_utf8(data)
             .map_err(|_| CnfError::InvalidInstruction("invalid UTF-8 for CSV validation".into()))?;
-
-        // Check for header row: look for comma in first line
         if let Some(first_line) = text.lines().next() {
             if !first_line.contains(',') {
-                return Err(CnfError::InvalidInstruction(
-                    "CSV missing header row with comma separator".into(),
-                ));
+                return Err(CnfError::InvalidInstruction("CSV missing header row with comma separator".into()));
             }
         } else {
             return Err(CnfError::InvalidInstruction("CSV file is empty".into()));
         }
-
         Ok(())
     }
+}
 
-    /// Validate XML format manually (no external crates).
-    fn validate_xml(&self, data: &[u8]) -> Result<(), CnfError> {
+impl TypeValidator for XmlTypeValidator {
+    fn validate(&self, data: &[u8]) -> Result<(), CnfError> {
         let _text = std::str::from_utf8(data)
             .map_err(|_| CnfError::InvalidInstruction("invalid UTF-8 for XML validation".into()))?;
-
-        // Simple XML validation: check for matching opening/closing tags
         let mut tag_stack = Vec::new();
         let mut in_tag = false;
         let mut current_tag = String::new();
-
         for &byte in data {
             match byte {
                 b'<' => {
@@ -619,52 +619,36 @@ impl Runtime {
                 b'>' => {
                     if in_tag {
                         if current_tag.starts_with('/') {
-                            // Closing tag
                             if let Some(expected_tag) = current_tag.strip_prefix('/') {
                                 let expected_tag = expected_tag.to_string();
                                 if let Some(opening_tag) = tag_stack.pop() {
                                     if opening_tag != expected_tag {
-                                        return Err(CnfError::InvalidInstruction(format!(
-                                            "XML tag mismatch: expected </{}>, got </{}>",
-                                            opening_tag, expected_tag
-                                        )));
+                                        return Err(CnfError::InvalidInstruction(format!("XML tag mismatch: expected </{}>, got </{}>", opening_tag, expected_tag)));
                                     }
                                 } else {
-                                    return Err(CnfError::InvalidInstruction(format!(
-                                        "XML unexpected closing tag: </{}>",
-                                        expected_tag
-                                    )));
+                                    return Err(CnfError::InvalidInstruction(format!("XML unexpected closing tag: </{}>", expected_tag)));
                                 }
                             }
-                        } else if !current_tag.is_empty()
-                            && !current_tag.starts_with('!')
-                            && !current_tag.starts_with('?')
-                        {
-                            // Opening tag (skip comments and processing instructions)
+                        } else if !current_tag.is_empty() && !current_tag.starts_with('!') && !current_tag.starts_with('?') {
                             tag_stack.push(current_tag.clone());
                         }
                         in_tag = false;
                     }
                 }
                 _ if in_tag => {
-                    if byte.is_ascii_alphanumeric() || byte == b'/' || byte == b'!' || byte == b'?'
-                    {
+                    if byte.is_ascii_alphanumeric() || byte == b'/' || byte == b'!' || byte == b'?'{
                         current_tag.push(byte as char);
                     }
                 }
                 _ => {}
             }
         }
-
         if !tag_stack.is_empty() {
-            return Err(CnfError::InvalidInstruction(format!(
-                "XML unclosed tags: {:?}",
-                tag_stack
-            )));
+            return Err(CnfError::InvalidInstruction(format!("XML unclosed tags: {:?}", tag_stack)));
         }
-
         Ok(())
     }
+}
 
     /// Execute EXTRACT instruction.
     ///
@@ -843,7 +827,13 @@ impl Runtime {
     }
 
     /// Execute CONVERT instruction (stub: append type info).
+    /// Zero-knowledge check stub: validasi buffer sebelum convert.
     fn dispatch_convert(&mut self, target: &str, output_type: &str) -> Result<(), CnfError> {
+        // Zero-knowledge stub: fail-fast jika buffer terlalu besar (simulasi overflow)
+        let buf = self.get_buffer_mut(target)?;
+        if buf.len() > 1024 * 1024 {
+            return Err(CnfError::InvalidInstruction("Zero-knowledge: buffer terlalu besar, potensi overflow".into()));
+        }
         // Untuk demo: CONVERT = panggil TRANSCODE
         self.dispatch_transcode(target, output_type)
     }

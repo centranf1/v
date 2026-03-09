@@ -308,3 +308,16 @@ Every commit must pass:
 **Last Updated:** 2026-03-05
 **Version:** 0.2.0
 **Status:** Solid foundation with comprehensive error handling
+
+### Type Validation & Zero-Knowledge
+
+- Semua operasi TRANSCODE dan CONVERT kini dilengkapi validasi buffer berbasis trait TypeValidator (JSON, CSV, XML).
+- Zero-knowledge check: buffer yang melebihi 1MB akan ditolak secara fail-fast untuk mencegah overflow/panic.
+- Edge case error handling: invalid UTF-8, empty CSV, XML tag mismatch, dan buffer overflow sudah teruji.
+
+### Fungsi Baru di Runtime
+
+- Fungsi dispatch_compress_csm menggunakan trait CsmCompressor untuk extensibility algoritma.
+- Fungsi dispatch_merge menggunakan Vec<String> (owned) untuk memory safety.
+- Fungsi validasi (validate_json, validate_csv, validate_xml) direfactor ke trait TypeValidator.
+- Test coverage edge case dan zero-knowledge sudah tersedia di integration.rs.

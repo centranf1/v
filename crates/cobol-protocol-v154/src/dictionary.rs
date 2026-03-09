@@ -1,3 +1,8 @@
+impl Default for CsmDictionary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 use std::collections::HashMap;
 use std::sync::Arc;
 use sha2::{Digest, Sha256};
@@ -39,8 +44,8 @@ impl CsmDictionary {
         entries.sort_by_key(|(k, _)| *k);
         let mut hasher = Sha256::new();
         for (k, v) in entries {
-            hasher.update(&k.to_be_bytes());
-            hasher.update(&v);
+            hasher.update(k.to_be_bytes());
+            hasher.update(v);
         }
         let result = hasher.finalize();
         let mut arr = [0u8; 32];

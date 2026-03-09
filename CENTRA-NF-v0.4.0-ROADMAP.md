@@ -207,3 +207,9 @@ cnf run file.cnf
 - **I/O Security**: Ensure READ operations are safe and bounded
 - **Performance**: Add benchmarks early to catch regressions
 - **Backward Compatibility**: All v0.3.0 programs must still work
+
+### Kernel Stabilitas & Security Layer
+
+- Sinkronisasi Dispatcher & Runtime, refactor field functions, implementasi CSM trait, validasi memory safety Vec<String>, audit & update test coverage TypeValidator, edge case & zero-knowledge testing.
+- Semua perubahan terdokumentasi di progress_status.md dan docs/specification.md.
+- Benchmarking security layer dilakukan setelah test suite lolos.

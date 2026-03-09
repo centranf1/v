@@ -1331,4 +1331,57 @@ mod integration_tests {
         let ir = result.unwrap();
         assert!(ir.iter().any(|instr| instr.to_string().contains("LENGTH")));
     }
+
+    #[test]
+    fn test_transcode_buffer_overflow_zero_knowledge() {
+        let mut runtime = Runtime::new();
+        // Simulasi buffer besar (1MB+)
+        let big_data = vec![0u8; 1024 * 1024 + 1];
+        runtime.add_buffer("overflow_buf".to_string(), big_data);
+        let result = runtime.dispatch_transcode("overflow_buf", "CSV");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Zero-knowledge"));
+    }
+
+    #[test]
+    fn test_convert_buffer_overflow_zero_knowledge() {
+        let mut runtime = Runtime::new();
+        let big_data = vec![0u8; 1024 * 1024 + 1];
+        runtime.add_buffer("overflow_buf".to_string(), big_data);
+        let result = runtime.dispatch_convert("overflow_buf", "JSON");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Zero-knowledge"));
+    }
+
+    #[test]
+    fn test_type_validator_edge_case_invalid_utf8() {
+        let validator = crate::runtime::JsonTypeValidator;
+        let invalid_utf8 = vec![0xFF, 0xFE, 0xFD];
+        let result = validator.validate(&invalid_utf8);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid UTF-8"));
+    }
+
+    #[test]
+    fn test_type_validator_edge_case_empty_csv() {
+        let validator = crate::runtime::CsvTypeValidator;
+        let empty = vec![];
+        let result = validator.validate(&empty);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("CSV file is empty"));
+    }
+
+    #[test]
+    fn test_type_validator_edge_case_xml_tag_mismatch() {
+        let validator = crate::runtime::XmlTypeValidator;
+        let bad_xml = b"<root><child></root>";
+        let result = validator.validate(bad_xml);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("XML tag mismatch"));
+    }
 }

@@ -28,7 +28,7 @@ pub fn decompress_csm_stream(data: &[u8], _dict: &CsmDictionary) -> Result<Vec<u
     if data.len() < HEADER_LEN + 4 {
         return Err(CsmError::InvalidStream);
     }
-    if &data[0..2] != MAGIC {
+    if data[0..2] != MAGIC {
         return Err(CsmError::InvalidStream);
     }
     if data[2] != VERSION {

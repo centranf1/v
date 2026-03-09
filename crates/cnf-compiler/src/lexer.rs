@@ -12,11 +12,11 @@ pub struct LexError {
     pub message: String,
     pub line: usize,
     pub col: usize,
-    pub context: String, // source snippet around error
-} // <--- Tambahkan ini
+    pub context: String,
+}
 
-impl fmt::Display for LexError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for LexError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "Lexer error at {}:{}: {}\n  | {}",
@@ -29,20 +29,19 @@ impl std::error::Error for LexError {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-        // CSM protocol (v154)
-        MapCsm,
-        CompressCsm,
-        DecompressCsm,
-        DictionaryRef,
-        ProtocolVersion,
-        Density,
+    // CSM protocol (v154)
+    MapCsm,
+    CompressCsm,
+    DecompressCsm,
+    DictionaryRef,
+    ProtocolVersion,
+    Density,
     // Divisions
     IdentificationDiv,
     EnvironmentDiv,
     DataDiv,
     ProcedureDiv,
     VerificationDiv,
-
     // Verification keywords
     PreCondition,
     PostCondition,
@@ -52,7 +51,6 @@ pub enum Token {
     Satisfies,
     AuditLog,
     ComplianceReport,
-
     // Keywords
     Division,
     ProgramId,
@@ -69,27 +67,10 @@ pub enum Token {
     Filter,
     Aggregate,
     Convert,
-    Merge,
     Split,
-    Validate,
-    Extract,
-    Encrypt,
-    Decrypt,
-    As,
-
-    // I/O operations
-    Display,
-    Print,
-    Read,
-
-    // File operations (storage)
-    Open,
-    ReadFile,
-    WriteFile,
     Close,
     Checkpoint,
     Replay,
-
     // Arithmetic operations
     Set,
     Add,
@@ -99,7 +80,6 @@ pub enum Token {
     Max,
     Min,
     Abs,
-
     // String operations
     Concatenate,
     Substring,
@@ -107,7 +87,6 @@ pub enum Token {
     Uppercase,
     Lowercase,
     Trim,
-
     // Control flow
     If,
     Else,
@@ -119,14 +98,12 @@ pub enum Token {
     EndFor,
     EndWhile,
     In,
-
     // Functions
     Define,
     Function,
     EndFunction,
     Parameters,
     Returns,
-
     // Network operations
     Network,
     Node,
@@ -143,7 +120,6 @@ pub enum Token {
     From,
     Pipe,
     CallRemote,
-
     // Data types
     VideoMp4,
     ImageJpg,
@@ -159,7 +135,6 @@ pub enum Token {
     NumberDecimal,
     FileHandle,
     RecordStream,
-
     // Quantum operations (v0.8.0)
     QuantumEncrypt,
     QuantumDecrypt,
@@ -169,7 +144,6 @@ pub enum Token {
     QuantumVerifyDecrypt,
     GenerateKeypair,
     LongTermSign,
-
     // Governance-related (v0.9.0)
     GovernanceDiv,
     Policy,
@@ -187,13 +161,11 @@ pub enum Token {
     Resource,
     Action,
     Entry,
-
     // Signature-related
     Signature,
     Algorithm,
     SignedBy,
     With,
-
     // Literals and punctuation
     Identifier(String),
     String(String),
@@ -201,26 +173,21 @@ pub enum Token {
     Eof,
 }
 
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            // CSM protocol (v154)
             Token::MapCsm => write!(f, "MAP-CSM"),
             Token::CompressCsm => write!(f, "COMPRESS-CSM"),
             Token::DecompressCsm => write!(f, "DECOMPRESS-CSM"),
             Token::DictionaryRef => write!(f, "DICTIONARY-REF"),
             Token::ProtocolVersion => write!(f, "PROTOCOL-VERSION"),
             Token::Density => write!(f, "DENSITY"),
-
-            // Divisions
             Token::IdentificationDiv => write!(f, "IDENTIFICATION DIVISION"),
             Token::EnvironmentDiv => write!(f, "ENVIRONMENT DIVISION"),
             Token::DataDiv => write!(f, "DATA DIVISION"),
             Token::ProcedureDiv => write!(f, "PROCEDURE DIVISION"),
             Token::VerificationDiv => write!(f, "VERIFICATION DIVISION"),
             Token::GovernanceDiv => write!(f, "GOVERNANCE DIVISION"),
-
-            // Verification keywords
             Token::PreCondition => write!(f, "PRE-CONDITION"),
             Token::PostCondition => write!(f, "POST-CONDITION"),
             Token::Invariant => write!(f, "INVARIANT"),
@@ -229,12 +196,127 @@ impl fmt::Display for Token {
             Token::Satisfies => write!(f, "SATISFIES"),
             Token::AuditLog => write!(f, "AUDIT-LOG"),
             Token::ComplianceReport => write!(f, "COMPLIANCE-REPORT"),
-
-            // Keywords
             Token::Division => write!(f, "DIVISION"),
             Token::ProgramId => write!(f, "PROGRAM-ID"),
             Token::Author => write!(f, "AUTHOR"),
             Token::Version => write!(f, "VERSION"),
+            Token::Os => write!(f, "OS"),
+            Token::Arch => write!(f, "ARCH"),
+            Token::RuntimeVersion => write!(f, "RUNTIME-VERSION"),
+            Token::Input => write!(f, "INPUT"),
+            Token::Output => write!(f, "OUTPUT"),
+            Token::Compress => write!(f, "COMPRESS"),
+            Token::VerifyIntegrity => write!(f, "VERIFY-INTEGRITY"),
+            Token::Transcode => write!(f, "TRANSCODE"),
+            Token::Filter => write!(f, "FILTER"),
+            Token::Aggregate => write!(f, "AGGREGATE"),
+            Token::Convert => write!(f, "CONVERT"),
+            Token::Split => write!(f, "SPLIT"),
+            Token::Close => write!(f, "CLOSE"),
+            Token::Checkpoint => write!(f, "CHECKPOINT"),
+            Token::Replay => write!(f, "REPLAY"),
+            Token::Set => write!(f, "SET"),
+            Token::Add => write!(f, "ADD"),
+            Token::Subtract => write!(f, "SUBTRACT"),
+            Token::Multiply => write!(f, "MULTIPLY"),
+            Token::Divide => write!(f, "DIVIDE"),
+            Token::Max => write!(f, "MAX"),
+            Token::Min => write!(f, "MIN"),
+            Token::Abs => write!(f, "ABS"),
+            Token::Concatenate => write!(f, "CONCATENATE"),
+            Token::Substring => write!(f, "SUBSTRING"),
+            Token::Length => write!(f, "LENGTH"),
+            Token::Uppercase => write!(f, "UPPERCASE"),
+            Token::Lowercase => write!(f, "LOWERCASE"),
+            Token::Trim => write!(f, "TRIM"),
+            Token::If => write!(f, "IF"),
+            Token::Else => write!(f, "ELSE"),
+            Token::Then => write!(f, "THEN"),
+            Token::EndIf => write!(f, "END-IF"),
+            Token::For => write!(f, "FOR"),
+            Token::While => write!(f, "WHILE"),
+            Token::Do => write!(f, "DO"),
+            Token::EndFor => write!(f, "END-FOR"),
+            Token::EndWhile => write!(f, "END-WHILE"),
+            Token::In => write!(f, "IN"),
+            Token::Define => write!(f, "DEFINE"),
+            Token::Function => write!(f, "FUNCTION"),
+            Token::EndFunction => write!(f, "END-FUNCTION"),
+            Token::Parameters => write!(f, "PARAMETERS"),
+            Token::Returns => write!(f, "RETURNS"),
+            Token::Network => write!(f, "NETWORK"),
+            Token::Node => write!(f, "NODE"),
+            Token::At => write!(f, "AT"),
+            Token::Self_ => write!(f, "SELF"),
+            Token::Topology => write!(f, "TOPOLOGY"),
+            Token::Pipeline => write!(f, "PIPELINE"),
+            Token::Mesh => write!(f, "MESH"),
+            Token::Star => write!(f, "STAR"),
+            Token::Timeout => write!(f, "TIMEOUT"),
+            Token::Send => write!(f, "SEND"),
+            Token::Receive => write!(f, "RECEIVE"),
+            Token::To => write!(f, "TO"),
+            Token::From => write!(f, "FROM"),
+            Token::Pipe => write!(f, "PIPE"),
+            Token::CallRemote => write!(f, "CALL-REMOTE"),
+            Token::VideoMp4 => write!(f, "VIDEO-MP4"),
+            Token::ImageJpg => write!(f, "IMAGE-JPG"),
+            Token::FinancialDecimal => write!(f, "FINANCIAL-DECIMAL"),
+            Token::AudioWav => write!(f, "AUDIO-WAV"),
+            Token::CsvTable => write!(f, "CSV-TABLE"),
+            Token::BinaryBlob => write!(f, "BINARY-BLOB"),
+            Token::JsonObject => write!(f, "JSON-OBJECT"),
+            Token::XmlDocument => write!(f, "XML-DOCUMENT"),
+            Token::ParquetTable => write!(f, "PARQUET-TABLE"),
+            Token::TextString => write!(f, "TEXT-STRING"),
+            Token::NumberInteger => write!(f, "NUMBER-INTEGER"),
+            Token::NumberDecimal => write!(f, "NUMBER-DECIMAL"),
+            Token::FileHandle => write!(f, "FILE-HANDLE"),
+            Token::RecordStream => write!(f, "RECORD-STREAM"),
+            Token::QuantumEncrypt => write!(f, "QUANTUM-ENCRYPT"),
+            Token::QuantumDecrypt => write!(f, "QUANTUM-DECRYPT"),
+            Token::QuantumSign => write!(f, "QUANTUM-SIGN"),
+            Token::QuantumVerifySig => write!(f, "QUANTUM-VERIFY-SIG"),
+            Token::QuantumSignEncrypt => write!(f, "QUANTUM-SIGN-ENCRYPT"),
+            Token::QuantumVerifyDecrypt => write!(f, "QUANTUM-VERIFY-DECRYPT"),
+            Token::GenerateKeypair => write!(f, "GENERATE-KEYPAIR"),
+            Token::LongTermSign => write!(f, "LONG-TERM-SIGN"),
+            Token::GovernanceDiv => write!(f, "GOVERNANCE DIVISION"),
+            Token::Policy => write!(f, "POLICY"),
+            Token::Formula => write!(f, "FORMULA"),
+            Token::Regulation => write!(f, "REGULATION"),
+            Token::Clause => write!(f, "CLAUSE"),
+            Token::DataSovereignty => write!(f, "DATA-SOVEREIGNTY"),
+            Token::AccessControl => write!(f, "ACCESS-CONTROL"),
+            Token::AuditLedger => write!(f, "AUDIT-LEDGER"),
+            Token::DecisionQuorum => write!(f, "DECISION-QUORUM"),
+            Token::Votes => write!(f, "VOTES"),
+            Token::Threshold => write!(f, "THRESHOLD"),
+            Token::Standard => write!(f, "STANDARD"),
+            Token::User => write!(f, "USER"),
+            Token::Resource => write!(f, "RESOURCE"),
+            Token::Action => write!(f, "ACTION"),
+            Token::Entry => write!(f, "ENTRY"),
+            Token::Signature => write!(f, "SIGNATURE"),
+            Token::Algorithm => write!(f, "ALGORITHM"),
+            Token::SignedBy => write!(f, "SIGNED-BY"),
+            Token::With => write!(f, "WITH"),
+            Token::Identifier(s) => write!(f, "IDENTIFIER({})", s),
+            Token::String(s) => write!(f, "STRING({})", s),
+            Token::Period => write!(f, "."),
+            Token::Eof => write!(f, "EOF"),
+        }
+}
+
+pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
+    let mut tokens = Vec::new();
+    let mut chars = source.chars().peekable();
+    while let Some(&_ch) = chars.peek() {
+        todo!()
+    }
+    tokens.push(Token::Eof);
+    Ok(tokens)
+}
             Token::Os => write!(f, "OS"),
             Token::Arch => write!(f, "ARCH"),
             Token::RuntimeVersion => write!(f, "RUNTIME-VERSION"),
@@ -376,10 +458,7 @@ impl fmt::Display for Token {
             Token::Period => write!(f, "."),
             Token::Eof => write!(f, "EOF"),
         }
-    }
-}
-
-// ...existing code...
+    // ...existing code...
 
 /// Tokenize CENTRA-NF source code.
 /// Rejects unrecognized characters immediately.
@@ -387,40 +466,15 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut chars = source.chars().peekable();
 
-    while let Some(&ch) = chars.peek() {
-        match ch {
-            // ...existing code...
-            _ => todo!(),
-        }
+    while let Some(&_ch) = chars.peek() {
+        todo!()
     }
 
     tokens.push(Token::Eof);
     Ok(tokens)
 }
 
-/// Convert identifier string to keyword token, or Identifier if not a keyword.
-fn keyword_to_token(s: &str) -> Token {
-    match s.to_uppercase().as_str() {
-        // CSM protocol v154 keywords
-        "MAP-CSM" => Token::MapCsm,
-        "COMPRESS-CSM" => Token::CompressCsm,
-        "DECOMPRESS-CSM" => Token::DecompressCsm,
-        "DICTIONARY-REF" => Token::DictionaryRef,
-        "PROTOCOL-VERSION" => Token::ProtocolVersion,
-        "DENSITY" => Token::Density,
-        "IDENTIFICATION" => Token::IdentificationDiv,
-        "ENVIRONMENT" => Token::EnvironmentDiv,
-        "USER" => Token::User,
-        "RESOURCE" => Token::Resource,
-        "ACTION" => Token::Action,
-        "ENTRY" => Token::Entry,
-        "SIGNATURE" => Token::Signature,
-        "ALGORITHM" => Token::Algorithm,
-        "SIGNED-BY" => Token::SignedBy,
-        "WITH" => Token::With,
-        _ => Token::Identifier(s.to_string()),
-    }
-}
+// ...existing code...
 
 /// Tokenize CENTRA-NF source code.
 /// Rejects unrecognized characters immediately.
