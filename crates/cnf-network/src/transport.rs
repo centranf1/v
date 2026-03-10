@@ -1,3 +1,32 @@
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+
+    #[test]
+    fn config_from_env_missing() {
+        unsafe { std::env::remove_var("CENTRA_NF_CLUSTER_TOKEN"); }
+        assert!(TransportConfig::from_env().is_err());
+    }
+
+    #[test]
+    fn config_from_env_too_short() {
+        unsafe { std::env::set_var("CENTRA_NF_CLUSTER_TOKEN", "short"); }
+        assert!(TransportConfig::from_env().is_err());
+    }
+
+    #[test]
+    fn config_from_env_valid() {
+        unsafe { std::env::set_var("CENTRA_NF_CLUSTER_TOKEN", "valid_token_16ch!"); }
+        assert!(TransportConfig::from_env().is_ok());
+    }
+
+    #[test]
+    fn frame_too_large_rejected() {
+        let mut buf = (128u32 * 1024 * 1024).to_be_bytes().to_vec();
+        buf.extend_from_slice(&[0u8; 4]);
+        assert!(matches!(NetworkFrame::deserialize(&buf), Err(CnfNetworkError::FrameTooLarge(_))));
+    }
+}
 //! Network transport layer for distributed CENTRA-NF
 //!
 //! Implements NetworkFrame format with CRC32 checksums and message routing.
@@ -11,13 +40,9 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 
-// TLS support (kerangka, implementasi menyusul)
-#[allow(unused_imports)]
-use tokio_rustls::rustls::{ClientConfig, ServerConfig};
-#[allow(unused_imports)]
-use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
-#[allow(unused_imports)]
-use std::sync::Arc as StdArc;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+use rand::{RngCore, rngs::OsRng};
 
 /// Jenis koneksi stream (plain TCP atau TLS)
 pub enum StreamType {
@@ -25,21 +50,21 @@ pub enum StreamType {
     #[allow(dead_code)]
     Tls(tokio_rustls::server::TlsStream<TcpStream>),
 }
-// Implement std::io::Write for StreamType
-impl Write for StreamType {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        match self {
-            StreamType::Plain(ref mut s) => s.write(buf),
-            #[allow(unreachable_patterns)]
-            _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "TLS not implemented")),
-        }
+#[derive(Clone, Debug, Default)]
+pub struct TransportConfig {
+    pub auth_token: Vec<u8>,
+    pub max_frame_bytes: usize,
+}
+
+impl TransportConfig {
+    pub fn new(token: impl Into<Vec<u8>>) -> Self {
+        Self { auth_token: token.into(), max_frame_bytes: 64 * 1024 * 1024 }
     }
-    fn flush(&mut self) -> std::io::Result<()> {
-        match self {
-            StreamType::Plain(ref mut s) => s.flush(),
-            #[allow(unreachable_patterns)]
-            _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "TLS not implemented")),
-        }
+    pub fn from_env() -> Result<Self, CnfNetworkError> {
+        let t = std::env::var("CENTRA_NF_CLUSTER_TOKEN")
+            .map_err(|_| CnfNetworkError::AuthenticationFailed)?;
+        if t.len() < 16 { return Err(CnfNetworkError::AuthenticationFailed); }
+        Ok(Self::new(t.into_bytes()))
     }
 }
 
@@ -216,7 +241,7 @@ impl TcpTransport {
         })?;
 
         let mut conns = self.connections.lock().unwrap();
-        conns.insert(node_id, StreamType::Plain(stream));
+        conns.insert(node_id, TcpStream::Plain(stream));
         Ok(())
     }
 
@@ -251,6 +276,8 @@ impl TcpTransport {
 
         match listener.accept() {
             Ok((mut stream, _addr)) => {
+                Self::server_handshake(&mut stream, &self.config)
+                    .map_err(|_| CnfNetworkError::AuthenticationFailed)?;
                 // Read frame
                 let mut size_buf = [0u8; 4];
                 stream

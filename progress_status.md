@@ -1,3 +1,23 @@
+[2026-03-10]
+Change:
+- Add AuthenticationFailed, FrameTooLarge to CnfNetworkError
+- Add hmac, sha2, rand dependencies
+- Remove TLS stub, refactor TcpTransport, add TransportConfig
+- Implement HMAC handshake (server/client), connect_authenticated
+- Enforce frame size limit in deserialize
+- Add auth and frame tests
+
+Scope:
+- crates/cnf-network/src/error.rs
+- crates/cnf-network/Cargo.toml
+- crates/cnf-network/src/transport.rs
+- progress_status.md
+
+Status:
+- completed
+
+Notes:
+- Removes broken TLS, enforces fail-fast, adds deterministic handshake, frame boundary, test coverage
 [2026-03-09]
 Change:
 - Add EncryptFailed to CnfCryptoError, implement Display/Error
