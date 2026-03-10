@@ -57,7 +57,7 @@ pub fn format_display(
     Ok(result)
 }
 
-/// Parse a variable expression like {VAR}, {VAR:hex}, {VAR:pad:5}
+/// Parse a variable expression like {VAR}, {VAR:hex}, {VAR:left:5}
 fn parse_variable_expr(
     chars: &mut std::iter::Peekable<std::str::Chars>,
     variables: &HashMap<String, String>,
@@ -77,10 +77,33 @@ fn parse_variable_expr(
         return Err("Empty variable name in format string".to_string());
     }
 
-    // Split by : to get variable name and format specifiers
+    // Parse variable name and format specifiers
     let parts: Vec<&str> = expr.split(':').collect();
+    if parts.is_empty() {
+        return Err("Invalid variable expression".to_string());
+    }
+
     let var_name = parts[0];
-    let format_specs = if parts.len() > 1 { &parts[1..] } else { &[] };
+
+    // Parse format specifiers, handling those with parameters
+    let mut format_specs = Vec::new();
+    let mut i = 1;
+    while i < parts.len() {
+        let spec = parts[i];
+        // Check if this specifier needs a parameter
+        if matches!(spec, "left" | "right" | "center" | "pad") {
+            if i + 1 < parts.len() {
+                // Combine specifier with its parameter
+                format_specs.push(format!("{}:{}", spec, parts[i + 1]));
+                i += 2;
+            } else {
+                return Err(format!("Format specifier '{}' requires a parameter", spec));
+            }
+        } else {
+            format_specs.push(spec.to_string());
+            i += 1;
+        }
+    }
 
     // Get variable value
     let mut value = variables
@@ -90,7 +113,7 @@ fn parse_variable_expr(
 
     // Apply format specifiers in order
     for spec in format_specs {
-        value = apply_format_spec(&value, spec)?;
+        value = apply_format_spec(&value, &spec)?;
     }
 
     Ok(value)
@@ -108,8 +131,9 @@ fn apply_format_spec(value: &str, spec: &str) -> Result<String, String> {
             Ok(format!(
                 "0x{}",
                 value
-                    .chars()
-                    .map(|c| format!("{:02x}", c as u8))
+                    .as_bytes()
+                    .iter()
+                    .map(|&b| format!("{:02x}", b))
                     .collect::<String>()
             ))
         }
@@ -173,6 +197,8 @@ fn apply_format_spec(value: &str, spec: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_simple_variable_substitution() {
@@ -279,5 +305,116 @@ mod tests {
 
         let result = format_display("{TEXT:upper:left:8}", &vars).unwrap();
         assert_eq!(result, "HELLO   ");
+    }
+
+    // Property-based tests for comprehensive coverage
+    proptest! {
+        #[test]
+        fn test_format_display_arbitrary_text(text in "\\PC*", width in 1..100usize) {
+            let mut vars = HashMap::new();
+            vars.insert("VAR".to_string(), text.clone());
+
+            // Test basic substitution
+            let result = format_display("{VAR}", &vars).unwrap();
+            prop_assert_eq!(result, text.clone());
+
+            // Test padding
+            let pad_result = format_display(&format!("{{VAR:pad:{}}}", width), &vars).unwrap();
+            let text_chars = text.chars().count();
+            prop_assert!(pad_result.chars().count() >= text_chars);
+            prop_assert!(pad_result.starts_with(&text));
+
+            // Test left alignment
+            let left_result = format_display(&format!("{{VAR:left:{}}}", width), &vars).unwrap();
+            prop_assert_eq!(left_result.chars().count(), width.max(text_chars));
+            prop_assert!(left_result.starts_with(&text));
+
+            // Test right alignment
+            let right_result = format_display(&format!("{{VAR:right:{}}}", width), &vars).unwrap();
+            prop_assert_eq!(right_result.chars().count(), width.max(text_chars));
+            prop_assert!(right_result.ends_with(&text));
+        }
+
+        #[test]
+        fn test_format_specifier_chains(text in "\\PC*", count in 1..5usize) {
+            let mut vars = HashMap::new();
+            vars.insert("VAR".to_string(), text.clone());
+
+            // Generate a chain of format specifiers
+            let mut spec_chain = String::new();
+            for i in 0..count {
+                match i % 4 {
+                    0 => spec_chain.push_str("upper:"),
+                    1 => spec_chain.push_str("lower:"),
+                    2 => spec_chain.push_str("left:10:"),
+                    3 => spec_chain.push_str("right:15:"),
+                    _ => unreachable!("i % 4 should always be 0-3"),
+                }
+            }
+            // Remove trailing colon
+            if spec_chain.ends_with(':') {
+                spec_chain.pop();
+            }
+
+            let template = format!("{{VAR:{}}}", spec_chain);
+            let result = format_display(&template, &vars);
+
+            // Should not panic and should produce some result
+            prop_assert!(result.is_ok());
+            let formatted = result.unwrap();
+
+            // Result should be non-empty for non-empty input
+            if !text.is_empty() {
+                prop_assert!(!formatted.is_empty());
+            }
+        }
+
+        #[test]
+        fn test_hex_format_arbitrary_bytes(bytes in prop::collection::vec(any::<u8>(), 0..100)) {
+            let text = String::from_utf8_lossy(&bytes).to_string();
+            let mut vars = HashMap::new();
+            vars.insert("DATA".to_string(), text.clone());
+
+            let result = format_display("{DATA:hex}", &vars).unwrap();
+
+            // Should start with 0x
+            prop_assert!(result.starts_with("0x"));
+
+            // Should have correct length (2 chars for "0x" + 2 chars per byte in the UTF-8 representation)
+            let expected_hex_len = text.len() * 2;
+            prop_assert_eq!(result.len(), 2 + expected_hex_len);
+
+            // Should only contain valid hex characters
+            for ch in result[2..].chars() {
+                prop_assert!(ch.is_ascii_hexdigit());
+            }
+        }
+
+        #[test]
+        fn test_length_format_consistency(text in "\\PC*") {
+            let mut vars = HashMap::new();
+            vars.insert("STR".to_string(), text.clone());
+
+            let len_result = format_display("{STR:len}", &vars).unwrap();
+            let expected_len = text.len().to_string();
+
+            prop_assert_eq!(len_result, expected_len);
+        }
+
+        #[test]
+        fn test_escape_sequences_preserve_other_text(prefix in "[^{}\\\\]*", suffix in "[^{}\\\\]*") {
+            let mut vars = HashMap::new();
+            vars.insert("VAR".to_string(), "test".to_string());
+
+            let template = format!("{}{{VAR}}\n\t{}", prefix, suffix);
+            let result = format_display(&template, &vars).unwrap();
+
+            // Should contain the prefix, variable, escaped chars, and suffix
+            prop_assert!(result.contains(&prefix));
+            prop_assert!(result.contains("test"));
+            prop_assert!(result.contains("\n"));
+            prop_assert!(result.contains("\t"));
+            prop_assert!(result.contains(&suffix));
+        }
     }
 }

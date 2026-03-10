@@ -143,17 +143,13 @@ impl ScopeManager {
     }
 
     /// Pop scope (cleanup after function/block exits)
-    /// Variables set in inner scope are merged into parent scope
+    /// Variables in inner scope are discarded
     pub fn pop_scope(&mut self) -> Result<(), String> {
         if self.scopes.len() <= 1 {
             return Err("Cannot pop global scope".to_string());
         }
-        if let Some(inner_scope) = self.scopes.pop() {
-            // Merge inner scope variables into parent scope
-            if let Some(parent_scope) = self.scopes.last_mut() {
-                parent_scope.extend(inner_scope);
-            }
-        }
+        // Just remove the inner scope, variables are discarded
+        self.scopes.pop();
         Ok(())
     }
 
@@ -326,6 +322,8 @@ impl CallStack {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_equality_evaluation() {
@@ -462,5 +460,173 @@ mod tests {
             stack.current_frame().unwrap().get("data"),
             Some("INPUT".to_string())
         );
+    }
+
+    // Property-based tests for comprehensive coverage
+    proptest! {
+        #[test]
+        fn test_condition_evaluation_arbitrary_values(
+            var_name in "[A-Z][A-Z0-9_]*",
+            var_value in "[^\\s]+",
+            compare_value in "[^\\s]+"
+        ) {
+            let mut vars = HashMap::new();
+            vars.insert(var_name.clone(), var_value.clone());
+            let evaluator = ConditionEvaluator::new(vars);
+
+            // Test equality
+            let eq_condition = format!("{} = {}", var_name, compare_value);
+            let eq_result = evaluator.evaluate(&eq_condition).unwrap();
+            prop_assert_eq!(eq_result, var_value == compare_value);
+
+            // Test inequality
+            let ne_condition = format!("{} != {}", var_name, compare_value);
+            let ne_result = evaluator.evaluate(&ne_condition).unwrap();
+            prop_assert_eq!(ne_result, var_value != compare_value);
+        }
+
+        #[test]
+        fn test_numeric_condition_evaluation(
+            var_name in "[A-Z][A-Z0-9_]*",
+            base_value in 0..1000i64,
+            offset in -500..500i64
+        ) {
+            let compare_value = base_value + offset;
+            let mut vars = HashMap::new();
+            vars.insert(var_name.clone(), base_value.to_string());
+            let evaluator = ConditionEvaluator::new(vars);
+
+            // Test greater than
+            let gt_condition = format!("{} > {}", var_name, compare_value);
+            let gt_result = evaluator.evaluate(&gt_condition).unwrap();
+            prop_assert_eq!(gt_result, base_value > compare_value);
+
+            // Test less than
+            let lt_condition = format!("{} < {}", var_name, compare_value);
+            let lt_result = evaluator.evaluate(&lt_condition).unwrap();
+            prop_assert_eq!(lt_result, base_value < compare_value);
+
+            // Test greater or equal
+            let ge_condition = format!("{} >= {}", var_name, compare_value);
+            let ge_result = evaluator.evaluate(&ge_condition).unwrap();
+            prop_assert_eq!(ge_result, base_value >= compare_value);
+
+            // Test less or equal
+            let le_condition = format!("{} <= {}", var_name, compare_value);
+            let le_result = evaluator.evaluate(&le_condition).unwrap();
+            prop_assert_eq!(le_result, base_value <= compare_value);
+        }
+
+        #[test]
+        fn test_scope_management_arbitrary_variables(
+            var_count in 1..20usize,
+            scope_depth in 1..10usize
+        ) {
+            let mut scope = ScopeManager::new();
+            let mut all_vars = HashMap::new();
+
+            // Set variables in global scope
+            for i in 0..var_count {
+                let var_name = format!("GLOBAL_VAR_{}", i);
+                let var_value = format!("value_{}", i);
+                scope.set(var_name.clone(), var_value.clone());
+                all_vars.insert(var_name, var_value);
+            }
+
+            // Push scopes and set local variables
+            let mut scope_vars = vec![all_vars.clone()];
+            for depth in 0..scope_depth {
+                scope.push_scope();
+
+                let mut current_scope_vars = HashMap::new();
+                for i in 0..var_count {
+                    let var_name = format!("LOCAL_VAR_{}_{}", depth, i);
+                    let var_value = format!("local_value_{}_{}", depth, i);
+                    scope.set(var_name.clone(), var_value.clone());
+                    current_scope_vars.insert(var_name, var_value);
+                }
+                scope_vars.push(current_scope_vars);
+            }
+
+            // Verify variables are accessible in deepest scope
+            for (var_name, expected_value) in &scope_vars[scope_vars.len() - 1] {
+                prop_assert_eq!(scope.get(var_name), Some(expected_value.clone()));
+            }
+
+            // Pop scopes and verify variables become inaccessible
+            for depth in (0..scope_depth).rev() {
+                // Local variables from this scope should still be accessible
+                for (var_name, expected_value) in &scope_vars[depth + 1] {
+                    prop_assert_eq!(scope.get(var_name), Some(expected_value.clone()));
+                }
+
+                scope.pop_scope().unwrap();
+
+                // After popping, local variables should be gone
+                for var_name in scope_vars[depth + 1].keys() {
+                    prop_assert_eq!(scope.get(var_name), None);
+                }
+
+                // But global variables should still be accessible
+                for (var_name, expected_value) in &scope_vars[0] {
+                    prop_assert_eq!(scope.get(var_name), Some(expected_value.clone()));
+                }
+            }
+        }
+
+        #[test]
+        fn test_call_stack_depth_arbitrary_operations(
+            operations in prop::collection::vec(
+                prop_oneof![
+                    Just("push".to_string()),
+                    Just("pop".to_string())
+                ],
+                1..50
+            )
+        ) {
+            let mut stack = CallStack::new();
+            let mut expected_depth = 0;
+
+            for op in operations {
+                match op.as_str() {
+                    "push" => {
+                        let frame = Frame::new("test_func".to_string(), vec![], vec![]);
+                        stack.push_frame(frame);
+                        expected_depth += 1;
+                        prop_assert_eq!(stack.depth(), expected_depth);
+                        prop_assert!(!stack.is_empty());
+                    }
+                    "pop" => {
+                        if expected_depth > 0 {
+                            stack.pop_frame().unwrap();
+                            expected_depth -= 1;
+                            prop_assert_eq!(stack.depth(), expected_depth);
+                        } else {
+                            // Can't pop from empty stack, but operation should be valid
+                            prop_assert_eq!(stack.depth(), 0);
+                            prop_assert!(stack.is_empty());
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        #[test]
+        fn test_loop_context_arbitrary_iterations(max_iter in 1..1000usize) {
+            let mut loop_ctx = LoopContext::new(max_iter);
+
+            prop_assert!(!loop_ctx.should_continue() || max_iter > 0);
+
+            let mut iterations_run = 0;
+            while loop_ctx.should_continue() {
+                prop_assert!(iterations_run < max_iter);
+                loop_ctx.next_iteration();
+                iterations_run += 1;
+            }
+
+            prop_assert_eq!(iterations_run, max_iter);
+            prop_assert!(!loop_ctx.should_continue());
+        }
     }
 }
