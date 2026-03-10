@@ -361,7 +361,8 @@ impl Runtime {
         let buf = self
             .get_buffer_mut(target)
             .map_err(|e| CnfError::EncryptionFailed(e.to_string()))?;
-        let result = cnf_security::encrypt_aes256(buf);
+        let result = cnf_security::encrypt_aes256(buf)
+            .map_err(|e| CnfError::EncryptionFailed(format!("Crypto: {e}")))?;
         *buf = result;
         Ok(())
     }

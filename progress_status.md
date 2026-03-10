@@ -1,5 +1,27 @@
 [2026-03-09]
 Change:
+- Add EncryptFailed to CnfCryptoError, implement Display/Error
+- Refactor encrypt_aes256 to Result, OsRng, no panic/expect
+- Add static ENV_MUTEX in cnf-security tests for env race
+- Update dispatch_encrypt to handle Result, propagate error
+- Fix PolicyEngine Always/Eventually logic, add eval_at
+- Add regression test for Always partial trace bug
+
+Scope:
+- crates/cnf-security/src/lib.rs
+- crates/cnf-security/tests/
+- crates/cnf-runtime/src/runtime.rs
+- crates/cnf-governance/src/policy_engine.rs
+- crates/cnf-governance/tests/
+- progress_status.md
+
+Status:
+- completed
+
+Notes:
+- Enforces fail-fast, determinism, no global mutable state, layer discipline, regression test for LTL bug
+[2026-03-09]
+Change:
 - Implementasi lengkap Display untuk seluruh 80+ variant enum Token di lexer
 - Error message kini menampilkan nama token sesuai spesifikasi (misal: "QUANTUM-ENCRYPT")
 

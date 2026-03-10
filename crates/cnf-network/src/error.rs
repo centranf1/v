@@ -1,3 +1,8 @@
+    #[error("L6.009 AuthenticationFailed: PSK handshake rejected")]
+    AuthenticationFailed,
+
+    #[error("L6.010 FrameTooLarge: {0} bytes exceeds limit")]
+    FrameTooLarge(usize),
 //! Network layer errors
 //!
 //! Layer L6 error codes for distributed operations.

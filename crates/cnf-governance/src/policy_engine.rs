@@ -25,18 +25,19 @@ impl PolicyEngine {
         PolicyEngine {}
     }
 
-    pub fn verify(&self, formula: &LtlFormula, trace: &ExecutionTrace) -> Result<bool, CnfGovernanceError> {
-        fn eval(formula: &LtlFormula, trace: &ExecutionTrace) -> bool {
-            match formula {
-                LtlFormula::Atom(name) => trace.operations.iter().any(|op| op == name),
-                LtlFormula::Not(inner) => !eval(inner, trace),
-                LtlFormula::And(left, right) => eval(left, trace) && eval(right, trace),
-                LtlFormula::Or(left, right) => eval(left, trace) || eval(right, trace),
-                LtlFormula::Always(inner) => eval(inner, trace), // Simplifikasi: true jika inner selalu terpenuhi (di semua op)
-                LtlFormula::Eventually(inner) => eval(inner, trace), // Simplifikasi: true jika inner pernah terpenuhi
-            }
+    pub fn eval_at(&self, formula: &LtlFormula, ops: &[String]) -> bool {
+        match formula {
+            LtlFormula::Atom(name)        => ops.iter().any(|op| op == name),
+            LtlFormula::Not(inner)        => !self.eval_at(inner, ops),
+            LtlFormula::And(l, r)         => self.eval_at(l, ops) && self.eval_at(r, ops),
+            LtlFormula::Or(l, r)          => self.eval_at(l, ops) || self.eval_at(r, ops),
+            LtlFormula::Always(inner)     => (0..=ops.len()).all(|i| self.eval_at(inner, &ops[i..])),
+            LtlFormula::Eventually(inner) => (0..=ops.len()).any(|i| self.eval_at(inner, &ops[i..])),
         }
-        Ok(eval(formula, trace))
+    }
+
+    pub fn verify(&self, formula: &LtlFormula, trace: &ExecutionTrace) -> Result<bool, CnfGovernanceError> {
+        Ok(self.eval_at(formula, &trace.operations))
     }
 }
 
@@ -69,6 +70,13 @@ mod extra_policy_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn always_partial_trace_is_false() {
+        // BUG REGRESSION: used to return TRUE incorrectly
+        let p = LtlFormula::Always(Box::new(LtlFormula::Atom("compress".into())));
+        let t = ExecutionTrace { operations: vec!["compress".into(), "verify".into()] };
+        assert!(!PolicyEngine::new().verify(&p, &t).unwrap());
+    }
 
     #[test]
     fn formula_construction_and_display() {
