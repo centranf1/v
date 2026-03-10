@@ -472,6 +472,7 @@ dependencies = [
  "cobol-protocol-v153",
  "cobol-protocol-v154",
  "criterion",
+ "hex",
  "serde",
  "serde_json",
 ]
