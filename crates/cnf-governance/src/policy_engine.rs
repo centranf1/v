@@ -18,6 +18,7 @@ pub struct ExecutionTrace {
 }
 
 /// Policy engine verifies whether a trace satisfies an LTL formula.
+#[derive(Default)]
 pub struct PolicyEngine {}
 
 impl PolicyEngine {

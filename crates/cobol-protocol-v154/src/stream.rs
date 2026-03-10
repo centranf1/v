@@ -1,4 +1,3 @@
-use crate::base4096;
 use crate::dictionary::CsmDictionary;
 use crate::CsmError;
 use crc32fast::Hasher as Crc32Hasher;

@@ -4,6 +4,8 @@
 //! Fail fast on invalid operations.
 //! No global mutable state.
 
+use std::fmt;
+
 /// Error type for CENTRA-NF runtime
 #[derive(Debug, Clone)]
 pub enum CnfError {
@@ -115,23 +117,24 @@ impl RuntimeValue {
             )),
         }
     }
+}
 
-    /// Convert to string representation
-    pub fn to_string(&self) -> String {
+impl fmt::Display for RuntimeValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RuntimeValue::Integer(n) => n.to_string(),
-            RuntimeValue::Decimal(d) => d.to_string(),
-            RuntimeValue::Binary(b) => hex::encode(b),
-            RuntimeValue::Text(s) => s.clone(),
+            RuntimeValue::Integer(n) => write!(f, "{}", n),
+            RuntimeValue::Decimal(d) => write!(f, "{}", d),
+            RuntimeValue::Binary(b) => write!(f, "{}", hex::encode(b)),
+            RuntimeValue::Text(s) => write!(f, "{}", s),
             RuntimeValue::List(items) => {
-                format!(
-                    "[{}]",
-                    items
-                        .iter()
-                        .map(|v| v.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
+                write!(f, "[")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", item)?;
+                }
+                write!(f, "]")
             }
         }
     }
@@ -258,7 +261,7 @@ impl Runtime {
 
     /// Execute a single instruction (helper method)
     pub fn execute_instruction(&mut self, instr: &cnf_compiler::ir::Instruction) -> Result<(), CnfError> {
-        self.execute_instructions(&[instr.clone()])
+        self.execute_instructions(std::slice::from_ref(instr))
     }
 
     /// Execute a list of IR instructions
@@ -332,7 +335,7 @@ impl Runtime {
                 }
                 Instruction::Print { target, format: _ } => {
                     if let Some(val) = self.variables.get(target) {
-                        println!("{}", val.to_string());
+                        println!("{}", val);
                     }
                 }
 
@@ -612,7 +615,7 @@ impl Runtime {
         let mut result = String::new();
         for op in operands {
             let val = self.resolve_operand(op)?;
-            result.push_str(&val.to_string());
+            result.push_str(&format!("{}", val));
         }
         self.variables
             .set(target.to_string(), RuntimeValue::Text(result));

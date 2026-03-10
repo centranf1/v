@@ -6,7 +6,6 @@
 
 use cnf_compiler::lexer::tokenize;
 use cnf_compiler::parser::Parser;
-use std::path::Path;
 
 /// Result of formatting or linting operation
 #[derive(Debug, Clone)]
@@ -228,21 +227,12 @@ fn lint_semantics(source: &str) -> Vec<Issue> {
 
     // Track division presence
     let mut has_identification = false;
-    let mut has_data = false;
-    let mut has_procedure = false;
 
-    for (line_num, line) in lines.iter().enumerate() {
+    for line in lines.iter() {
         let trimmed = line.trim();
-        let line_no = line_num + 1;
 
         if trimmed.contains("IDENTIFICATION DIVISION") {
             has_identification = true;
-        }
-        if trimmed.contains("DATA DIVISION") {
-            has_data = true;
-        }
-        if trimmed.contains("PROCEDURE DIVISION") {
-            has_procedure = true;
         }
 
         // Check for variables without SET

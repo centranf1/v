@@ -4,30 +4,30 @@ use cnf_stdlib::*;
 
 #[test]
 fn test_string_basic() {
-    assert!(is_empty(""));
-    assert_eq!(length("abc"), 3);
-    assert_eq!(to_upper("abc"), "ABC");
-    assert_eq!(to_lower("ABC"), "abc");
-    assert_eq!(trim("  x "), "x");
-    assert_eq!(substring("abcdef", 2, 3), "cde");
-    assert_eq!(pad_left("x", 3, '0'), "00x");
-    assert_eq!(pad_right("x", 3, '0'), "x00");
-    assert_eq!(split("a,b,c", ','), vec!["a", "b", "c"]);
-    assert_eq!(parse_int("42").unwrap(), 42);
-    assert_eq!(format_template("{0}-{1}", &["A", "B"]), "A-B");
-    assert_eq!(reverse("abc"), "cba");
-    assert_eq!(find("abcdef", "cd"), Some(2));
-    assert_eq!(replace("abcabc", "a", "z"), "zbczbc");
-    assert_eq!(remove_whitespace("a b\tc\n"), "abc");
-    assert_eq!(capitalize("hello"), "Hello");
-    assert_eq!(join(&["a", "b"], ","), "a,b");
+    assert!(string::is_empty(""));
+    assert_eq!(string::length("abc"), 3);
+    assert_eq!(string::to_upper("abc"), "ABC");
+    assert_eq!(string::to_lower("ABC"), "abc");
+    assert_eq!(string::trim("  x "), "x");
+    assert_eq!(string::substring("abcdef", 2, 3), "cde");
+    assert_eq!(string::pad_left("x", 3, '0'), "00x");
+    assert_eq!(string::pad_right("x", 3, '0'), "x00");
+    assert_eq!(string::split("a,b,c", ','), vec!["a", "b", "c"]);
+    assert_eq!(string::parse_int("42").unwrap(), 42);
+    assert_eq!(string::format_template("{0}-{1}", &["A", "B"]), "A-B");
+    assert_eq!(string::reverse("abc"), "cba");
+    assert_eq!(string::find("abcdef", "cd"), Some(2));
+    assert_eq!(string::replace("abcabc", "a", "z"), "zbczbc");
+    assert_eq!(string::remove_whitespace("a b\tc\n"), "abc");
+    assert_eq!(string::capitalize("hello"), "Hello");
+    assert_eq!(string::join(&["a", "b"], ","), "a,b");
 }
 
 #[test]
 fn test_buffer_basic() {
     let b = b"abc";
-    assert_eq!(size(b), 3);
-    assert!(!is_empty(b));
+    assert_eq!(buffer::size(b), 3);
+    assert!(!buffer::is_empty(b));
     assert_eq!(hex_encode(b), "616263");
     assert_eq!(hex_decode("616263").unwrap(), b);
     assert_eq!(concat(b, b"d"), b"abcd");
@@ -51,11 +51,11 @@ fn test_math_basic() {
 #[test]
 fn test_collection_basic() {
     let v = vec![1,2,2,3];
-    assert_eq!(count(&v), 4);
-    assert_eq!(find(&v, &2), Some(1));
-    assert_eq!(unique(&v), vec![1,2,3]);
-    assert_eq!(sum(&[1,2,3]), 6);
-    assert!(mean(&[1.0,2.0,3.0]).unwrap() - 2.0 < 1e-6);
+    assert_eq!(collection::count(&v), 4);
+    assert_eq!(collection::find(&v, &2), Some(1));
+    assert_eq!(collection::unique(&v), vec![1,2,3]);
+    assert_eq!(collection::sum(&[1,2,3]), 6);
+    assert!(collection::mean(&[1.0,2.0,3.0]).unwrap() - 2.0 < 1e-6);
 }
 
 #[test]

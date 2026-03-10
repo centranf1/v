@@ -46,8 +46,8 @@ impl ConditionEvaluator {
 
     /// Evaluate NOT condition (high precedence)
     fn evaluate_not(&self, condition: &str) -> Result<bool, String> {
-        if condition.starts_with("NOT ") {
-            let inner = &condition[4..].trim();
+        if let Some(stripped) = condition.strip_prefix("NOT ") {
+            let inner = stripped.trim();
             return self.evaluate_comparison(inner).map(|b| !b);
         }
         self.evaluate_comparison(condition)

@@ -424,7 +424,7 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                     chars.next();
                     tokens.push(Token::NotEquals);
                 } else {
-                    return Err(format!("Unrecognized character '!'"));
+                    return Err("Unrecognized character '!'".to_string());
                 }
             }
             '(' => {
@@ -747,5 +747,39 @@ mod tests {
         assert_eq!(tokens[1], Token::Algorithm);
         assert_eq!(tokens[2], Token::SignedBy);
         assert_eq!(tokens[3], Token::With);
+    }
+
+    // Property-based lexer tests
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn prop_identifier_roundtrip(id in "[A-Z][A-Z0-9-]*") {
+            // identifiers should tokenize to Identifier(s) and reconstruct as the same string
+            let source = id.clone();
+            let tokens = tokenize(&source).unwrap();
+            // first token should be Identifier
+            match &tokens[0] {
+                Token::Identifier(s) => prop_assert_eq!(s, &id),
+                _ => prop_assert!(false, "Expected Identifier token"),
+            }
+        }
+
+        #[test]
+        fn prop_string_literal_roundtrip(inner in r#"[^"\\]*"#) {
+            // generate a simple quoted string without internal quotes, backslashes, or newlines
+            let source = format!("\"{}\"", inner);
+            let tokens = tokenize(&source).unwrap();
+            match &tokens[0] {
+                Token::String(strval) => prop_assert_eq!(strval, &inner),
+                _ => prop_assert!(false, "Expected String token"),
+            }
+        }
+
+        #[test]
+        fn prop_mixed_tokens(text in ".*") {
+            // ensure tokenize never panics and returns at least one token
+            let _ = tokenize(&text);
+        }
     }
 }

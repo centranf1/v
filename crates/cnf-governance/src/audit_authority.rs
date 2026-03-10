@@ -1,5 +1,6 @@
 use sha2::{Sha256, Digest};
 
+#[derive(Default)]
 pub struct AuditLedger {
     pub entries: Vec<String>,
 }

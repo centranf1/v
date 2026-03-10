@@ -8,6 +8,7 @@ pub enum Region {
     OTHER(String),
 }
 
+#[derive(Default)]
 pub struct SovereigntyChecker;
 
 impl SovereigntyChecker {

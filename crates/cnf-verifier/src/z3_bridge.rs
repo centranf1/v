@@ -125,22 +125,29 @@ impl Z3Solver {
     ) -> Result<VerificationResult, CnfVerifierError> {
         use z3::*;
 
-        let config = Config::new();
+        // apply configuration including timeout
+        let mut config = Z3CfgNative::new();
+        config.set_timeout_msec(self.config.timeout_ms);
+        // max_memory_mb is not supported on all Z3 bindings; timeout is primary guard
         let z3_ctx = Context::new(&config);
         let solver = Solver::new(&z3_ctx);
 
         // Encode predicate to Z3 formula
         let formula = self.encode_predicate(pred, &z3_ctx, ctx)?;
-        solver.assert(&formula);
+        // for validity we check UNSAT on negation
+        let neg = formula.not();
+        solver.assert(&neg);
 
         // Check satisfiability with timeout
         match solver.check() {
-            SatResult::Sat => Ok(VerificationResult::Proved),
-            SatResult::Unsat => Ok(VerificationResult::Refuted {
-                counterexample: "negation satisfiable".to_string(),
-            }),
+            SatResult::Unsat => Ok(VerificationResult::Proved),
+            SatResult::Sat => {
+                // counterexample is a model satisfying negation
+                let model = solver.get_model().map(|m| format!("{}", m)).unwrap_or_default();
+                Ok(VerificationResult::Refuted { counterexample: model })
+            }
             SatResult::Unknown => Ok(VerificationResult::Unknown {
-                reason: "Z3 solver could not determine satisfiability".to_string(),
+                reason: "Z3 solver could not determine validity (timeout or undecidable)".to_string(),
             }),
         }
     }
@@ -170,8 +177,14 @@ impl Z3Solver {
                 Ok(fp.not())
             }
             Predicate::NumericBound { variable, op, value } => {
+                // if the context has a concrete length for this variable, evaluate directly
+                if let Some(state) = hctx.buffer_states.get(variable) {
+                    let holds = Self::eval_cmp_op(state.length, *value as usize, op);
+                    return Ok(Bool::from_bool(ctx, holds));
+                }
+                // otherwise, encode symbolically
                 let var = Int::new_const(ctx, variable.as_str());
-                let val = Int::from_i64(ctx, *value as i64);
+                let val = Int::from_i64(ctx, *value);
                 Ok(match op {
                     CmpOp::Lt => var.lt(&val),
                     CmpOp::Le => var.le(&val),
@@ -194,26 +207,32 @@ impl Z3Solver {
         triple: &HoareTriple,
         ctx: &HoareContext,
     ) -> Result<VerificationResult, CnfVerifierError> {
+        // Always perform a precondition check using the generic predicate verifier.
+        let pre_result = self.verify_predicate(&triple.pre, ctx)?;
+        match pre_result {
+            VerificationResult::Refuted { .. } => {
+                return Err(CnfVerifierError::PreconditionFailed {
+                    procedure: triple.body_description.clone(),
+                    predicate: triple.pre.to_string(),
+                });
+            }
+            VerificationResult::Proved => {} // continue to post-check
+            _ => {
+                return Ok(VerificationResult::Unknown {
+                    reason: "precondition unknown".to_string(),
+                });
+            }
+        }
+
         #[cfg(feature = "z3-solver")]
         {
+            // after precondition proven, check post under pre assumption
             self.verify_with_z3(triple, ctx)
         }
         #[cfg(not(feature = "z3-solver"))]
         {
-            // original fallback
-            let pre_result = self.verify_predicate(&triple.pre, ctx)?;
-            match pre_result {
-                VerificationResult::Refuted { .. } => {
-                    Err(CnfVerifierError::PreconditionFailed {
-                        procedure: triple.body_description.clone(),
-                        predicate: triple.pre.to_string(),
-                    })
-                }
-                VerificationResult::Proved => Ok(VerificationResult::Proved),
-                _ => Ok(VerificationResult::Unknown {
-                    reason: "precondition unknown".to_string(),
-                }),
-            }
+            // without Z3 we already know pre proved, so guarantee 'proved'
+            Ok(VerificationResult::Proved)
         }
     }
 

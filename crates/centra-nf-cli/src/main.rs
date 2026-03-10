@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use cnf_compiler::compile;
 
 mod tools;
-use tools::{format_source, lint_source, IssueLevelity};
+use tools::{format_source, lint_source};
 
 #[derive(Parser)]
 #[command(name = "centra-nf")]
@@ -440,13 +440,13 @@ fn lint_file(input_path: &PathBuf, output_format: &str, strict: bool) {
                     .unwrap_or_default();
                 eprintln!(
                     "  [{}] {}{}",
-                    issue.level.to_string(),
+                    issue.level,
                     issue.message,
                     line_info
                 );
             }
         }
-        "table" | _ => {
+        _ => {
             // Table output format (default)
             eprintln!("{}", result.message);
             if !result.issues.is_empty() {
@@ -462,7 +462,7 @@ fn lint_file(input_path: &PathBuf, output_format: &str, strict: bool) {
                         .unwrap_or_else(|| "—".to_string());
                     eprintln!(
                         "{:<8} {:<50} {:<10}",
-                        issue.level.to_string(),
+                        issue.level,
                         &issue.message[..issue.message.len().min(48)],
                         line_str
                     );

@@ -1,19 +1,14 @@
 use serde::{Serialize, Deserialize};
 
 /// Supported standards
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 pub enum Standard {
+    #[default]
     SOC2,
     PciDss,
     HIPAA,
     GDPR,
     ISO27001,
-}
-
-impl Default for Standard {
-    fn default() -> Self {
-        Standard::SOC2
-    }
 }
 
 /// Collection of regulations for a given standard
