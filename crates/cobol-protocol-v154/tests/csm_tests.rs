@@ -28,7 +28,7 @@ fn dictionary_checksum_verification() {
 
 #[test]
 fn stream_header_validation() {
-    let mut dict = CsmDictionary::new();
+    let dict = CsmDictionary::new();
     let data = b"testdata";
     let compressed = stream::compress_csm_stream(data, &dict).unwrap();
     assert_eq!(&compressed[0..2], b"CS");
@@ -37,7 +37,7 @@ fn stream_header_validation() {
 
 #[test]
 fn crc32_tamper_detection() {
-    let mut dict = CsmDictionary::new();
+    let dict = CsmDictionary::new();
     let data = b"tamper";
     let mut compressed = stream::compress_csm_stream(data, &dict).unwrap();
     let len = compressed.len();
@@ -48,7 +48,7 @@ fn crc32_tamper_detection() {
 
 #[test]
 fn compress_decompress_roundtrip() {
-    let mut dict = CsmDictionary::new();
+    let dict = CsmDictionary::new();
     let data = b"roundtrip test data";
     let compressed = compress_csm(data, &dict).unwrap();
     let decompressed = decompress_csm(&compressed, &dict).unwrap();

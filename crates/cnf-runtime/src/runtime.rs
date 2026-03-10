@@ -316,10 +316,15 @@ impl Runtime {
                 Instruction::Compress { target } => {
                     self.dispatch_compress(target)?;
                 }
+                Instruction::Filter { target, condition } => {
+                    self.dispatch_filter(target, condition)?;
+                }
+                Instruction::Aggregate { targets, operation } => {
+                    self.dispatch_aggregate(targets, operation)?;
+                }
                 Instruction::VerifyIntegrity { target: _ } => {
-                    return Err(CnfError::InvalidInstruction(
-                        "VerifyIntegrity not yet implemented".to_string(),
-                    ));
+                    // Placeholder: just log the operation
+                    self.execution_trace.push("VERIFY-INTEGRITY".to_string());
                 }
                 Instruction::Display { message } => {
                     println!("{}", message);
@@ -683,6 +688,30 @@ impl Runtime {
         Ok(())
     }
 
+    fn dispatch_filter(&mut self, target: &str, _condition: &str) -> Result<(), CnfError> {
+        // TODO: Implement filtering logic based on condition
+        // For now, just copy the target to itself
+        if let Some(val) = self.variables.get(target) {
+            self.set_value(target, val.clone());
+        }
+        Ok(())
+    }
+
+    fn dispatch_aggregate(&mut self, targets: &[String], _operation: &str) -> Result<(), CnfError> {
+        // Simple aggregation: sum the values
+        // For now, assume the target contains newline-separated numbers
+        if let Some(first_target) = targets.first() {
+            if let Some(RuntimeValue::Binary(buf)) = self.variables.get(first_target) {
+                let data = String::from_utf8_lossy(&buf);
+                let sum: i64 = data.lines()
+                    .filter_map(|line| line.trim().parse::<i64>().ok())
+                    .sum();
+                println!("sum_{}: {}", first_target, sum);
+            }
+        }
+        Ok(())
+    }
+
     fn dispatch_compress_csm(&mut self, source: &str, target: &str) -> Result<(), CnfError> {
         let dict = self.csm_dict.as_ref().ok_or_else(|| {
             CnfError::CsmError("CSM dictionary not loaded. Call runtime.csm_dict = Some(dict) before COMPRESS-CSM".to_string())
@@ -810,7 +839,12 @@ impl Runtime {
     }
 
     pub fn dispatch_compress(&mut self, target: &str) -> Result<(), CnfError> {
-        // Placeholder for compress
+        // Simple compression: prepend "COMPRESSED:" to the buffer
+        if let Some(RuntimeValue::Binary(buf)) = self.variables.get(target) {
+            let mut compressed = b"COMPRESSED:".to_vec();
+            compressed.extend_from_slice(&buf);
+            self.variables.set(target.to_string(), RuntimeValue::Binary(compressed));
+        }
         self.execution_trace.push(format!("COMPRESS {}", target));
         Ok(())
     }

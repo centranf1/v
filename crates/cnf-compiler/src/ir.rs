@@ -866,6 +866,26 @@ pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
                 target: target.clone(),
             })
         }
+        ProcedureStatement::Filter { target, condition } => {
+            if !declared_vars.contains(target) {
+                return Err(format!("Variable '{}' not declared", target));
+            }
+            Ok(Instruction::Filter {
+                target: target.clone(),
+                condition: condition.clone(),
+            })
+        }
+        ProcedureStatement::Aggregate { targets, operation } => {
+            for target in targets {
+                if !declared_vars.contains(target) {
+                    return Err(format!("Variable '{}' not declared", target));
+                }
+            }
+            Ok(Instruction::Aggregate {
+                targets: targets.clone(),
+                operation: operation.clone(),
+            })
+        }
         ProcedureStatement::If {
             condition,
             then_statements,
