@@ -7,6 +7,9 @@ pub enum CnfCryptoError {
     DecryptFailed,
 }
 
+pub mod key_manager;
+pub use key_manager::KeyManager;
+
 // cnf-security — Cryptographic operations.
 //
 // Responsibility: SHA-256 integrity verification and deterministic encryption.

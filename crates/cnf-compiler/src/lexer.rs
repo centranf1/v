@@ -108,6 +108,18 @@ pub enum Token {
     EndFor,
     EndWhile,
     In,
+    // Comparison operators
+    Equals,
+    NotEquals,
+    LessThan,
+    GreaterThan,
+    LessThanOrEqual,
+    GreaterThanOrEqual,
+    And,
+    Or,
+    Not,
+    LeftParen,
+    RightParen,
     // Functions
     Define,
     Function,
@@ -261,6 +273,17 @@ impl std::fmt::Display for Token {
             Token::EndFor => write!(f, "END-FOR"),
             Token::EndWhile => write!(f, "END-WHILE"),
             Token::In => write!(f, "IN"),
+            Token::Equals => write!(f, "="),
+            Token::NotEquals => write!(f, "!="),
+            Token::LessThan => write!(f, "<"),
+            Token::GreaterThan => write!(f, ">"),
+            Token::LessThanOrEqual => write!(f, "<="),
+            Token::GreaterThanOrEqual => write!(f, ">="),
+            Token::And => write!(f, "AND"),
+            Token::Or => write!(f, "OR"),
+            Token::Not => write!(f, "NOT"),
+            Token::LeftParen => write!(f, "("),
+            Token::RightParen => write!(f, ")"),
             Token::Define => write!(f, "DEFINE"),
             Token::Function => write!(f, "FUNCTION"),
             Token::EndFunction => write!(f, "END-FUNCTION"),
@@ -372,6 +395,47 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                 tokens.push(Token::Period);
             }
             
+            // Comparison operators
+            '=' => {
+                chars.next();
+                tokens.push(Token::Equals);
+            }
+            '<' => {
+                chars.next();
+                if let Some(&'=') = chars.peek() {
+                    chars.next();
+                    tokens.push(Token::LessThanOrEqual);
+                } else {
+                    tokens.push(Token::LessThan);
+                }
+            }
+            '>' => {
+                chars.next();
+                if let Some(&'=') = chars.peek() {
+                    chars.next();
+                    tokens.push(Token::GreaterThanOrEqual);
+                } else {
+                    tokens.push(Token::GreaterThan);
+                }
+            }
+            '!' => {
+                chars.next();
+                if let Some(&'=') = chars.peek() {
+                    chars.next();
+                    tokens.push(Token::NotEquals);
+                } else {
+                    return Err(format!("Unrecognized character '!'"));
+                }
+            }
+            '(' => {
+                chars.next();
+                tokens.push(Token::LeftParen);
+            }
+            ')' => {
+                chars.next();
+                tokens.push(Token::RightParen);
+            }
+            
             // Keywords and identifiers (must be alphanumeric or dash)
             'A'..='Z' | 'a'..='z' | '0'..='9' | '_' => {
                 let mut word = String::new();
@@ -469,6 +533,19 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                     "WHILE" => Token::While,
                     "DO" => Token::Do,
                     "END-WHILE" => Token::EndWhile,
+                    
+                    // Comparison operators
+                    "=" => Token::Equals,
+                    "!=" => Token::NotEquals,
+                    "<" => Token::LessThan,
+                    ">" => Token::GreaterThan,
+                    "<=" => Token::LessThanOrEqual,
+                    ">=" => Token::GreaterThanOrEqual,
+                    "AND" => Token::And,
+                    "OR" => Token::Or,
+                    "NOT" => Token::Not,
+                    "(" => Token::LeftParen,
+                    ")" => Token::RightParen,
                     
                     // Functions
                     "FUNCTION" => Token::Function,

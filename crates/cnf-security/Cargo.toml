@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 sha2 = "0.10"
 hex = "0.4"
+zeroize = { version = "1.7", features = ["zeroize_derive"] }
 
 # Real AES-256-GCM encryption
 aes-gcm = "0.10"

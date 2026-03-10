@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod runtime_execution_tests {
     use cnf_compiler::ir::Instruction;
-    use cnf_runtime::Runtime;
+    use cnf_runtime::{Runtime, runtime::RuntimeValue};
 
     #[test]
     fn test_runtime_executes_single_instruction() {
@@ -303,7 +303,7 @@ mod runtime_execution_tests {
         // The loop should have executed 3 times with items A, B, C
         // ITEM variable should be set to the last item (C)
         let final_value = runtime.get_variable("ITEM");
-        assert_eq!(final_value, Some("C".to_string()), "Loop variable should be set to final item");
+        assert_eq!(final_value, Some(RuntimeValue::Text("C".to_string())), "Loop variable should be set to final item");
     }
 
     #[test]
@@ -341,7 +341,7 @@ mod runtime_execution_tests {
     fn test_for_loop_scope_isolation() {
         // Test that loop variables are properly scoped
         let mut runtime = Runtime::new();
-        runtime.set_variable("OUTER".to_string(), "BEFORE".to_string());
+        runtime.set_variable("OUTER".to_string(), RuntimeValue::Text("BEFORE".to_string()));
 
         let instructions = vec![
             Instruction::ForLoop {
@@ -362,7 +362,7 @@ mod runtime_execution_tests {
         // OUTER should remain unchanged
         assert_eq!(
             runtime.get_variable("OUTER"),
-            Some("BEFORE".to_string()),
+            Some(RuntimeValue::Text("BEFORE".to_string())),
             "Outer scope should not be affected by loop"
         );
     }
@@ -550,7 +550,7 @@ mod runtime_execution_tests {
 
         assert_eq!(
             runtime.get_variable("ITEM"),
-            Some("ONLY".to_string()),
+            Some(RuntimeValue::Text("ONLY".to_string())),
             "Single-item ForLoop should set loop variable"
         );
     }

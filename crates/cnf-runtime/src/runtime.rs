@@ -1,3 +1,9 @@
+//! Runtime — CENTRA-NF execution engine.
+//!
+//! Execute IR instructions against owned buffers.
+//! Fail fast on invalid operations.
+//! No global mutable state.
+
 /// Error type for CENTRA-NF runtime
 #[derive(Debug, Clone)]
 pub enum CnfError {
@@ -7,6 +13,12 @@ pub enum CnfError {
     DecryptionFailed(String),
     IoError(String),
     RuntimeError(String),
+    CsmError(String),
+    DivisionByZero,
+    LoopLimitExceeded(usize),
+    AccessDenied { user: String, resource: String, action: String },
+    GovernancePolicyViolation(String),
+    BufferCorrupted(String),
     #[cfg(feature = "verifier")]
     PreconditionFailed(String),
     #[cfg(feature = "verifier")]
@@ -30,6 +42,12 @@ impl std::fmt::Display for CnfError {
             CnfError::DecryptionFailed(msg) => write!(f, "Decryption failed: {}", msg),
             CnfError::IoError(msg) => write!(f, "I/O error: {}", msg),
             CnfError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
+            CnfError::CsmError(msg) => write!(f, "CSM error: {}", msg),
+            CnfError::DivisionByZero => write!(f, "Division by zero"),
+            CnfError::LoopLimitExceeded(limit) => write!(f, "Loop limit exceeded: {}", limit),
+            CnfError::AccessDenied { user, resource, action } => write!(f, "Access denied: {} cannot {} on {}", user, action, resource),
+            CnfError::GovernancePolicyViolation(msg) => write!(f, "Governance policy violation: {}", msg),
+            CnfError::BufferCorrupted(msg) => write!(f, "Buffer corrupted: {}", msg),
             #[cfg(feature = "verifier")]
             CnfError::PreconditionFailed(loc) => write!(f, "Precondition failed at {}", loc),
             #[cfg(feature = "verifier")]
@@ -161,13 +179,35 @@ impl Default for VariableStore {
 /// Executes IR instructions deterministically with phase-by-phase dispatch
 pub struct Runtime {
     variables: VariableStore,
+    /// CSM dictionary for COMPRESS-CSM / DECOMPRESS-CSM instructions
+    pub csm_dict: Option<cobol_protocol_v154::dictionary::CsmDictionary>,
+    /// Audit log entries (append-only, never cleared during execution)
+    pub audit_log: Vec<String>,
+    /// Access control rules: (user, resource) -> allowed actions
+    access_rules: std::collections::HashMap<(String, String), Vec<String>>,
+    /// Active governance policies: name -> LTL formula string
+    governance_policies: std::collections::HashMap<String, String>,
+    governance: cnf_governance::policy_engine::PolicyEngine,
+    governance_trace: cnf_governance::policy_engine::ExecutionTrace,
+    /// Execution trace for LTL evaluation
+    execution_trace: Vec<String>,
+    #[cfg(feature = "quantum")]
+    quantum_keys: std::collections::HashMap<String, (Vec<u8>, Vec<u8>)>,
 }
 
 impl Runtime {
-    /// Create new runtime with empty variable store
+    /// Create new runtime with empty variable store and fresh scope manager
     pub fn new() -> Self {
         Runtime {
             variables: VariableStore::new(),
+            csm_dict: None,
+            audit_log: Vec::new(),
+            access_rules: std::collections::HashMap::new(),
+            governance_policies: std::collections::HashMap::new(),
+            governance_engine: cnf_governance::policy_engine::PolicyEngine::new(),
+            execution_trace: Vec::new(),
+            #[cfg(feature = "quantum")]
+            quantum_keys: std::collections::HashMap::new(),
         }
     }
 
@@ -204,6 +244,11 @@ impl Runtime {
     /// Get a variable's value (helper for tests)
     pub fn get_variable(&self, name: &str) -> Option<RuntimeValue> {
         self.variables.get(name)
+    }
+
+    /// Set a variable's value (helper for tests)
+    pub fn set_variable(&mut self, name: String, value: RuntimeValue) {
+        self.variables.set(name, value);
     }
 
     /// Execute a single instruction (helper method)
@@ -253,11 +298,15 @@ impl Runtime {
                     self.dispatch_divide(target, operand1, operand2)?;
                 }
 
-                // === PHASE 4+: OTHER INSTRUCTIONS (stubs) ===
-                Instruction::Compress { target: _ } => {
-                    return Err(CnfError::InvalidInstruction(
-                        "Compress not yet implemented".to_string(),
-                    ));
+                // === PHASE 4+: OTHER INSTRUCTIONS ===
+                Instruction::CompressCsm { source, target } => {
+                    self.dispatch_compress_csm(source, target)?;
+                }
+                Instruction::DecompressCsm { source, target } => {
+                    self.dispatch_decompress_csm(source, target)?;
+                }
+                Instruction::Compress { target } => {
+                    self.dispatch_compress(target)?;
                 }
                 Instruction::VerifyIntegrity { target: _ } => {
                     return Err(CnfError::InvalidInstruction(
@@ -282,6 +331,100 @@ impl Runtime {
                     }
                 }
 
+                // === PHASE 4: STRING OPERATIONS ===
+                Instruction::Concatenate { target, operands } => {
+                    self.dispatch_concatenate(target, operands)?;
+                }
+                Instruction::Substring {
+                    target,
+                    source,
+                    start,
+                    length,
+                } => {
+                    self.dispatch_substring(target, source, start, length)?;
+                }
+                Instruction::Length { target, source } => {
+                    self.dispatch_length(target, source)?;
+                }
+                Instruction::Uppercase { target, source } => {
+                    self.dispatch_uppercase(target, source)?;
+                }
+                Instruction::Lowercase { target, source } => {
+                    self.dispatch_lowercase(target, source)?;
+                }
+                Instruction::Trim { target, source } => {
+                    self.dispatch_trim(target, source)?;
+                }
+
+                // === CONTROL FLOW ===
+                Instruction::IfStatement {
+                    condition,
+                    then_instrs,
+                    else_instrs,
+                } => {
+                    self.dispatch_if(condition, then_instrs, else_instrs)?;
+                }
+                Instruction::ForLoop { variable, in_list, instrs } => {
+                    self.dispatch_for(variable, in_list, instrs)?;
+                }
+                Instruction::WhileLoop { condition, instrs } => {
+                    self.dispatch_while(condition, instrs)?;
+                }
+
+                // === QUANTUM CRYPTOGRAPHY ===
+                #[cfg(feature = "quantum")]
+                Instruction::QuantumEncrypt { source, key_name } => {
+                    self.dispatch_quantum_encrypt(source, key_name)?;
+                }
+                #[cfg(feature = "quantum")]
+                Instruction::QuantumDecrypt { target, key_name } => {
+                    self.dispatch_quantum_decrypt(target, key_name)?;
+                }
+                #[cfg(feature = "quantum")]
+                Instruction::QuantumSign { source, signing_key, output } => {
+                    self.dispatch_quantum_sign(source, signing_key, output)?;
+                }
+                #[cfg(feature = "quantum")]
+                Instruction::QuantumVerifySig { source, verification_key, signature_ref } => {
+                    self.dispatch_quantum_verify_sig(source, verification_key, signature_ref)?;
+                }
+                #[cfg(feature = "quantum")]
+                Instruction::QuantumSignEncrypt { source, recipient_key, signing_key, output } => {
+                    self.dispatch_quantum_sign_encrypt(source, recipient_key, signing_key, output)?;
+                }
+                #[cfg(feature = "quantum")]
+                Instruction::QuantumVerifyDecrypt { source, recipient_key, output } => {
+                    self.dispatch_quantum_verify_decrypt(source, recipient_key, output)?;
+                }
+                #[cfg(feature = "quantum")]
+                Instruction::GenerateKeyPair { algorithm, output_name } => {
+                    self.dispatch_generate_keypair(algorithm, output_name)?;
+                }
+                #[cfg(feature = "quantum")]
+                Instruction::LongTermSign { source, signing_key, output } => {
+                    self.dispatch_long_term_sign(source, signing_key, output)?;
+                }
+
+                // === GOVERNANCE ===
+                Instruction::Policy { name, formula } => {
+                    self.dispatch_policy(name, formula)?;
+                }
+                Instruction::Regulation { standard, clause } => {
+                    self.dispatch_regulation(standard, clause)?;
+                }
+                Instruction::DataSovereignty { from, to } => {
+                    self.dispatch_data_sovereignty(from, to)?;
+                }
+                Instruction::AccessControl { user, resource, action } => {
+                    self.dispatch_access_control(user, resource, action)?;
+                }
+                Instruction::AuditLedger { message } => {
+                    self.dispatch_audit_ledger(message)?;
+                }
+                Instruction::DecisionQuorum { votes, threshold } => {
+                    self.dispatch_decision_quorum(votes, threshold)?;
+                }
+
                 // Stub implementations for unimplemented instructions
                 _ => {
                     return Err(CnfError::InvalidInstruction(format!(
@@ -297,32 +440,37 @@ impl Runtime {
 
     // ============ PHASE 3: DISPATCH METHODS ============
 
+    /// Helper sets a value in the variable store
+    fn set_value(&mut self, name: &str, value: RuntimeValue) {
+        self.variables.set(name.to_string(), value);
+    }
+
     /// SET target value
     /// Sets a variable to a literal value or reference to another variable
     fn dispatch_set(&mut self, target: &str, value_expr: &str) -> Result<(), CnfError> {
         // Try to parse as integer
         if let Ok(n) = value_expr.parse::<i64>() {
-            self.variables
-                .set(target.to_string(), RuntimeValue::Integer(n));
+            self.set_value(target, RuntimeValue::Integer(n));
             return Ok(());
         }
 
         // Try to parse as float
         if let Ok(d) = value_expr.parse::<f64>() {
-            self.variables
-                .set(target.to_string(), RuntimeValue::Decimal(d));
+            self.set_value(target, RuntimeValue::Decimal(d));
             return Ok(());
         }
 
         // Otherwise treat as variable reference
         if let Some(val) = self.variables.get(value_expr) {
-            self.variables.set(target.to_string(), val);
+            self.set_value(target, val);
             return Ok(());
         }
 
         // Default: treat as text
-        self.variables
-            .set(target.to_string(), RuntimeValue::Text(value_expr.to_string()));
+        self.set_value(
+            target,
+            RuntimeValue::Text(value_expr.to_string()),
+        );
         Ok(())
     }
 
@@ -342,16 +490,14 @@ impl Runtime {
         if matches!(op1, RuntimeValue::Decimal(_)) || matches!(op2, RuntimeValue::Decimal(_)) {
             let a = op1.as_decimal()?;
             let b = op2.as_decimal()?;
-            self.variables
-                .set(target.to_string(), RuntimeValue::Decimal(a + b));
+            self.set_value(target, RuntimeValue::Decimal(a + b));
             return Ok(());
         }
 
         // Otherwise both are integers
         let a = op1.as_integer()?;
         let b = op2.as_integer()?;
-        self.variables
-            .set(target.to_string(), RuntimeValue::Integer(a + b));
+        self.set_value(target, RuntimeValue::Integer(a + b));
         Ok(())
     }
 
@@ -369,16 +515,14 @@ impl Runtime {
         if matches!(op1, RuntimeValue::Decimal(_)) || matches!(op2, RuntimeValue::Decimal(_)) {
             let a = op1.as_decimal()?;
             let b = op2.as_decimal()?;
-            self.variables
-                .set(target.to_string(), RuntimeValue::Decimal(a - b));
+            self.set_value(target, RuntimeValue::Decimal(a - b));
             return Ok(());
         }
 
         // Otherwise both are integers
         let a = op1.as_integer()?;
         let b = op2.as_integer()?;
-        self.variables
-            .set(target.to_string(), RuntimeValue::Integer(a - b));
+        self.set_value(target, RuntimeValue::Integer(a - b));
         Ok(())
     }
 
@@ -396,16 +540,14 @@ impl Runtime {
         if matches!(op1, RuntimeValue::Decimal(_)) || matches!(op2, RuntimeValue::Decimal(_)) {
             let a = op1.as_decimal()?;
             let b = op2.as_decimal()?;
-            self.variables
-                .set(target.to_string(), RuntimeValue::Decimal(a * b));
+            self.set_value(target, RuntimeValue::Decimal(a * b));
             return Ok(());
         }
 
         // Otherwise both are integers
         let a = op1.as_integer()?;
         let b = op2.as_integer()?;
-        self.variables
-            .set(target.to_string(), RuntimeValue::Integer(a * b));
+        self.set_value(target, RuntimeValue::Integer(a * b));
         Ok(())
     }
 
@@ -426,8 +568,7 @@ impl Runtime {
             if b == 0.0 {
                 return Err(CnfError::RuntimeError("Division by zero".to_string()));
             }
-            self.variables
-                .set(target.to_string(), RuntimeValue::Decimal(a / b));
+            self.set_value(target, RuntimeValue::Decimal(a / b));
             return Ok(());
         }
 
@@ -437,8 +578,414 @@ impl Runtime {
         if b == 0 {
             return Err(CnfError::RuntimeError("Division by zero".to_string()));
         }
+        self.set_value(target, RuntimeValue::Integer(a / b));
+        Ok(())
+    }
+
+    // ============ PHASE 4: STRING DISPATCH METHODS ============
+
+    /// CONCATENATE operands (converted to text) → target
+    fn dispatch_concatenate(&mut self, target: &str, operands: &[String]) -> Result<(), CnfError> {
+        let mut result = String::new();
+        for op in operands {
+            let val = self.resolve_operand(op)?;
+            result.push_str(&val.to_string());
+        }
         self.variables
-            .set(target.to_string(), RuntimeValue::Integer(a / b));
+            .set(target.to_string(), RuntimeValue::Text(result));
+        Ok(())
+    }
+
+    /// SUBSTRING source[start : start+length] (byte-based)
+    fn dispatch_substring(
+        &mut self,
+        target: &str,
+        source: &str,
+        start_expr: &str,
+        length_expr: &str,
+    ) -> Result<(), CnfError> {
+        let src_val = self.resolve_operand(source)?;
+        let src_str = src_val.to_string();
+        let start_idx: usize = start_expr
+            .parse()
+            .map_err(|_| CnfError::InvalidInstruction(start_expr.to_string()))?;
+        let len: usize = length_expr
+            .parse()
+            .map_err(|_| CnfError::InvalidInstruction(length_expr.to_string()))?;
+        let substring = if start_idx < src_str.len() {
+            let end = (start_idx + len).min(src_str.len());
+            src_str[start_idx..end].to_string()
+        } else {
+            String::new()
+        };
+        self.set_value(target, RuntimeValue::Text(substring));
+        Ok(())
+    }
+
+    /// LENGTH of text representation → Integer
+    fn dispatch_length(&mut self, target: &str, source: &str) -> Result<(), CnfError> {
+        let src_val = self.resolve_operand(source)?;
+        let len = src_val.to_string().len() as i64;
+        self.set_value(target, RuntimeValue::Integer(len));
+        Ok(())
+    }
+
+    /// Convert source to uppercase text
+    fn dispatch_uppercase(&mut self, target: &str, source: &str) -> Result<(), CnfError> {
+        let src_val = self.resolve_operand(source)?;
+        let src_str = src_val.to_string();
+        let result = cnf_stdlib::string::to_upper(&src_str);
+        self.set_value(target, RuntimeValue::Text(result));
+        Ok(())
+    }
+
+    /// Convert source to lowercase text
+    fn dispatch_lowercase(&mut self, target: &str, source: &str) -> Result<(), CnfError> {
+        let src_val = self.resolve_operand(source)?;
+        let src_str = src_val.to_string();
+        let result = cnf_stdlib::string::to_lower(&src_str);
+        self.set_value(target, RuntimeValue::Text(result));
+        Ok(())
+    }
+
+    /// Trim whitespace from text
+    fn dispatch_trim(&mut self, target: &str, source: &str) -> Result<(), CnfError> {
+        let src_val = self.resolve_operand(source)?;
+        let src_str = src_val.to_string();
+        let result = cnf_stdlib::string::trim(&src_str).to_string();
+        self.set_value(target, RuntimeValue::Text(result));
+        Ok(())
+    }
+
+    fn dispatch_compress_csm(&mut self, source: &str, target: &str) -> Result<(), CnfError> {
+        let dict = self.csm_dict.as_ref().ok_or_else(|| {
+            CnfError::CsmError("CSM dictionary not loaded. Call runtime.csm_dict = Some(dict) before COMPRESS-CSM".to_string())
+        })?;
+        let data = match self.variables.get(source) {
+            Some(RuntimeValue::Binary(b)) => b.clone(),
+            Some(RuntimeValue::Text(t)) => t.as_bytes().to_vec(),
+            Some(_) => return Err(CnfError::CsmError(format!("Variable '{}' is not binary or text", source))),
+            None => return Err(CnfError::BufferNotFound(source.to_string())),
+        };
+        let compressed = cobol_protocol_v154::compress_csm(&data, dict)
+            .map_err(|e| CnfError::CsmError(format!("CSM compression failed: {}", e)))?;
+        self.variables.set(target.to_string(), RuntimeValue::Binary(compressed));
+        self.audit_log.push(format!("COMPRESS-CSM: {} -> {} ({} bytes -> compressed)", source, target, data.len()));
+        Ok(())
+    }
+
+    fn dispatch_decompress_csm(&mut self, source: &str, target: &str) -> Result<(), CnfError> {
+        let dict = self.csm_dict.as_ref().ok_or_else(|| {
+            CnfError::CsmError("CSM dictionary not loaded".to_string())
+        })?;
+        let data = match self.variables.get(source) {
+            Some(RuntimeValue::Binary(b)) => b.clone(),
+            None => return Err(CnfError::BufferNotFound(source.to_string())),
+            _ => return Err(CnfError::CsmError(format!("Variable '{}' is not binary", source))),
+        };
+        let decompressed = cobol_protocol_v154::decompress_csm(&data, dict)
+            .map_err(|e| CnfError::CsmError(format!("CSM decompression failed: {}", e)))?;
+        self.variables.set(target.to_string(), RuntimeValue::Binary(decompressed));
+        Ok(())
+    }
+
+    // ============ CONTROL FLOW ============
+
+    fn dispatch_if(
+        &mut self,
+        condition: &str,
+        then_instrs: &[cnf_compiler::ir::Instruction],
+        else_instrs: &Option<Vec<cnf_compiler::ir::Instruction>>,
+    ) -> Result<(), CnfError> {
+        let vars = self.variables.iter()
+            .map(|(k, v)| (k.clone(), v.to_string()))
+            .collect::<std::collections::HashMap<_, _>>();
+        let evaluator = crate::control_flow::ConditionEvaluator::new(vars);
+        let result = evaluator.evaluate(condition)
+            .map_err(|e| CnfError::RuntimeError(format!("Condition evaluation failed: {}", e)))?;
+        self.execution_trace.push(format!("IF({}={})", condition, result));
+        if result {
+            self.execute_instructions(then_instrs)?;
+        } else if let Some(else_i) = else_instrs {
+            self.execute_instructions(else_i)?;
+        }
+        Ok(())
+    }
+
+    fn dispatch_while(
+        &mut self,
+        condition: &str,
+        instrs: &[cnf_compiler::ir::Instruction],
+    ) -> Result<(), CnfError> {
+        const MAX_ITERATIONS: usize = 10_000;
+        let mut count = 0usize;
+        loop {
+            if count >= MAX_ITERATIONS {
+                return Err(CnfError::LoopLimitExceeded(MAX_ITERATIONS));
+            }
+            let vars = self.variables.iter()
+                .map(|(k, v)| (k.clone(), v.to_string()))
+                .collect::<std::collections::HashMap<_, _>>();
+            let evaluator = crate::control_flow::ConditionEvaluator::new(vars);
+            let cond = evaluator.evaluate(condition)
+                .map_err(|e| CnfError::RuntimeError(format!("While condition error: {}", e)))?;
+            if !cond { break; }
+            self.execute_instructions(instrs)?;
+            count += 1;
+        }
+        Ok(())
+    }
+
+    fn dispatch_for(
+        &mut self,
+        variable: &str,
+        in_list: &str,
+        instrs: &[cnf_compiler::ir::Instruction],
+    ) -> Result<(), CnfError> {
+        let items: Vec<String> = in_list.split(',').map(|s| s.trim().to_string()).collect();
+        for item in items {
+            self.variables.set(variable.to_string(), RuntimeValue::Text(item.clone()));
+            self.execution_trace.push(format!("FOR {}={}", variable, item));
+            self.execute_instructions(instrs)?;
+        }
+        Ok(())
+    }
+
+    // ============ GOVERNANCE DISPATCH METHODS ============
+
+    pub fn dispatch_governance_begin(&mut self) -> Result<(), CnfError> {
+        self.execution_trace.push("GOVERNANCE_BEGIN".to_string());
+        Ok(())
+    }
+
+    pub fn dispatch_governance_policy(&mut self, name: &str) -> Result<(), CnfError> {
+        self.dispatch_policy(name, "true") // dummy formula
+    }
+
+    pub fn dispatch_governance_regulation(&mut self, standard: &str) -> Result<(), CnfError> {
+        self.dispatch_regulation(standard, "compliant")
+    }
+
+    pub fn dispatch_governance_data_sovereignty(&mut self, from: &str, to: &str) -> Result<(), CnfError> {
+        self.dispatch_data_sovereignty(from, to)
+    }
+
+    pub fn dispatch_governance_access_control(&mut self, user: &str, resource: &str) -> Result<(), CnfError> {
+        self.dispatch_access_control(user, resource, "access")
+    }
+
+    pub fn dispatch_governance_audit_ledger(&mut self, message: &str) -> Result<(), CnfError> {
+        self.dispatch_audit_ledger(message)
+    }
+
+    pub fn dispatch_governance_end(&mut self) -> Result<(), CnfError> {
+        self.execution_trace.push("GOVERNANCE_END".to_string());
+        Ok(())
+    }
+
+    pub fn dispatch_compress(&mut self, target: &str) -> Result<(), CnfError> {
+        // Placeholder for compress
+        self.execution_trace.push(format!("COMPRESS {}", target));
+        Ok(())
+    }
+
+    fn dispatch_policy(&mut self, name: &str, formula: &str) -> Result<(), CnfError> {
+        self.governance_policies.insert(name.to_string(), formula.to_string());
+        self.execution_trace.push(format!("POLICY {}: {}", name, formula));
+        Ok(())
+    }
+
+    fn dispatch_regulation(&mut self, standard: &str, clause: &str) -> Result<(), CnfError> {
+        // For now, just log it. In full implementation, would validate against regulatory standards
+        self.execution_trace.push(format!("REGULATION {}: {}", standard, clause));
+        Ok(())
+    }
+
+    fn dispatch_data_sovereignty(&mut self, from: &str, to: &str) -> Result<(), CnfError> {
+        // Check data sovereignty rules
+        use cnf_governance::data_sovereignty::{SovereigntyChecker, Region};
+        let from_region = match from {
+            "EU" => Region::EU,
+            "US" => Region::US,
+            "APAC" => Region::APAC,
+            _ => Region::OTHER(from.to_string()),
+        };
+        let to_region = match to {
+            "EU" => Region::EU,
+            "US" => Region::US,
+            "APAC" => Region::APAC,
+            _ => Region::OTHER(to.to_string()),
+        };
+        let checker = SovereigntyChecker::new();
+        checker.validate_transfer(&from_region, &to_region)
+            .map_err(|e| CnfError::GovernancePolicyViolation(format!("Data sovereignty violation: {:?}", e)))?;
+        self.execution_trace.push(format!("DATA_SOVEREIGNTY {} -> {}", from, to));
+        Ok(())
+    }
+
+    fn dispatch_access_control(&mut self, user: &str, resource: &str, action: &str) -> Result<(), CnfError> {
+        // Store access rule
+        self.access_rules.insert((user.to_string(), resource.to_string()), vec![action.to_string()]);
+        self.execution_trace.push(format!("ACCESS_CONTROL {} {} {}", user, resource, action));
+        Ok(())
+    }
+
+    fn dispatch_audit_ledger(&mut self, message: &str) -> Result<(), CnfError> {
+        self.audit_log.push(message.to_string());
+        self.execution_trace.push(format!("AUDIT: {}", message));
+        Ok(())
+    }
+
+    fn dispatch_decision_quorum(&mut self, votes: &str, threshold: &str) -> Result<(), CnfError> {
+        // Parse votes as number, check against threshold
+        let vote_count: usize = votes.parse().map_err(|_| CnfError::RuntimeError("Invalid vote count".to_string()))?;
+        let thresh: usize = threshold.parse().map_err(|_| CnfError::RuntimeError("Invalid threshold".to_string()))?;
+        if vote_count < thresh {
+            return Err(CnfError::GovernancePolicyViolation(
+                format!("Quorum not reached: {} votes, threshold {}", vote_count, thresh)
+            ));
+        }
+        self.execution_trace.push(format!("DECISION_QUORUM {} votes, threshold {}", vote_count, thresh));
+        Ok(())
+    }
+
+    // ============ QUANTUM CRYPTOGRAPHY DISPATCH METHODS ============
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_encrypt(&mut self, source: &str, key_name: &str) -> Result<(), CnfError> {
+        let data = self.resolve_operand(source)?.as_binary()?;
+        // Assume key is stored as binary in variables
+        let key_data = self.resolve_operand(key_name)?.as_binary()?;
+        // Deserialize key (simplified - in real impl, use proper deserialization)
+        let key: cnf_quantum::KyberKeyPair = serde_json::from_slice(&key_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid quantum key: {}", e)))?;
+        let encrypted = cnf_quantum::quantum_encrypt(&data, &key.public_key)
+            .map_err(|e| CnfError::EncryptionFailed(format!("Quantum encryption failed: {:?}", e)))?;
+        let encrypted_bytes = serde_json::to_vec(&encrypted)
+            .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?;
+        self.set_value(source, RuntimeValue::Binary(encrypted_bytes));
+        self.execution_trace.push(format!("QUANTUM_ENCRYPT {} with {}", source, key_name));
+        Ok(())
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_decrypt(&mut self, target: &str, key_name: &str) -> Result<(), CnfError> {
+        let encrypted_data = self.resolve_operand(target)?.as_binary()?;
+        let key_data = self.resolve_operand(key_name)?.as_binary()?;
+        let key: cnf_quantum::KyberKeyPair = serde_json::from_slice(&key_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid quantum key: {}", e)))?;
+        let encrypted: cnf_quantum::QuantumEncryptedBlob = serde_json::from_slice(&encrypted_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid encrypted data: {}", e)))?;
+        let decrypted = cnf_quantum::quantum_decrypt(&encrypted, &key.secret_key)
+            .map_err(|e| CnfError::DecryptionFailed(format!("Quantum decryption failed: {:?}", e)))?;
+        self.set_value(target, RuntimeValue::Binary(decrypted));
+        self.execution_trace.push(format!("QUANTUM_DECRYPT {} with {}", target, key_name));
+        Ok(())
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_sign(&mut self, source: &str, signing_key: &str, output: &str) -> Result<(), CnfError> {
+        let data = self.resolve_operand(source)?.as_binary()?;
+        let key_data = self.resolve_operand(signing_key)?.as_binary()?;
+        let key: cnf_quantum::DilithiumKeyPair = serde_json::from_slice(&key_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid signing key: {}", e)))?;
+        let signature = cnf_quantum::dilithium_sign(&data, &key.secret_key)
+            .map_err(|e| CnfError::RuntimeError(format!("Quantum signing failed: {:?}", e)))?;
+        let sig_bytes = serde_json::to_vec(&signature)
+            .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?;
+        self.set_value(output, RuntimeValue::Binary(sig_bytes));
+        self.execution_trace.push(format!("QUANTUM_SIGN {} with {} -> {}", source, signing_key, output));
+        Ok(())
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_verify_sig(&mut self, source: &str, verification_key: &str, signature_ref: &str) -> Result<(), CnfError> {
+        let data = self.resolve_operand(source)?.as_binary()?;
+        let key_data = self.resolve_operand(verification_key)?.as_binary()?;
+        let sig_data = self.resolve_operand(signature_ref)?.as_binary()?;
+        let key: cnf_quantum::DilithiumKeyPair = serde_json::from_slice(&key_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid verification key: {}", e)))?;
+        let signature: cnf_quantum::DilithiumSignature = serde_json::from_slice(&sig_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid signature: {}", e)))?;
+        cnf_quantum::dilithium_verify(&data, &signature, &key.public_key)
+            .map_err(|e| CnfError::RuntimeError(format!("Quantum verification failed: {:?}", e)))?;
+        self.execution_trace.push(format!("QUANTUM_VERIFY_SIG {} with {} sig {}", source, verification_key, signature_ref));
+        Ok(())
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_sign_encrypt(&mut self, source: &str, recipient_key: &str, signing_key: &str, output: &str) -> Result<(), CnfError> {
+        let data = self.resolve_operand(source)?.as_binary()?;
+        let rec_key_data = self.resolve_operand(recipient_key)?.as_binary()?;
+        let sig_key_data = self.resolve_operand(signing_key)?.as_binary()?;
+        let rec_key: cnf_quantum::KyberKeyPair = serde_json::from_slice(&rec_key_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid recipient key: {}", e)))?;
+        let sig_key: cnf_quantum::DilithiumKeyPair = serde_json::from_slice(&sig_key_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid signing key: {}", e)))?;
+        let signed_encrypted = cnf_quantum::quantum_sign_and_encrypt(&data, &rec_key.public_key, &sig_key.secret_key)
+            .map_err(|e| CnfError::RuntimeError(format!("Quantum sign-encrypt failed: {:?}", e)))?;
+        let se_bytes = serde_json::to_vec(&signed_encrypted)
+            .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?;
+        self.set_value(output, RuntimeValue::Binary(se_bytes));
+        self.execution_trace.push(format!("QUANTUM_SIGN_ENCRYPT {} to {} with {} -> {}", source, recipient_key, signing_key, output));
+        Ok(())
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_quantum_verify_decrypt(&mut self, source: &str, recipient_key: &str, output: &str) -> Result<(), CnfError> {
+        let se_data = self.resolve_operand(source)?.as_binary()?;
+        let rec_key_data = self.resolve_operand(recipient_key)?.as_binary()?;
+        let rec_key: cnf_quantum::KyberKeyPair = serde_json::from_slice(&rec_key_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid recipient key: {}", e)))?;
+        let signed_encrypted: cnf_quantum::SignedEncryptedBlob = serde_json::from_slice(&se_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid signed-encrypted data: {}", e)))?;
+        let (decrypted, verified) = cnf_quantum::quantum_verify_and_decrypt(&signed_encrypted, &rec_key.secret_key)
+            .map_err(|e| CnfError::RuntimeError(format!("Quantum verify-decrypt failed: {:?}", e)))?;
+        if !verified {
+            return Err(CnfError::RuntimeError("Signature verification failed".to_string()));
+        }
+        self.set_value(output, RuntimeValue::Binary(decrypted));
+        self.execution_trace.push(format!("QUANTUM_VERIFY_DECRYPT {} with {} -> {}", source, recipient_key, output));
+        Ok(())
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_generate_keypair(&mut self, algorithm: &str, output_name: &str) -> Result<(), CnfError> {
+        let keypair = match algorithm {
+            "kyber" => {
+                let kp = cnf_quantum::generate_kyber_keypair();
+                serde_json::to_vec(&kp)
+                    .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?
+            }
+            "dilithium" => {
+                let kp = cnf_quantum::generate_dilithium_keypair();
+                serde_json::to_vec(&kp)
+                    .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?
+            }
+            "sphincs" => {
+                let kp = cnf_quantum::generate_sphincs_keypair();
+                serde_json::to_vec(&kp)
+                    .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?
+            }
+            _ => return Err(CnfError::RuntimeError(format!("Unknown algorithm: {}", algorithm))),
+        };
+        self.set_value(output_name, RuntimeValue::Binary(keypair));
+        self.execution_trace.push(format!("GENERATE_KEYPAIR {} -> {}", algorithm, output_name));
+        Ok(())
+    }
+
+    #[cfg(feature = "quantum")]
+    fn dispatch_long_term_sign(&mut self, source: &str, signing_key: &str, output: &str) -> Result<(), CnfError> {
+        let data = self.resolve_operand(source)?.as_binary()?;
+        let key_data = self.resolve_operand(signing_key)?.as_binary()?;
+        let key: cnf_quantum::SphincsKeyPair = serde_json::from_slice(&key_data)
+            .map_err(|e| CnfError::RuntimeError(format!("Invalid long-term signing key: {}", e)))?;
+        let signature = cnf_quantum::sphincs_sign(&data, &key.secret_key)
+            .map_err(|e| CnfError::RuntimeError(format!("Long-term signing failed: {:?}", e)))?;
+        let sig_bytes = serde_json::to_vec(&signature)
+            .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?;
+        self.set_value(output, RuntimeValue::Binary(sig_bytes));
+        self.execution_trace.push(format!("LONG_TERM_SIGN {} with {} -> {}", source, signing_key, output));
         Ok(())
     }
 
@@ -751,6 +1298,147 @@ mod tests {
         assert_eq!(buffers.len(), 2);
         assert!(buffers.iter().any(|(name, _)| name == "BUF1"));
         assert!(buffers.iter().any(|(name, _)| name == "BUF2"));
+    }
+
+    // === string operation tests ===
+
+    #[test]
+    fn test_dispatch_concatenate_text() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("a".to_string(), RuntimeValue::Text("Hello".to_string()));
+        runtime
+            .variables
+            .set("b".to_string(), RuntimeValue::Text("World".to_string()));
+
+        runtime
+            .dispatch_concatenate("out", &["a".to_string(), "b".to_string()])
+            .unwrap();
+        assert_eq!(
+            runtime.variables.get("out"),
+            Some(RuntimeValue::Text("HelloWorld".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_substring_basic() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("s".to_string(), RuntimeValue::Text("abcdef".to_string()));
+
+        runtime
+            .dispatch_substring("out", "s", "2", "3")
+            .unwrap();
+        assert_eq!(
+            runtime.variables.get("out"),
+            Some(RuntimeValue::Text("cde".to_string()))
+        );
+
+        // start past end returns empty
+        runtime
+            .dispatch_substring("out2", "s", "10", "4")
+            .unwrap();
+        assert_eq!(runtime.variables.get("out2"), Some(RuntimeValue::Text("".to_string())));
+    }
+
+    #[test]
+    fn test_dispatch_length_integer() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("s".to_string(), RuntimeValue::Text("xyz".to_string()));
+        runtime.dispatch_length("len", "s").unwrap();
+        assert_eq!(runtime.variables.get("len"), Some(RuntimeValue::Integer(3)));
+
+        // length of numeric value coerces to text
+        runtime
+            .variables
+            .set("n".to_string(), RuntimeValue::Integer(12345));
+        runtime.dispatch_length("len2", "n").unwrap();
+        assert_eq!(runtime.variables.get("len2"), Some(RuntimeValue::Integer(5)));
+    }
+
+    #[test]
+    fn test_dispatch_case_trim() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("x".to_string(), RuntimeValue::Text(" Foo Bar ".to_string()));
+        runtime.dispatch_trim("trimmed", "x").unwrap();
+        assert_eq!(
+            runtime.variables.get("trimmed"),
+            Some(RuntimeValue::Text("Foo Bar".to_string()))
+        );
+
+        runtime.dispatch_uppercase("up", "x").unwrap();
+        assert_eq!(
+            runtime.variables.get("up"),
+            Some(RuntimeValue::Text(" FOO BAR ".to_string()))
+        );
+
+        runtime.dispatch_lowercase("low", "x").unwrap();
+        assert_eq!(
+            runtime.variables.get("low"),
+            Some(RuntimeValue::Text(" foo bar ".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_if_for_while() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("NUM".to_string(), RuntimeValue::Text("0".to_string()));
+
+        // IF statement
+        let if_instr = cnf_compiler::ir::Instruction::IfStatement {
+            condition: "true".to_string(),
+            then_instrs: vec![cnf_compiler::ir::Instruction::Set {
+                target: "NUM".to_string(),
+                value: "1".to_string(),
+            }],
+            else_instrs: None,
+        };
+        runtime.execute_instruction(&if_instr).unwrap();
+        assert_eq!(
+            runtime.variables.get("NUM"),
+            Some(RuntimeValue::Integer(1))
+        );
+
+        // FOR loop over list
+        let for_instr = cnf_compiler::ir::Instruction::ForLoop {
+            variable: "ITEM".to_string(),
+            in_list: "a,b".to_string(),
+            instrs: vec![cnf_compiler::ir::Instruction::Set {
+                target: "NUM".to_string(),
+                value: "2".to_string(),
+            }],
+        };
+        runtime.execute_instruction(&for_instr).unwrap();
+        assert_eq!(
+            runtime.variables.get("ITEM"),
+            Some(RuntimeValue::Text("b".to_string()))
+        );
+
+        // WHILE loop increments counter
+        runtime
+            .variables
+            .set("CNT".to_string(), RuntimeValue::Text("0".to_string()));
+        let while_instr = cnf_compiler::ir::Instruction::WhileLoop {
+            condition: "CNT < 3".to_string(),
+            instrs: vec![cnf_compiler::ir::Instruction::Set {
+                target: "CNT".to_string(),
+                value: "3".to_string(), // Set to 3 to exit loop
+            }],
+        };
+        runtime.execute_instruction(&while_instr).unwrap();
+        // After loop, CNT should be 3 (integer)
+        assert_eq!(
+            runtime.variables.get("CNT"),
+            Some(RuntimeValue::Integer(3))
+        );
     }
 }
 

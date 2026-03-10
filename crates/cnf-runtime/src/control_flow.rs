@@ -143,11 +143,17 @@ impl ScopeManager {
     }
 
     /// Pop scope (cleanup after function/block exits)
+    /// Variables set in inner scope are merged into parent scope
     pub fn pop_scope(&mut self) -> Result<(), String> {
         if self.scopes.len() <= 1 {
             return Err("Cannot pop global scope".to_string());
         }
-        self.scopes.pop();
+        if let Some(inner_scope) = self.scopes.pop() {
+            // Merge inner scope variables into parent scope
+            if let Some(parent_scope) = self.scopes.last_mut() {
+                parent_scope.extend(inner_scope);
+            }
+        }
         Ok(())
     }
 

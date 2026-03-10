@@ -54,6 +54,7 @@ use std::sync::{Arc, Mutex};
 use hmac::{Hmac, Mac};
 use rand::{rngs::OsRng, RngCore};
 use sha2::Sha256;
+use subtle::ConstantTimeEq;
 #[derive(Clone, Debug, Default)]
 pub struct TransportConfig {
     pub auth_token: Vec<u8>,
@@ -238,6 +239,12 @@ impl TcpTransport {
         }
     }
 
+    /// Builder method to set transport config
+    pub fn with_config(mut self, config: TransportConfig) -> Self {
+        self.config = Some(config);
+        self
+    }
+
     /// Bind to listening address
     pub fn bind(&mut self, addr: &str) -> Result<(), CnfNetworkError> {
         let listener = TcpListener::bind(addr).map_err(|e| {
@@ -289,8 +296,10 @@ impl TcpTransport {
 
         match listener.accept() {
             Ok((mut stream, _addr)) => {
-                // HMAC handshake will be implemented in connect_authenticated
-                // For now, skip handshake
+                if let Some(ref cfg) = self.config {
+                    Self::server_handshake(&mut stream, cfg)
+                        .map_err(|_| CnfNetworkError::AuthenticationFailed)?
+                }
 
                 // Read frame
                 let mut size_buf = [0u8; 4];
@@ -430,9 +439,8 @@ impl TcpTransport {
             .map_err(|_| CnfNetworkError::AuthenticationFailed)?;
         verify_mac.update(&client_nonce);
         verify_mac.update(&server_nonce);
-        let expected_server_hmac = verify_mac.finalize();
-
-        if expected_server_hmac.into_bytes().as_ref() != received_server_hmac.as_slice() {
+        let expected = verify_mac.finalize().into_bytes();
+        if expected[..].ct_eq(&received_server_hmac[..]).unwrap_u8() == 0 {
             return Err(CnfNetworkError::AuthenticationFailed);
         }
 
@@ -471,9 +479,8 @@ impl TcpTransport {
         let mut mac = Hmac::<Sha256>::new_from_slice(&config.auth_token)
             .map_err(|_| CnfNetworkError::AuthenticationFailed)?;
         mac.update(&client_nonce);
-        let expected_client_hmac = mac.finalize();
-
-        if expected_client_hmac.into_bytes().as_ref() != received_client_hmac.as_slice() {
+        let expected = mac.finalize().into_bytes();
+        if expected[..].ct_eq(&received_client_hmac[..]).unwrap_u8() == 0 {
             return Err(CnfNetworkError::AuthenticationFailed);
         }
 

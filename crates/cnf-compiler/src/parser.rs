@@ -897,6 +897,66 @@ impl Parser {
         Ok(predicate_parts.join(" "))
     }
 
+    fn parse_condition_expression(&mut self) -> Result<String, String> {
+        let mut parts = Vec::new();
+        while self.current() != &Token::Then && self.current() != &Token::Do && self.current() != &Token::Eof {
+            match self.current() {
+                Token::Identifier(s) => {
+                    parts.push(s.clone());
+                    self.advance();
+                }
+                Token::Equals => {
+                    parts.push("=".to_string());
+                    self.advance();
+                }
+                Token::NotEquals => {
+                    parts.push("!=".to_string());
+                    self.advance();
+                }
+                Token::LessThan => {
+                    parts.push("<".to_string());
+                    self.advance();
+                }
+                Token::GreaterThan => {
+                    parts.push(">".to_string());
+                    self.advance();
+                }
+                Token::LessThanOrEqual => {
+                    parts.push("<=".to_string());
+                    self.advance();
+                }
+                Token::GreaterThanOrEqual => {
+                    parts.push(">=".to_string());
+                    self.advance();
+                }
+                Token::And => {
+                    parts.push("AND".to_string());
+                    self.advance();
+                }
+                Token::Or => {
+                    parts.push("OR".to_string());
+                    self.advance();
+                }
+                Token::Not => {
+                    parts.push("NOT".to_string());
+                    self.advance();
+                }
+                Token::LeftParen => {
+                    parts.push("(".to_string());
+                    self.advance();
+                }
+                Token::RightParen => {
+                    parts.push(")".to_string());
+                    self.advance();
+                }
+                _ => {
+                    return Err(format!("Unexpected token in condition: {}", self.current()));
+                }
+            }
+        }
+        Ok(parts.join(" "))
+    }
+
     fn parse_data(&mut self) -> Result<DataDivision, String> {
         self.expect_division(Token::DataDiv, "DATA DIVISION")?;
         self.expect(Token::Division)?;
@@ -1294,7 +1354,7 @@ impl Parser {
                 }
                 Token::If => {
                     self.advance();
-                    let condition = self.expect_identifier()?;
+                    let condition = self.parse_condition_expression()?;
                     self.expect(Token::Then)?;
                     let then_statements = self.parse_block_until(&[Token::Else, Token::EndIf])?;
                     let else_statements = if self.current() == &Token::Else {
@@ -1316,7 +1376,13 @@ impl Parser {
                     self.advance();
                     let variable = self.expect_identifier()?;
                     self.expect(Token::In)?;
-                    let in_list = self.expect_identifier()?;
+                    let in_list = if let Token::String(s) = self.current() {
+                        let list = s.clone();
+                        self.advance();
+                        list
+                    } else {
+                        self.expect_identifier()?
+                    };
                     self.expect(Token::Do)?;
                     let statements = self.parse_block_until(&[Token::EndFor])?;
                     self.expect(Token::EndFor)?;
@@ -1329,7 +1395,7 @@ impl Parser {
                 }
                 Token::While => {
                     self.advance();
-                    let condition = self.expect_identifier()?;
+                    let condition = self.parse_condition_expression()?;
                     self.expect(Token::Do)?;
                     let statements = self.parse_block_until(&[Token::EndWhile])?;
                     self.expect(Token::EndWhile)?;

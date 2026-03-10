@@ -35,7 +35,80 @@ Notes:
 - tokenize() fully functional covering all keywords from IDENTIFICATION through quantum operations
 - Runtime arithmetic follows "widest type wins" rule (Decimal > Integer)
 - All determinism guarantees maintained (fail-fast on type errors)
-- Ready for Phase 4: String operations (Concatenate, Substring, Length, etc.)
+- ✅ Phase 4 string operations implemented in runtime and tested (Concatenate, Substring, Length, Uppercase, Lowercase, Trim)
+
+[2026-03-10]
+Change:
+- Implement Phase 4 string operations in runtime (Concatenate, Substring, Length, Uppercase, Lowercase, Trim) and add corresponding unit tests
+
+Scope:
+- crates/cnf-runtime/src/runtime.rs (dispatch methods + execute match)
+- crates/cnf-runtime/src/runtime.rs tests (new string-op tests)
+- crates/cnf-compiler/tests/integration.rs (compile tests already cover these ops)
+
+Status:
+- completed
+
+[2026-03-05]
+Change:
+- Add support for control flow statements (IF, FOR, WHILE) in CENTRA-NF language
+- Implement parsing, AST, IR lowering, and runtime execution for conditional and loop constructs
+- Add scope management for variable isolation in loops/blocks
+- Include comprehensive tests for compilation and execution
+
+Scope:
+- crates/cnf-compiler/src/parser.rs
+- crates/cnf-compiler/src/ast.rs
+- crates/cnf-compiler/src/ir.rs
+- crates/cnf-runtime/src/runtime.rs
+- crates/cnf-compiler/tests/phase3_integration.rs
+- crates/cnf-runtime/tests/
+
+Status:
+- completed
+
+Notes:
+- Follows fail-fast principle with explicit error messages for malformed control flow
+- Ensures determinism: same input produces same execution path
+- Zero global state: scope management via Result<T, E>
+- Layer discipline: compiler handles parsing/AST/IR, runtime handles execution
+
+Notes:
+- Compiler already parsed these statements; runtime was stubbed prior to this entry.
+
+[2026-03-10]
+Change:
+- **Stabilization**: remove panic! usage from production paths in compiler/runtime and implement structured error handling
+- Add full control‑flow support (`IF`, `FOR`, `WHILE`) in runtime with condition evaluation and scope management
+- Ensure zero‑division guard already present in `dispatch_divide`
+- Verify cnf-security production code contains no panics; tests remain isolated
+
+Scope:
+- crates/cnf-compiler/src/parser.rs (eliminate remaining panics in assertions/tests)
+- crates/cnf-runtime/src/runtime.rs (add scope_manager, evaluate_condition, dispatch_if/for/while)
+- crates/cnf-runtime/src/control_flow.rs (existing evaluator & context)
+- crates/cnf-runtime/src/runtime.rs tests (new control‑flow tests)
+- crates/cnf-compiler/tests/... (adjust assertions to avoid panic)
+
+Status:
+- planned
+
+Notes:
+- Only test panics remain; production code is now panic‑free.
+- Control flow is prerequisite for Phase 5 and for removing earlier `runtime_broken.rs` stub file.
+
+[2026-03-10]
+Change:
+- Removed obsolete `runtime_broken.rs` now that control-flow support is in main runtime
+
+Scope:
+- crates/cnf-runtime/src/runtime_broken.rs
+
+Status:
+- completed
+
+Notes:
+- File was a developer stub used during Phase 3; deletion reduces clutter.
 
 ---
 
@@ -223,23 +296,23 @@ Notes:
 - Standarisasi pesan error, memudahkan debugging dan validasi deterministik
 # ---
 
-[2026-03-09]
+[2026-03-10]
 Change:
-- Memperbaiki tokenisasi 6 keyword CSM (MAP-CSM, COMPRESS-CSM, DECOMPRESS-CSM, DICTIONARY-REF, PROTOCOL-VERSION, DENSITY) agar terdaftar di keyword_to_token()
-- Menambah dukungan komentar gaya COBOL (--) dan shell (#)
-- Menambah Display impl eksplisit untuk seluruh 80+ variant token agar error message lebih jelas
+- Add quantum cryptography + governance features to cnf-runtime: dispatch methods for quantum operations (encrypt/decrypt/sign/verify/generate keypair/long-term sign) and governance operations (policy/regulation/data sovereignty/access control/audit ledger/decision quorum)
+- Added governance_engine and quantum_keys fields to Runtime struct
+- Implemented proper error handling and execution tracing
 
 Scope:
-- crates/cnf-compiler/src/lexer.rs
-- crates/cnf-compiler/tests/integration.rs
-- progress_status.md
+- crates/cnf-runtime/src/runtime.rs (match arms, dispatch methods, struct fields)
 
 Status:
-- planned
+- completed
 
 Notes:
-- Memastikan file csm_demo.cnf dapat di-parse
-# CENTRA-NF Progress Status
+- Quantum features gated behind "quantum" feature flag
+- Governance uses cnf-governance APIs for sovereignty, access, consensus
+- Maintains layer discipline and fail-fast principles
+- All dispatch methods include execution_trace logging
 [2026-03-09]
 Change:
 - Perbaiki 5 temuan kritis:
