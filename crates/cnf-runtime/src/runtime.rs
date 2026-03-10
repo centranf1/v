@@ -1,3 +1,7 @@
+use crate::control_flow::{
+    ConditionEvaluator as ControlFlowEvaluator, 
+    LoopContext,
+};
 use serde_json_main as serde_json;
 use serde_main as serde;
 use cobol_protocol_v154::compress_csm;
@@ -727,9 +731,22 @@ impl TypeValidator for XmlTypeValidator {
         Ok(())
     }
 
-    /// Execute DISPLAY instruction (print message to stdout).
+    /// Execute DISPLAY instruction (print message to stdout with variable interpolation).
+    /// Supports format strings like:
+    ///   - {VAR_NAME} - simple substitution
+    ///   - {VAR:upper} - uppercase formatting
+    ///   - {VAR:pad:10} - padding to 10 characters
+    ///   - {VAR:hex} - hex encoding
+    ///   - {VAR:left:8} - left-align to 8 chars
     fn dispatch_display(&self, message: &str) -> Result<(), CnfError> {
-        println!("{}", message);
+        // Build variable map from current scope
+        let variables = self.scope_manager.flatten();
+        
+        // Apply format string interpolation
+        let output = crate::formatter::format_display(message, &variables)
+            .map_err(|e| CnfError::RuntimeError(format!("Display format error: {}", e)))?;
+        
+        println!("{}", output);
         Ok(())
     }
 
@@ -1258,34 +1275,17 @@ impl TypeValidator for XmlTypeValidator {
 
     /// Evaluate condition expression (simplified for v0.4.0)
     fn evaluate_condition(&self, condition: &str) -> Result<bool, CnfError> {
-        let condition = condition.trim();
-
-        // Simple equality check: variable = "value"
-        if let Some(eq_pos) = condition.find(" = ") {
-            let var_name = &condition[..eq_pos];
-            let expected = &condition[eq_pos + 3..];
-
-            if let Some(actual) = self.get_variable(var_name) {
-                // Remove quotes from expected if present
-                let expected_clean = expected.trim_matches('"');
-                return Ok(actual == expected_clean);
-            } else {
-                return Err(CnfError::InvalidInstruction(format!(
-                    "Variable '{}' not found in condition '{}'",
-                    var_name, condition
-                )));
-            }
-        }
-
-        // Simple boolean literal
-        match condition {
-            "true" | "TRUE" => Ok(true),
-            "false" | "FALSE" => Ok(false),
-            _ => Err(CnfError::InvalidInstruction(format!(
-                "Unsupported condition: '{}'",
-                condition
-            ))),
-        }
+        // Build map of current variables from scope
+        let variables = self.scope_manager.flatten();
+        
+        // Use enhanced ConditionEvaluator from control_flow with support for:
+        // - Comparison operators: =, !=, <, >, <=, >=
+        // - Logical operators: AND, OR, NOT
+        // - Parentheses for grouping: (expr1 AND expr2) OR expr3
+        let evaluator = ControlFlowEvaluator::new(variables);
+        evaluator
+            .evaluate(condition)
+            .map_err(|e| CnfError::InvalidInstruction(e))
     }
 
     /// Build HoareContext from current buffer states.
@@ -1934,33 +1934,91 @@ impl TypeValidator for XmlTypeValidator {
                 in_list,
                 instrs,
             } => {
-                // Simple iteration over buffer names (for v0.4.0)
-                // TODO: Support actual list iteration in v0.5.0
+                // Enhanced for loop with LoopContext for iteration tracking
                 let list_items: Vec<&str> = in_list.split(',').map(|s| s.trim()).collect();
-                for item in list_items {
+                let max_iterations = list_items.len();
+                
+                // Create loop context for tracking iterations
+                let mut loop_ctx = LoopContext::new(max_iterations);
+                
+                // Push new scope for loop variables
+                self.scope_manager.push_scope();
+                
+                for (idx, item) in list_items.iter().enumerate() {
+                    // Set loop variable and iteration context
                     self.set_variable(variable.clone(), item.to_string());
+                    self.set_variable(
+                        format!("__loop_index_{}", variable),
+                        idx.to_string(),
+                    );
+                    self.set_variable(
+                        format!("__loop_max_{}", variable),
+                        max_iterations.to_string(),
+                    );
+                    
+                    // Execute loop body
                     for instr in instrs {
-                        self.execute_instruction(instr)?;
+                        match self.execute_instruction(instr) {
+                            Ok(_) => {},
+                            Err(e) => {
+                                // Clean up scope on error
+                                self.scope_manager.pop_scope();
+                                return Err(e);
+                            }
+                        }
                     }
+                    
+                    loop_ctx.next_iteration();
                 }
+                
+                // Pop loop scope
+                self.scope_manager.pop_scope();
             }
             Instruction::WhileLoop { condition, instrs } => {
-                let max_iterations = 1000; // Prevent infinite loops
-                let mut iterations = 0;
-
-                while self.evaluate_condition(condition)? && iterations < max_iterations {
+                // Enhanced while loop with LoopContext and configurable iteration limits
+                const DEFAULT_MAX_ITERATIONS: usize = 10000;
+                let max_iterations = DEFAULT_MAX_ITERATIONS;
+                
+                // Create and initialize loop context
+                let mut loop_ctx = LoopContext::new(max_iterations);
+                
+                // Push new scope for loop variables
+                self.scope_manager.push_scope();
+                
+                // Execute loop while condition is true
+                while self.evaluate_condition(condition)? && loop_ctx.should_continue() {
+                    // Update loop iteration tracking variables
+                    self.set_variable(
+                        "__iter".to_string(),
+                        loop_ctx.iterations.to_string(),
+                    );
+                    
+                    // Execute loop body
                     for instr in instrs {
-                        self.execute_instruction(instr)?;
+                        match self.execute_instruction(instr) {
+                            Ok(_) => {},
+                            Err(e) => {
+                                // Clean up scope on error
+                                self.scope_manager.pop_scope();
+                                return Err(e);
+                            }
+                        }
                     }
-                    iterations += 1;
+                    
+                    loop_ctx.next_iteration();
                 }
-
-                if iterations >= max_iterations {
+                
+                // Check for infinite loop condition
+                if !loop_ctx.should_continue() && self.evaluate_condition(condition)? {
+                    self.scope_manager.pop_scope();
                     return Err(CnfError::InvalidInstruction(format!(
-                        "While loop exceeded maximum iterations ({}) - possible infinite loop",
+                        "While loop exceeded maximum iterations ({}) - possible infinite loop detected",
                         max_iterations
                     )));
                 }
+                
+                // Pop loop scope
+                self.scope_manager.pop_scope();
             }
             Instruction::FunctionDef {
                 name,

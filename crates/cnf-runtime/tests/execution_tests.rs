@@ -277,4 +277,281 @@ mod runtime_execution_tests {
             "Determinism test failed: same input produced different output"
         );
     }
+
+    // Phase 1b: Enhanced ForLoop and WhileLoop with LoopContext tests
+
+    #[test]
+    fn test_for_loop_basic_iteration() {
+        // Test basic ForLoop execution with loop variable assignment
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("RESULT".to_string(), Vec::new());
+
+        let for_loop = Instruction::ForLoop {
+            variable: "ITEM".to_string(),
+            in_list: "A,B,C".to_string(),
+            instrs: vec![
+                Instruction::Print {
+                    target: "ITEM".to_string(),
+                    format: None,
+                },
+            ],
+        };
+
+        let result = runtime.execute_instruction(&for_loop);
+        assert!(result.is_ok(), "ForLoop should execute successfully");
+
+        // The loop should have executed 3 times with items A, B, C
+        // ITEM variable should be set to the last item (C)
+        let final_value = runtime.get_variable("ITEM");
+        assert_eq!(final_value, Some("C".to_string()), "Loop variable should be set to final item");
+    }
+
+    #[test]
+    fn test_for_loop_with_accumulation() {
+        // Test ForLoop that accumulates values
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("COUNT".to_string(), Vec::new());
+
+        let instructions = vec![
+            Instruction::Set {
+                target: "COUNT".to_string(),
+                value: "0".to_string(),
+            },
+            Instruction::ForLoop {
+                variable: "I".to_string(),
+                in_list: "1,2,3,4,5".to_string(),
+                instrs: vec![
+                    Instruction::Add {
+                        target: "COUNT".to_string(),
+                        operand1: "COUNT".to_string(),
+                        operand2: "I".to_string(),
+                    },
+                ],
+            },
+        ];
+
+        runtime.execute_instructions(&instructions).unwrap();
+
+        // 0 + 1 + 2 + 3 + 4 + 5 = 15
+        let count = String::from_utf8(runtime.get_output("COUNT").unwrap()).unwrap();
+        assert_eq!(count, "15", "ForLoop accumulation should compute sum correctly");
+    }
+
+    #[test]
+    fn test_for_loop_scope_isolation() {
+        // Test that loop variables are properly scoped
+        let mut runtime = Runtime::new();
+        runtime.set_variable("OUTER".to_string(), "BEFORE".to_string());
+
+        let instructions = vec![
+            Instruction::ForLoop {
+                variable: "LOOP_VAR".to_string(),
+                in_list: "X,Y,Z".to_string(),
+                instrs: vec![
+                    Instruction::Set {
+                        target: "LOOP_VAR".to_string(),
+                        value: "MODIFIED".to_string(),
+                    },
+                ],
+            },
+        ];
+
+        runtime.execute_instructions(&instructions).unwrap();
+
+        // After loop, LOOP_VAR should be in scope (from last iteration)
+        // OUTER should remain unchanged
+        assert_eq!(
+            runtime.get_variable("OUTER"),
+            Some("BEFORE".to_string()),
+            "Outer scope should not be affected by loop"
+        );
+    }
+
+    #[test]
+    fn test_for_loop_with_nested_instructions() {
+        // Test ForLoop with multiple instructions in body
+        let mut runtime = Runtime::new();
+        
+        let instructions = vec![
+            Instruction::Set {
+                target: "RESULT".to_string(),
+                value: "".to_string(),
+            },
+            Instruction::ForLoop {
+                variable: "ITEM".to_string(),
+                in_list: "A,B,C".to_string(),
+                instrs: vec![
+                    Instruction::Concatenate {
+                        target: "RESULT".to_string(),
+                        operands: vec!["RESULT".to_string(), "ITEM".to_string()],
+                    },
+                ],
+            },
+        ];
+
+        runtime.execute_instructions(&instructions).unwrap();
+
+        let result = String::from_utf8(runtime.get_output("RESULT").unwrap()).unwrap_or_default();
+        assert_eq!(result, "ABC", "ForLoop with concatenation should produce correct output");
+    }
+
+    #[test]
+    fn test_while_loop_basic_iteration() {
+        // Test basic WhileLoop with condition
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("COUNT".to_string(), Vec::new());
+
+        let instructions = vec![
+            Instruction::Set {
+                target: "COUNT".to_string(),
+                value: "0".to_string(),
+            },
+            Instruction::WhileLoop {
+                condition: "COUNT < 5".to_string(),
+                instrs: vec![
+                    Instruction::Add {
+                        target: "COUNT".to_string(),
+                        operand1: "COUNT".to_string(),
+                        operand2: "1".to_string(),
+                    },
+                ],
+            },
+        ];
+
+        runtime.execute_instructions(&instructions).unwrap();
+
+        let count = String::from_utf8(runtime.get_output("COUNT").unwrap()).unwrap();
+        assert_eq!(count, "5", "WhileLoop should iterate until condition is false");
+    }
+
+    #[test]
+    fn test_while_loop_tracks_iterations() {
+        // Test that WhileLoop tracks iteration count via __iter variable
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("X".to_string(), Vec::new());
+
+        let instructions = vec![
+            Instruction::Set {
+                target: "X".to_string(),
+                value: "0".to_string(),
+            },
+            Instruction::WhileLoop {
+                condition: "X < 3".to_string(),
+                instrs: vec![
+                    Instruction::Add {
+                        target: "X".to_string(),
+                        operand1: "X".to_string(),
+                        operand2: "1".to_string(),
+                    },
+                ],
+            },
+        ];
+
+        let result = runtime.execute_instructions(&instructions);
+        assert!(result.is_ok(), "WhileLoop with __iter tracking should succeed");
+
+        let final_value = String::from_utf8(runtime.get_output("X").unwrap()).unwrap();
+        assert_eq!(final_value, "3", "WhileLoop should reach target value");
+    }
+
+    #[test]
+    fn test_while_loop_infinite_loop_detection() {
+        // Test that WhileLoop detects and prevents infinite loops
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("X".to_string(), Vec::new());
+
+        let instructions = vec![
+            Instruction::Set {
+                target: "X".to_string(),
+                value: "1".to_string(),
+            },
+            Instruction::WhileLoop {
+                // X is always 1, so condition X = 1 is always true
+                condition: "X = 1".to_string(),
+                instrs: vec![
+                    // We don't modify X, so loop never terminates
+                ],
+            },
+        ];
+
+        let result = runtime.execute_instructions(&instructions);
+        assert!(
+            result.is_err(),
+            "WhileLoop should detect infinite loop and return error"
+        );
+
+        let error_msg = format!("{:?}", result);
+        assert!(
+            error_msg.contains("exceeded maximum iterations") || error_msg.contains("infinite"),
+            "Error message should mention infinite loop detection"
+        );
+    }
+
+    #[test]
+    fn test_nested_for_loops() {
+        // Test that nested ForLoops work correctly
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("RESULT".to_string(), Vec::new());
+
+        let instructions = vec![
+            Instruction::Set {
+                target: "RESULT".to_string(),
+                value: "".to_string(),
+            },
+            Instruction::ForLoop {
+                variable: "I".to_string(),
+                in_list: "1,2".to_string(),
+                instrs: vec![
+                    Instruction::ForLoop {
+                        variable: "J".to_string(),
+                        in_list: "A,B".to_string(),
+                        instrs: vec![
+                            Instruction::Concatenate {
+                                target: "RESULT".to_string(),
+                                operands: vec!["RESULT".to_string(), "I".to_string(), "J".to_string()],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ];
+
+        let result = runtime.execute_instructions(&instructions);
+        assert!(result.is_ok(), "Nested ForLoops should execute");
+
+        let output = String::from_utf8(runtime.get_output("RESULT").unwrap()).unwrap_or_default();
+        // Expect: 1A 1B 2A 2B (in some form depending on concatenation)
+        assert!(!output.is_empty(), "Nested loops should produce output");
+    }
+
+    #[test]
+    fn test_for_loop_with_single_item() {
+        // Test ForLoop with just one item
+        let mut runtime = Runtime::new();
+
+        let instructions = vec![
+            Instruction::Set {
+                target: "VALUE".to_string(),
+                value: "UNSET".to_string(),
+            },
+            Instruction::ForLoop {
+                variable: "ITEM".to_string(),
+                in_list: "ONLY".to_string(),
+                instrs: vec![
+                    Instruction::Set {
+                        target: "VALUE".to_string(),
+                        value: "ITEM".to_string(),
+                    },
+                ],
+            },
+        ];
+
+        runtime.execute_instructions(&instructions).unwrap();
+
+        assert_eq!(
+            runtime.get_variable("ITEM"),
+            Some("ONLY".to_string()),
+            "Single-item ForLoop should set loop variable"
+        );
+    }
 }

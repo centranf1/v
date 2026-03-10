@@ -14,8 +14,10 @@
 
 pub mod control_flow;
 pub mod dag;
+pub mod formatter;
 pub mod runtime;
 pub mod scheduler;
 
 pub use control_flow::{ConditionEvaluator, ControlFlowResult, LoopContext, ScopeManager};
+pub use formatter::format_display;
 pub use runtime::{CnfError, Runtime};

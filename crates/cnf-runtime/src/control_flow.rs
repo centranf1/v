@@ -15,77 +15,105 @@ impl ConditionEvaluator {
         ConditionEvaluator { variables }
     }
 
-    /// Evaluate a simple condition (e.g., "INPUT = VALID")
+    /// Evaluate condition with support for comparison operators and logical operators
+    /// Supports: =, !=, <, >, <=, >=, AND, OR, NOT
+    /// Example: "COUNT > 5 AND STATUS = VALID"
+    /// Example: "NOT (INPUT = INVALID OR FLAG = FALSE)"
     pub fn evaluate(&self, condition: &str) -> Result<bool, String> {
+        let condition = condition.trim();
+        self.evaluate_or(condition)
+    }
+
+    /// Evaluate OR condition (lowest precedence)
+    fn evaluate_or(&self, condition: &str) -> Result<bool, String> {
+        for part in condition.split(" OR ") {
+            if self.evaluate_and(part.trim())? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Evaluate AND condition (medium precedence)
+    fn evaluate_and(&self, condition: &str) -> Result<bool, String> {
+        for part in condition.split(" AND ") {
+            if !self.evaluate_not(part.trim())? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Evaluate NOT condition (high precedence)
+    fn evaluate_not(&self, condition: &str) -> Result<bool, String> {
+        if condition.starts_with("NOT ") {
+            let inner = &condition[4..].trim();
+            return self.evaluate_comparison(inner).map(|b| !b);
+        }
+        self.evaluate_comparison(condition)
+    }
+
+    /// Evaluate comparison condition (= , !=, <, >, <=, >=)
+    fn evaluate_comparison(&self, condition: &str) -> Result<bool, String> {
+        let condition = condition.trim();
+
+        // Handle boolean literals
+        match condition {
+            "true" | "TRUE" => return Ok(true),
+            "false" | "FALSE" => return Ok(false),
+            _ => {}
+        }
+
+        // Remove parentheses if wrapped
+        let condition = if condition.starts_with('(') && condition.ends_with(')') {
+            &condition[1..condition.len() - 1]
+        } else {
+            condition
+        };
+
         let tokens: Vec<&str> = condition.split_whitespace().collect();
 
         match tokens.as_slice() {
-            // Simple equality: VAR = VALUE
+            // Equality: VAR = VALUE
             [var, op, val] if *op == "=" => {
                 let var_value = self.variables.get(*var);
                 Ok(var_value.is_some_and(|v| v == *val))
             }
-            // Simple inequality: VAR != VALUE
+            // Inequality: VAR != VALUE
             [var, op, val] if *op == "!=" => {
                 let var_value = self.variables.get(*var);
                 Ok(var_value.is_none_or(|v| v != *val))
             }
             // Greater than: VAR > VALUE
-            [var, op, val] if *op == ">" => {
-                if let Some(v) = self.variables.get(*var) {
-                    if let (Ok(var_num), Ok(val_num)) = (v.parse::<i64>(), val.parse::<i64>()) {
-                        Ok(var_num > val_num)
-                    } else {
-                        Ok(false)
-                    }
-                } else {
-                    Ok(false)
-                }
-            }
+            [var, op, val] if *op == ">" => self.compare_numeric(var, val, |a, b| a > b),
             // Less than: VAR < VALUE
-            [var, op, val] if *op == "<" => {
-                if let Some(v) = self.variables.get(*var) {
-                    if let (Ok(var_num), Ok(val_num)) = (v.parse::<i64>(), val.parse::<i64>()) {
-                        Ok(var_num < val_num)
-                    } else {
-                        Ok(false)
-                    }
-                } else {
-                    Ok(false)
-                }
-            }
+            [var, op, val] if *op == "<" => self.compare_numeric(var, val, |a, b| a < b),
             // Greater or equal: VAR >= VALUE
-            [var, op, val] if *op == ">=" => {
-                if let Some(v) = self.variables.get(*var) {
-                    if let (Ok(var_num), Ok(val_num)) = (v.parse::<i64>(), val.parse::<i64>()) {
-                        Ok(var_num >= val_num)
-                    } else {
-                        Ok(false)
-                    }
-                } else {
-                    Ok(false)
-                }
-            }
+            [var, op, val] if *op == ">=" => self.compare_numeric(var, val, |a, b| a >= b),
             // Less or equal: VAR <= VALUE
-            [var, op, val] if *op == "<=" => {
-                if let Some(v) = self.variables.get(*var) {
-                    if let (Ok(var_num), Ok(val_num)) = (v.parse::<i64>(), val.parse::<i64>()) {
-                        Ok(var_num <= val_num)
-                    } else {
-                        Ok(false)
-                    }
-                } else {
-                    Ok(false)
-                }
-            }
-            // Check if variable exists (truthy)
+            [var, op, val] if *op == "<=" => self.compare_numeric(var, val, |a, b| a <= b),
+            // Variable existence check (truthy)
             [var] => Ok(self.variables.contains_key(*var)),
-            // NOT condition
-            ["NOT", rest @ ..] => {
-                let inner_condition = rest.join(" ");
-                self.evaluate(&inner_condition).map(|result| !result)
-            }
             _ => Err(format!("Invalid condition: {}", condition)),
+        }
+    }
+
+    /// Helper to compare numeric values
+    fn compare_numeric<F>(&self, var: &str, val: &str, op: F) -> Result<bool, String>
+    where
+        F: Fn(i64, i64) -> bool,
+    {
+        if let Some(v) = self.variables.get(var) {
+            if let (Ok(var_num), Ok(val_num)) = (v.parse::<i64>(), val.parse::<i64>()) {
+                Ok(op(var_num, val_num))
+            } else {
+                Err(format!(
+                    "Cannot compare non-numeric values: {} and {}",
+                    v, val
+                ))
+            }
+        } else {
+            Err(format!("Variable '{}' not found", var))
         }
     }
 }

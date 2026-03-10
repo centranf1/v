@@ -3,8 +3,6 @@
 //! Responsibility: Convert source string into Token stream.
 //! Fail fast on unrecognized characters.
 
-use std::fmt;
-
 /// Structured error with position and context
 #[derive(Debug, Clone, PartialEq)]
 
@@ -67,10 +65,22 @@ pub enum Token {
     Filter,
     Aggregate,
     Convert,
+    Merge,
     Split,
+    Validate,
+    Extract,
+    Encrypt,
+    Decrypt,
+    Display,
+    Print,
+    Read,
+    Open,
+    ReadFile,
+    WriteFile,
     Close,
     Checkpoint,
     Replay,
+    As,
     // Arithmetic operations
     Set,
     Add,
@@ -211,145 +221,22 @@ impl std::fmt::Display for Token {
             Token::Filter => write!(f, "FILTER"),
             Token::Aggregate => write!(f, "AGGREGATE"),
             Token::Convert => write!(f, "CONVERT"),
-            Token::Split => write!(f, "SPLIT"),
-            Token::Close => write!(f, "CLOSE"),
-            Token::Checkpoint => write!(f, "CHECKPOINT"),
-            Token::Replay => write!(f, "REPLAY"),
-            Token::Set => write!(f, "SET"),
-            Token::Add => write!(f, "ADD"),
-            Token::Subtract => write!(f, "SUBTRACT"),
-            Token::Multiply => write!(f, "MULTIPLY"),
-            Token::Divide => write!(f, "DIVIDE"),
-            Token::Max => write!(f, "MAX"),
-            Token::Min => write!(f, "MIN"),
-            Token::Abs => write!(f, "ABS"),
-            Token::Concatenate => write!(f, "CONCATENATE"),
-            Token::Substring => write!(f, "SUBSTRING"),
-            Token::Length => write!(f, "LENGTH"),
-            Token::Uppercase => write!(f, "UPPERCASE"),
-            Token::Lowercase => write!(f, "LOWERCASE"),
-            Token::Trim => write!(f, "TRIM"),
-            Token::If => write!(f, "IF"),
-            Token::Else => write!(f, "ELSE"),
-            Token::Then => write!(f, "THEN"),
-            Token::EndIf => write!(f, "END-IF"),
-            Token::For => write!(f, "FOR"),
-            Token::While => write!(f, "WHILE"),
-            Token::Do => write!(f, "DO"),
-            Token::EndFor => write!(f, "END-FOR"),
-            Token::EndWhile => write!(f, "END-WHILE"),
-            Token::In => write!(f, "IN"),
-            Token::Define => write!(f, "DEFINE"),
-            Token::Function => write!(f, "FUNCTION"),
-            Token::EndFunction => write!(f, "END-FUNCTION"),
-            Token::Parameters => write!(f, "PARAMETERS"),
-            Token::Returns => write!(f, "RETURNS"),
-            Token::Network => write!(f, "NETWORK"),
-            Token::Node => write!(f, "NODE"),
-            Token::At => write!(f, "AT"),
-            Token::Self_ => write!(f, "SELF"),
-            Token::Topology => write!(f, "TOPOLOGY"),
-            Token::Pipeline => write!(f, "PIPELINE"),
-            Token::Mesh => write!(f, "MESH"),
-            Token::Star => write!(f, "STAR"),
-            Token::Timeout => write!(f, "TIMEOUT"),
-            Token::Send => write!(f, "SEND"),
-            Token::Receive => write!(f, "RECEIVE"),
-            Token::To => write!(f, "TO"),
-            Token::From => write!(f, "FROM"),
-            Token::Pipe => write!(f, "PIPE"),
-            Token::CallRemote => write!(f, "CALL-REMOTE"),
-            Token::VideoMp4 => write!(f, "VIDEO-MP4"),
-            Token::ImageJpg => write!(f, "IMAGE-JPG"),
-            Token::FinancialDecimal => write!(f, "FINANCIAL-DECIMAL"),
-            Token::AudioWav => write!(f, "AUDIO-WAV"),
-            Token::CsvTable => write!(f, "CSV-TABLE"),
-            Token::BinaryBlob => write!(f, "BINARY-BLOB"),
-            Token::JsonObject => write!(f, "JSON-OBJECT"),
-            Token::XmlDocument => write!(f, "XML-DOCUMENT"),
-            Token::ParquetTable => write!(f, "PARQUET-TABLE"),
-            Token::TextString => write!(f, "TEXT-STRING"),
-            Token::NumberInteger => write!(f, "NUMBER-INTEGER"),
-            Token::NumberDecimal => write!(f, "NUMBER-DECIMAL"),
-            Token::FileHandle => write!(f, "FILE-HANDLE"),
-            Token::RecordStream => write!(f, "RECORD-STREAM"),
-            Token::QuantumEncrypt => write!(f, "QUANTUM-ENCRYPT"),
-            Token::QuantumDecrypt => write!(f, "QUANTUM-DECRYPT"),
-            Token::QuantumSign => write!(f, "QUANTUM-SIGN"),
-            Token::QuantumVerifySig => write!(f, "QUANTUM-VERIFY-SIG"),
-            Token::QuantumSignEncrypt => write!(f, "QUANTUM-SIGN-ENCRYPT"),
-            Token::QuantumVerifyDecrypt => write!(f, "QUANTUM-VERIFY-DECRYPT"),
-            Token::GenerateKeypair => write!(f, "GENERATE-KEYPAIR"),
-            Token::LongTermSign => write!(f, "LONG-TERM-SIGN"),
-            Token::GovernanceDiv => write!(f, "GOVERNANCE DIVISION"),
-            Token::Policy => write!(f, "POLICY"),
-            Token::Formula => write!(f, "FORMULA"),
-            Token::Regulation => write!(f, "REGULATION"),
-            Token::Clause => write!(f, "CLAUSE"),
-            Token::DataSovereignty => write!(f, "DATA-SOVEREIGNTY"),
-            Token::AccessControl => write!(f, "ACCESS-CONTROL"),
-            Token::AuditLedger => write!(f, "AUDIT-LEDGER"),
-            Token::DecisionQuorum => write!(f, "DECISION-QUORUM"),
-            Token::Votes => write!(f, "VOTES"),
-            Token::Threshold => write!(f, "THRESHOLD"),
-            Token::Standard => write!(f, "STANDARD"),
-            Token::User => write!(f, "USER"),
-            Token::Resource => write!(f, "RESOURCE"),
-            Token::Action => write!(f, "ACTION"),
-            Token::Entry => write!(f, "ENTRY"),
-            Token::Signature => write!(f, "SIGNATURE"),
-            Token::Algorithm => write!(f, "ALGORITHM"),
-            Token::SignedBy => write!(f, "SIGNED-BY"),
-            Token::With => write!(f, "WITH"),
-            Token::Identifier(s) => write!(f, "IDENTIFIER({})", s),
-            Token::String(s) => write!(f, "STRING({})", s),
-            Token::Period => write!(f, "."),
-            Token::Eof => write!(f, "EOF"),
-        }
-}
-
-pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
-    let mut tokens = Vec::new();
-    let mut chars = source.chars().peekable();
-    while let Some(&_ch) = chars.peek() {
-        todo!()
-    }
-    tokens.push(Token::Eof);
-    Ok(tokens)
-}
-            Token::Os => write!(f, "OS"),
-            Token::Arch => write!(f, "ARCH"),
-            Token::RuntimeVersion => write!(f, "RUNTIME-VERSION"),
-            Token::Input => write!(f, "INPUT"),
-            Token::Output => write!(f, "OUTPUT"),
-            Token::Compress => write!(f, "COMPRESS"),
-            Token::VerifyIntegrity => write!(f, "VERIFY-INTEGRITY"),
-            Token::Transcode => write!(f, "TRANSCODE"),
-            Token::Filter => write!(f, "FILTER"),
-            Token::Aggregate => write!(f, "AGGREGATE"),
-            Token::Convert => write!(f, "CONVERT"),
             Token::Merge => write!(f, "MERGE"),
             Token::Split => write!(f, "SPLIT"),
             Token::Validate => write!(f, "VALIDATE"),
             Token::Extract => write!(f, "EXTRACT"),
             Token::Encrypt => write!(f, "ENCRYPT"),
             Token::Decrypt => write!(f, "DECRYPT"),
-            Token::As => write!(f, "AS"),
-
-            // I/O operations
             Token::Display => write!(f, "DISPLAY"),
             Token::Print => write!(f, "PRINT"),
             Token::Read => write!(f, "READ"),
-
-            // File operations (storage)
             Token::Open => write!(f, "OPEN"),
             Token::ReadFile => write!(f, "READ-FILE"),
             Token::WriteFile => write!(f, "WRITE-FILE"),
+            Token::As => write!(f, "AS"),
             Token::Close => write!(f, "CLOSE"),
             Token::Checkpoint => write!(f, "CHECKPOINT"),
             Token::Replay => write!(f, "REPLAY"),
-
-            // Arithmetic operations
             Token::Set => write!(f, "SET"),
             Token::Add => write!(f, "ADD"),
             Token::Subtract => write!(f, "SUBTRACT"),
@@ -358,16 +245,12 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             Token::Max => write!(f, "MAX"),
             Token::Min => write!(f, "MIN"),
             Token::Abs => write!(f, "ABS"),
-
-            // String operations
             Token::Concatenate => write!(f, "CONCATENATE"),
             Token::Substring => write!(f, "SUBSTRING"),
             Token::Length => write!(f, "LENGTH"),
             Token::Uppercase => write!(f, "UPPERCASE"),
             Token::Lowercase => write!(f, "LOWERCASE"),
             Token::Trim => write!(f, "TRIM"),
-
-            // Control flow
             Token::If => write!(f, "IF"),
             Token::Else => write!(f, "ELSE"),
             Token::Then => write!(f, "THEN"),
@@ -378,15 +261,11 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             Token::EndFor => write!(f, "END-FOR"),
             Token::EndWhile => write!(f, "END-WHILE"),
             Token::In => write!(f, "IN"),
-
-            // Functions
             Token::Define => write!(f, "DEFINE"),
             Token::Function => write!(f, "FUNCTION"),
             Token::EndFunction => write!(f, "END-FUNCTION"),
             Token::Parameters => write!(f, "PARAMETERS"),
             Token::Returns => write!(f, "RETURNS"),
-
-            // Network operations
             Token::Network => write!(f, "NETWORK"),
             Token::Node => write!(f, "NODE"),
             Token::At => write!(f, "AT"),
@@ -402,8 +281,6 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             Token::From => write!(f, "FROM"),
             Token::Pipe => write!(f, "PIPE"),
             Token::CallRemote => write!(f, "CALL-REMOTE"),
-
-            // Data types
             Token::VideoMp4 => write!(f, "VIDEO-MP4"),
             Token::ImageJpg => write!(f, "IMAGE-JPG"),
             Token::FinancialDecimal => write!(f, "FINANCIAL-DECIMAL"),
@@ -418,8 +295,6 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             Token::NumberDecimal => write!(f, "NUMBER-DECIMAL"),
             Token::FileHandle => write!(f, "FILE-HANDLE"),
             Token::RecordStream => write!(f, "RECORD-STREAM"),
-
-            // Quantum operations (v0.8.0)
             Token::QuantumEncrypt => write!(f, "QUANTUM-ENCRYPT"),
             Token::QuantumDecrypt => write!(f, "QUANTUM-DECRYPT"),
             Token::QuantumSign => write!(f, "QUANTUM-SIGN"),
@@ -428,8 +303,6 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             Token::QuantumVerifyDecrypt => write!(f, "QUANTUM-VERIFY-DECRYPT"),
             Token::GenerateKeypair => write!(f, "GENERATE-KEYPAIR"),
             Token::LongTermSign => write!(f, "LONG-TERM-SIGN"),
-
-            // Governance-related (v0.9.0)
             Token::Policy => write!(f, "POLICY"),
             Token::Formula => write!(f, "FORMULA"),
             Token::Regulation => write!(f, "REGULATION"),
@@ -445,20 +318,17 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             Token::Resource => write!(f, "RESOURCE"),
             Token::Action => write!(f, "ACTION"),
             Token::Entry => write!(f, "ENTRY"),
-
-            // Signature-related
             Token::Signature => write!(f, "SIGNATURE"),
             Token::Algorithm => write!(f, "ALGORITHM"),
             Token::SignedBy => write!(f, "SIGNED-BY"),
             Token::With => write!(f, "WITH"),
-
-            // Literals and punctuation
             Token::Identifier(s) => write!(f, "IDENTIFIER({})", s),
             Token::String(s) => write!(f, "STRING({})", s),
             Token::Period => write!(f, "."),
             Token::Eof => write!(f, "EOF"),
         }
-    // ...existing code...
+    }
+}
 
 /// Tokenize CENTRA-NF source code.
 /// Rejects unrecognized characters immediately.

@@ -35,10 +35,10 @@ impl std::error::Error for CnfCryptoError {}
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
-use std::env;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
+use std::env;
 
 /// Compute SHA-256 digest of buffer and return hex-encoded string.
 /// Input → UTF-8 hex string (64 characters for 256-bit hash)
@@ -126,6 +126,11 @@ pub fn decrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Global mutex to synchronize access to environment variables in tests.
+    // All tests that call set_var/remove_var MUST acquire this guard.
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_sha256_deterministic() {
@@ -160,7 +165,10 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
-        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        }
         let plaintext = b"secret data";
         let encrypted = encrypt_aes256(plaintext).unwrap();
         let decrypted = decrypt_aes256(&encrypted).unwrap();
@@ -169,43 +177,68 @@ mod tests {
 
     #[test]
     fn test_encrypt_random_nonce() {
-        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        }
         let data = b"random nonce test";
         let enc1 = encrypt_aes256(data).unwrap();
         let enc2 = encrypt_aes256(data).unwrap();
-        assert_ne!(enc1, enc2, "Nonce acak harus menghasilkan ciphertext berbeda");
+        assert_ne!(
+            enc1, enc2,
+            "Nonce acak harus menghasilkan ciphertext berbeda"
+        );
     }
 
     #[test]
     fn test_encrypt_decrypt_aes_gcm_roundtrip() {
-        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        }
         let plaintext = b"This is a test message for AES-GCM encryption";
         let encrypted = encrypt_aes256(plaintext).unwrap();
         let decrypted = decrypt_aes256(&encrypted).unwrap();
         assert_eq!(plaintext.to_vec(), decrypted);
     }
+
     #[test]
     fn test_decrypt_error_too_short() {
-        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
-        let short = vec![1,2,3];
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        }
+        let short = vec![1, 2, 3];
         let res = decrypt_aes256(&short);
         assert!(matches!(res, Err(super::CnfCryptoError::DataTooShort)));
     }
+
     #[test]
     fn test_decrypt_error_key_missing() {
-        std::env::remove_var("CENTRA_NF_AES_KEY");
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::remove_var("CENTRA_NF_AES_KEY");
+        }
         let res = encrypt_aes256(b"fail");
         assert!(matches!(res, Err(super::CnfCryptoError::KeyMissing)));
     }
+
     #[test]
     fn test_decrypt_error_key_invalid() {
-        std::env::set_var("CENTRA_NF_AES_KEY", "shortkey");
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("CENTRA_NF_AES_KEY", "shortkey");
+        }
         let res = encrypt_aes256(b"fail");
         assert!(matches!(res, Err(super::CnfCryptoError::KeyInvalid)));
     }
+
     #[test]
     fn test_decrypt_error_decrypt_failed() {
-        std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+        }
         let mut data = encrypt_aes256(b"fail").unwrap();
         // Corrupt ciphertext
         data[15] ^= 0xFF;

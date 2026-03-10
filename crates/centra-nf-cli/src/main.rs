@@ -11,6 +11,9 @@ use std::path::PathBuf;
 
 use cnf_compiler::compile;
 
+mod tools;
+use tools::{format_source, lint_source, IssueLevelity};
+
 #[derive(Parser)]
 #[command(name = "centra-nf")]
 #[command(about = "CENTRA-NF Compiler — Deterministic, fail-fast compilation", long_about = None)]
@@ -61,6 +64,36 @@ enum Commands {
 
     /// Interactive REPL (Read-Eval-Print-Loop) for testing snippets
     Repl,
+
+    /// Format a .cnf source file to canonical style
+    Format {
+        /// Input .cnf file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output file (default: stdout)
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
+
+        /// Check formatting without writing (dry-run)
+        #[arg(short, long)]
+        check: bool,
+    },
+
+    /// Lint a .cnf source file for style and semantic issues
+    Lint {
+        /// Input .cnf file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output format: table, json, or text (default: table)
+        #[arg(short, long, value_name = "FORMAT", default_value = "table")]
+        format: String,
+
+        /// Fail if any warnings are found (strict mode)
+        #[arg(short, long)]
+        strict: bool,
+    },
 }
 
 fn main() {
@@ -89,6 +122,20 @@ fn main() {
             println!("Type 'help' for commands, 'quit' to exit\n");
             // TODO: Implement interactive REPL for v0.3.0
             println!("REPL coming in v0.3.0");
+        }
+        Commands::Format {
+            input,
+            output,
+            check,
+        } => {
+            format_file(&input, output.as_ref(), check);
+        }
+        Commands::Lint {
+            input,
+            format: fmt,
+            strict,
+        } => {
+            lint_file(&input, &fmt, strict);
         }
     }
 }
@@ -294,5 +341,143 @@ fn run_file(input_path: &PathBuf, buffer_hex: Option<&str>, verbose: bool) {
         }
     } else {
         eprintln!("✓ Execution completed successfully");
+    }
+}
+
+/// Format a .cnf file to canonical style
+fn format_file(input_path: &PathBuf, output_path: Option<&PathBuf>, dry_run: bool) {
+    // Read source file
+    let source = match fs::read_to_string(input_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", input_path.display(), e);
+            std::process::exit(1);
+        }
+    };
+
+    // Format
+    let result = format_source(&source);
+
+    if !result.success {
+        eprintln!("❌ Formatting failed: {}", result.message);
+        for issue in &result.issues {
+            eprintln!("  {} - {}", issue.level, issue.message);
+        }
+        std::process::exit(1);
+    }
+
+    if let Some(formatted) = result.output {
+        if dry_run {
+            eprintln!("✓ Format check passed (no changes needed)");
+            // Show diff preview if formatting would change file
+            if formatted.trim() != source.trim() {
+                eprintln!("ℹ️  File would be reformatted");
+            }
+        } else if let Some(out_path) = output_path {
+            // Write to output file
+            match fs::write(out_path, &formatted) {
+                Ok(_) => {
+                    eprintln!("✓ Formatted and written to '{}'", out_path.display());
+                }
+                Err(e) => {
+                    eprintln!("❌ Error writing file '{}': {}", out_path.display(), e);
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            // Write to stdout
+            println!("{}", formatted);
+        }
+    }
+}
+
+/// Lint a .cnf file for style and semantic issues
+fn lint_file(input_path: &PathBuf, output_format: &str, strict: bool) {
+    // Read source file
+    let source = match fs::read_to_string(input_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", input_path.display(), e);
+            std::process::exit(1);
+        }
+    };
+
+    // Lint
+    let result = lint_source(&source);
+
+    // Print results based on format
+    match output_format {
+        "json" => {
+            // JSON output format
+            println!("{{");
+            println!(
+                "  \"success\": {},",
+                if result.success { "true" } else { "false" }
+            );
+            println!("  \"message\": \"{}\",", result.message);
+            println!("  \"issues\": [");
+            for (i, issue) in result.issues.iter().enumerate() {
+                println!("    {{");
+                println!("      \"level\": \"{}\",", issue.level);
+                println!("      \"message\": \"{}\",", issue.message);
+                if let Some(line) = issue.line {
+                    println!("      \"line\": {},", line);
+                } else {
+                    println!("      \"line\": null,");
+                }
+                println!("    }}{}", if i < result.issues.len() - 1 { "," } else { "" });
+            }
+            println!("  ]");
+            println!("}}");
+        }
+        "text" => {
+            // Text output format
+            eprintln!("{}", result.message);
+            for issue in &result.issues {
+                let line_info = issue
+                    .line
+                    .map(|l| format!(" (line {})", l))
+                    .unwrap_or_default();
+                eprintln!(
+                    "  [{}] {}{}",
+                    issue.level.to_string(),
+                    issue.message,
+                    line_info
+                );
+            }
+        }
+        "table" | _ => {
+            // Table output format (default)
+            eprintln!("{}", result.message);
+            if !result.issues.is_empty() {
+                eprintln!(
+                    "\n{:<8} {:<50} {:<10}",
+                    "LEVEL", "MESSAGE", "LINE"
+                );
+                eprintln!("{}", "─".repeat(68));
+                for issue in &result.issues {
+                    let line_str = issue
+                        .line
+                        .map(|l| l.to_string())
+                        .unwrap_or_else(|| "—".to_string());
+                    eprintln!(
+                        "{:<8} {:<50} {:<10}",
+                        issue.level.to_string(),
+                        &issue.message[..issue.message.len().min(48)],
+                        line_str
+                    );
+                }
+            }
+        }
+    }
+
+    // Exit with error if strict mode and issues found
+    if strict && !result.issues.is_empty() {
+        std::process::exit(1);
+    }
+
+    // Success exit code
+    if !result.success {
+        std::process::exit(1);
     }
 }

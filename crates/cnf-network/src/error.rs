@@ -1,8 +1,3 @@
-    #[error("L6.009 AuthenticationFailed: PSK handshake rejected")]
-    AuthenticationFailed,
-
-    #[error("L6.010 FrameTooLarge: {0} bytes exceeds limit")]
-    FrameTooLarge(usize),
 //! Network layer errors
 //!
 //! Layer L6 error codes for distributed operations.
@@ -43,4 +38,12 @@ pub enum CnfNetworkError {
     /// L6.008: Failover attempt failed
     #[error("L6.008 FailoverFailed: {0}")]
     FailoverFailed(String),
+
+    /// L6.009: Authentication failed (PSK handshake rejected)
+    #[error("L6.009 AuthenticationFailed: PSK handshake rejected")]
+    AuthenticationFailed,
+
+    /// L6.010: Frame size exceeds configured maximum
+    #[error("L6.010 FrameTooLarge: {0} bytes exceeds limit")]
+    FrameTooLarge(usize),
 }
