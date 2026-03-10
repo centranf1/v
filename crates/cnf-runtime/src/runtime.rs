@@ -190,6 +190,27 @@ impl Runtime {
             .collect()
     }
 
+    /// Get a variable's value as bytes (helper for tests)
+    pub fn get_output(&self, name: &str) -> Option<Vec<u8>> {
+        match self.variables.get(name)? {
+            RuntimeValue::Binary(b) => Some(b),
+            RuntimeValue::Text(s) => Some(s.as_bytes().to_vec()),
+            RuntimeValue::Integer(n) => Some(n.to_string().as_bytes().to_vec()),
+            RuntimeValue::Decimal(d) => Some(d.to_string().as_bytes().to_vec()),
+            RuntimeValue::List(_) => None,
+        }
+    }
+
+    /// Get a variable's value (helper for tests)
+    pub fn get_variable(&self, name: &str) -> Option<RuntimeValue> {
+        self.variables.get(name)
+    }
+
+    /// Execute a single instruction (helper method)
+    pub fn execute_instruction(&mut self, instr: &cnf_compiler::ir::Instruction) -> Result<(), CnfError> {
+        self.execute_instructions(&[instr.clone()])
+    }
+
     /// Execute a list of IR instructions
     pub fn execute_instructions(
         &mut self,
@@ -307,6 +328,7 @@ impl Runtime {
 
     /// ADD operand1 + operand2 → target
     /// Performs numeric addition with type coercion
+    /// Prefers the "wider" type (decimal > integer)
     fn dispatch_add(
         &mut self,
         target: &str,
@@ -316,18 +338,20 @@ impl Runtime {
         let op1 = self.resolve_operand(op1_name)?;
         let op2 = self.resolve_operand(op2_name)?;
 
-        // Try integer addition first
-        if let (Ok(a), Ok(b)) = (op1.as_integer(), op2.as_integer()) {
+        // If either operand is Decimal, perform decimal arithmetic
+        if matches!(op1, RuntimeValue::Decimal(_)) || matches!(op2, RuntimeValue::Decimal(_)) {
+            let a = op1.as_decimal()?;
+            let b = op2.as_decimal()?;
             self.variables
-                .set(target.to_string(), RuntimeValue::Integer(a + b));
+                .set(target.to_string(), RuntimeValue::Decimal(a + b));
             return Ok(());
         }
 
-        // Fall back to decimal
-        let a = op1.as_decimal()?;
-        let b = op2.as_decimal()?;
+        // Otherwise both are integers
+        let a = op1.as_integer()?;
+        let b = op2.as_integer()?;
         self.variables
-            .set(target.to_string(), RuntimeValue::Decimal(a + b));
+            .set(target.to_string(), RuntimeValue::Integer(a + b));
         Ok(())
     }
 
@@ -341,18 +365,20 @@ impl Runtime {
         let op1 = self.resolve_operand(op1_name)?;
         let op2 = self.resolve_operand(op2_name)?;
 
-        // Try integer subtraction first
-        if let (Ok(a), Ok(b)) = (op1.as_integer(), op2.as_integer()) {
+        // If either operand is Decimal, perform decimal arithmetic
+        if matches!(op1, RuntimeValue::Decimal(_)) || matches!(op2, RuntimeValue::Decimal(_)) {
+            let a = op1.as_decimal()?;
+            let b = op2.as_decimal()?;
             self.variables
-                .set(target.to_string(), RuntimeValue::Integer(a - b));
+                .set(target.to_string(), RuntimeValue::Decimal(a - b));
             return Ok(());
         }
 
-        // Fall back to decimal
-        let a = op1.as_decimal()?;
-        let b = op2.as_decimal()?;
+        // Otherwise both are integers
+        let a = op1.as_integer()?;
+        let b = op2.as_integer()?;
         self.variables
-            .set(target.to_string(), RuntimeValue::Decimal(a - b));
+            .set(target.to_string(), RuntimeValue::Integer(a - b));
         Ok(())
     }
 
@@ -366,18 +392,20 @@ impl Runtime {
         let op1 = self.resolve_operand(op1_name)?;
         let op2 = self.resolve_operand(op2_name)?;
 
-        // Try integer multiplication first
-        if let (Ok(a), Ok(b)) = (op1.as_integer(), op2.as_integer()) {
+        // If either operand is Decimal, perform decimal arithmetic
+        if matches!(op1, RuntimeValue::Decimal(_)) || matches!(op2, RuntimeValue::Decimal(_)) {
+            let a = op1.as_decimal()?;
+            let b = op2.as_decimal()?;
             self.variables
-                .set(target.to_string(), RuntimeValue::Integer(a * b));
+                .set(target.to_string(), RuntimeValue::Decimal(a * b));
             return Ok(());
         }
 
-        // Fall back to decimal
-        let a = op1.as_decimal()?;
-        let b = op2.as_decimal()?;
+        // Otherwise both are integers
+        let a = op1.as_integer()?;
+        let b = op2.as_integer()?;
         self.variables
-            .set(target.to_string(), RuntimeValue::Decimal(a * b));
+            .set(target.to_string(), RuntimeValue::Integer(a * b));
         Ok(())
     }
 
@@ -391,24 +419,26 @@ impl Runtime {
         let op1 = self.resolve_operand(op1_name)?;
         let op2 = self.resolve_operand(op2_name)?;
 
-        // Try integer division first
-        if let (Ok(a), Ok(b)) = (op1.as_integer(), op2.as_integer()) {
-            if b == 0 {
+        // If either operand is Decimal, perform decimal arithmetic
+        if matches!(op1, RuntimeValue::Decimal(_)) || matches!(op2, RuntimeValue::Decimal(_)) {
+            let a = op1.as_decimal()?;
+            let b = op2.as_decimal()?;
+            if b == 0.0 {
                 return Err(CnfError::RuntimeError("Division by zero".to_string()));
             }
             self.variables
-                .set(target.to_string(), RuntimeValue::Integer(a / b));
+                .set(target.to_string(), RuntimeValue::Decimal(a / b));
             return Ok(());
         }
 
-        // Fall back to decimal
-        let a = op1.as_decimal()?;
-        let b = op2.as_decimal()?;
-        if b == 0.0 {
+        // Otherwise both are integers
+        let a = op1.as_integer()?;
+        let b = op2.as_integer()?;
+        if b == 0 {
             return Err(CnfError::RuntimeError("Division by zero".to_string()));
         }
         self.variables
-            .set(target.to_string(), RuntimeValue::Decimal(a / b));
+            .set(target.to_string(), RuntimeValue::Integer(a / b));
         Ok(())
     }
 
@@ -440,3 +470,287 @@ impl Default for Runtime {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_runtime_value_as_integer() {
+        let val_int = RuntimeValue::Integer(42);
+        assert_eq!(val_int.as_integer().unwrap(), 42);
+
+        let val_dec = RuntimeValue::Decimal(42.5);
+        assert_eq!(val_dec.as_integer().unwrap(), 42);
+    }
+
+    #[test]
+    fn test_runtime_value_as_decimal() {
+        let val_int = RuntimeValue::Integer(42);
+        assert_eq!(val_int.as_decimal().unwrap(), 42.0);
+
+        let val_dec = RuntimeValue::Decimal(42.5);
+        assert_eq!(val_dec.as_decimal().unwrap(), 42.5);
+    }
+
+    #[test]
+    fn test_variable_store_set_and_get() {
+        let mut store = VariableStore::new();
+        store.set("x".to_string(), RuntimeValue::Integer(10));
+
+        assert_eq!(
+            store.get("x"),
+            Some(RuntimeValue::Integer(10))
+        );
+        assert_eq!(store.get("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_variable_store_get_or_default() {
+        let store = VariableStore::new();
+        // Nonexistent variable defaults to 0
+        assert_eq!(
+            store.get_or_default("missing"),
+            RuntimeValue::Integer(0)
+        );
+    }
+
+    #[test]
+    fn test_dispatch_set_integer_literal() {
+        let mut runtime = Runtime::new();
+        runtime.dispatch_set("x", "42").unwrap();
+
+        assert_eq!(
+            runtime.variables.get("x"),
+            Some(RuntimeValue::Integer(42))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_set_decimal_literal() {
+        let mut runtime = Runtime::new();
+        runtime.dispatch_set("x", "3.14").unwrap();
+
+        let val = runtime.variables.get("x").unwrap();
+        match val {
+            RuntimeValue::Decimal(d) => {
+                assert!((d - 3.14).abs() < 0.001);
+            }
+            _ => panic!("Expected decimal"),
+        }
+    }
+
+    #[test]
+    fn test_dispatch_set_text_literal() {
+        let mut runtime = Runtime::new();
+        runtime.dispatch_set("msg", "hello").unwrap();
+
+        assert_eq!(
+            runtime.variables.get("msg"),
+            Some(RuntimeValue::Text("hello".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_set_variable_reference() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("x".to_string(), RuntimeValue::Integer(42));
+
+        runtime.dispatch_set("y", "x").unwrap();
+
+        assert_eq!(
+            runtime.variables.get("y"),
+            Some(RuntimeValue::Integer(42))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_add_integers() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("a".to_string(), RuntimeValue::Integer(10));
+        runtime
+            .variables
+            .set("b".to_string(), RuntimeValue::Integer(5));
+
+        runtime.dispatch_add("result", "a", "b").unwrap();
+
+        assert_eq!(
+            runtime.variables.get("result"),
+            Some(RuntimeValue::Integer(15))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_add_decimals() {
+        let mut runtime = Runtime::new();
+        // When loading decimals, treat first as trying integer,
+        // which will fail, then fall back to decimal.
+        // We directly use literals here to avoid variable resolution issues
+        runtime
+            .variables
+            .set("dec_a".to_string(), RuntimeValue::Decimal(10.5));
+        runtime
+            .variables
+            .set("dec_b".to_string(), RuntimeValue::Decimal(5.2));
+
+        runtime.dispatch_add("result", "dec_a", "dec_b").unwrap();
+
+        let val = runtime.variables.get("result").unwrap();
+        match val {
+            RuntimeValue::Decimal(d) => {
+                assert!((d - 15.7).abs() < 0.001);
+            }
+            _ => panic!("Expected decimal, got {:?}", val),
+        }
+    }
+
+    #[test]
+    fn test_dispatch_add_integer_literals() {
+        let mut runtime = Runtime::new();
+        runtime.dispatch_add("result", "10", "5").unwrap();
+
+        assert_eq!(
+            runtime.variables.get("result"),
+            Some(RuntimeValue::Integer(15))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_subtract_integers() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("a".to_string(), RuntimeValue::Integer(10));
+        runtime
+            .variables
+            .set("b".to_string(), RuntimeValue::Integer(3));
+
+        runtime.dispatch_subtract("result", "a", "b").unwrap();
+
+        assert_eq!(
+            runtime.variables.get("result"),
+            Some(RuntimeValue::Integer(7))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_multiply_integers() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("a".to_string(), RuntimeValue::Integer(6));
+        runtime
+            .variables
+            .set("b".to_string(), RuntimeValue::Integer(7));
+
+        runtime.dispatch_multiply("result", "a", "b").unwrap();
+
+        assert_eq!(
+            runtime.variables.get("result"),
+            Some(RuntimeValue::Integer(42))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_divide_integers() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("a".to_string(), RuntimeValue::Integer(20));
+        runtime
+            .variables
+            .set("b".to_string(), RuntimeValue::Integer(4));
+
+        runtime.dispatch_divide("result", "a", "b").unwrap();
+
+        assert_eq!(
+            runtime.variables.get("result"),
+            Some(RuntimeValue::Integer(5))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_divide_by_zero_fails() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("a".to_string(), RuntimeValue::Integer(10));
+        runtime
+            .variables
+            .set("b".to_string(), RuntimeValue::Integer(0));
+
+        let result = runtime.dispatch_divide("result", "a", "b");
+        assert!(result.is_err());
+
+        match result {
+            Err(CnfError::RuntimeError(msg)) => {
+                assert!(msg.contains("Division by zero"));
+            }
+            _ => panic!("Expected RuntimeError for division by zero"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_operand_integer_literal() {
+        let runtime = Runtime::new();
+        let val = runtime.resolve_operand("42").unwrap();
+        assert_eq!(val, RuntimeValue::Integer(42));
+    }
+
+    #[test]
+    fn test_resolve_operand_variable_reference() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("x".to_string(), RuntimeValue::Integer(100));
+
+        let val = runtime.resolve_operand("x").unwrap();
+        assert_eq!(val, RuntimeValue::Integer(100));
+    }
+
+    #[test]
+    fn test_resolve_operand_missing_variable_fails() {
+        let runtime = Runtime::new();
+        let result = runtime.resolve_operand("missing");
+        assert!(result.is_err());
+
+        match result {
+            Err(CnfError::BufferNotFound(msg)) => {
+                assert!(msg.contains("Variable not found"));
+            }
+            _ => panic!("Expected BufferNotFound error"),
+        }
+    }
+
+    #[test]
+    fn test_add_buffer() {
+        let mut runtime = Runtime::new();
+        let data = vec![1, 2, 3, 4];
+        runtime.add_buffer("TEST".to_string(), data.clone());
+
+        assert_eq!(
+            runtime.variables.get("TEST"),
+            Some(RuntimeValue::Binary(data))
+        );
+    }
+
+    #[test]
+    fn test_list_buffers() {
+        let mut runtime = Runtime::new();
+        runtime.add_buffer("BUF1".to_string(), vec![1, 2, 3]);
+        runtime.add_buffer("BUF2".to_string(), vec![4, 5, 6]);
+        runtime
+            .variables
+            .set("VAR".to_string(), RuntimeValue::Integer(42));
+
+        let buffers = runtime.list_buffers();
+        assert_eq!(buffers.len(), 2);
+        assert!(buffers.iter().any(|(name, _)| name == "BUF1"));
+        assert!(buffers.iter().any(|(name, _)| name == "BUF2"));
+    }
+}
+

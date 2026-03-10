@@ -335,11 +335,248 @@ impl std::fmt::Display for Token {
 pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut chars = source.chars().peekable();
-
-    while let Some(&_ch) = chars.peek() {
-        todo!()
+    
+    while let Some(&ch) = chars.peek() {
+        match ch {
+            // Whitespace
+            ' ' | '\t' | '\n' | '\r' => {
+                chars.next();
+            }
+            
+            // String literals (quoted)
+            '"' => {
+                chars.next(); // consume opening quote
+                let mut string_val = String::new();
+                let mut escaped = false;
+                
+                while let Some(&c) = chars.peek() {
+                    chars.next();
+                    if escaped {
+                        string_val.push(c);
+                        escaped = false;
+                    } else if c == '\\' {
+                        escaped = true;
+                    } else if c == '"' {
+                        break;
+                    } else {
+                        string_val.push(c);
+                    }
+                }
+                
+                tokens.push(Token::String(string_val));
+            }
+            
+            // Punctuation
+            '.' => {
+                chars.next();
+                tokens.push(Token::Period);
+            }
+            
+            // Keywords and identifiers (must be alphanumeric or dash)
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '_' => {
+                let mut word = String::new();
+                while let Some(&c) = chars.peek() {
+                    if c.is_alphanumeric() || c == '-' || c == '_' {
+                        word.push(c);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Try to recognize as keyword (case-insensitive)
+                let upper_word = word.to_uppercase();
+                let token = match upper_word.as_str() {
+                    // Divisions (single word versions)
+                    "IDENTIFICATION" => Token::IdentificationDiv,
+                    "ENVIRONMENT" => Token::EnvironmentDiv,
+                    "DATA" => Token::DataDiv,
+                    "PROCEDURE" => Token::ProcedureDiv,
+                    "VERIFICATION" => Token::VerificationDiv,
+                    "GOVERNANCE" => Token::GovernanceDiv,
+                    
+                    // Core keywords
+                    "DIVISION" => Token::Division,
+                    "PROGRAM-ID" => Token::ProgramId,
+                    "PROGRAM" => Token::ProgramId,
+                    "AUTHOR" => Token::Author,
+                    "VERSION" => Token::Version,
+                    
+                    // Phase 3: Arithmetic
+                    "SET" => Token::Set,
+                    "ADD" => Token::Add,
+                    "SUBTRACT" => Token::Subtract,
+                    "MULTIPLY" => Token::Multiply,
+                    "DIVIDE" => Token::Divide,
+                    "MAX" => Token::Max,
+                    "MIN" => Token::Min,
+                    "ABS" => Token::Abs,
+                    
+                    // Phase 2/4: Display & I/O
+                    "DISPLAY" => Token::Display,
+                    "PRINT" => Token::Print,
+                    "READ" => Token::Read,
+                    "OPEN" => Token::Open,
+                    "CLOSE" => Token::Close,
+                    "READ-FILE" => Token::ReadFile,
+                    "WRITE-FILE" => Token::WriteFile,
+                    
+                    // Compression
+                    "COMPRESS" => Token::Compress,
+                    "COMPRESS-CSM" => Token::CompressCsm,
+                    "DECOMPRESS-CSM" => Token::DecompressCsm,
+                    "VERIFY-INTEGRITY" => Token::VerifyIntegrity,
+                    "MAP-CSM" => Token::MapCsm,
+                    
+                    // Cryptography
+                    "ENCRYPT" => Token::Encrypt,
+                    "DECRYPT" => Token::Decrypt,
+                    "GENERATE-KEYPAIR" => Token::GenerateKeypair,
+                    "LONG-TERM-SIGN" => Token::LongTermSign,
+                    
+                    // Quantum operations
+                    "QUANTUM-ENCRYPT" => Token::QuantumEncrypt,
+                    "QUANTUM-DECRYPT" => Token::QuantumDecrypt,
+                    "QUANTUM-SIGN" => Token::QuantumSign,
+                    "QUANTUM-SIGN-ENCRYPT" => Token::QuantumSignEncrypt,
+                    "QUANTUM-VERIFY-DECRYPT" => Token::QuantumVerifyDecrypt,
+                    "QUANTUM-VERIFY-SIG" => Token::QuantumVerifySig,
+                    
+                    // Data types
+                    "VIDEO-MP4" => Token::VideoMp4,
+                    "IMAGE-JPG" => Token::ImageJpg,
+                    "FINANCIAL-DECIMAL" => Token::FinancialDecimal,
+                    "AUDIO-WAV" => Token::AudioWav,
+                    "CSV-TABLE" => Token::CsvTable,
+                    "BINARY-BLOB" => Token::BinaryBlob,
+                    "JSON-OBJECT" => Token::JsonObject,
+                    "XML-DOCUMENT" => Token::XmlDocument,
+                    "PARQUET-TABLE" => Token::ParquetTable,
+                    "TEXT-STRING" => Token::TextString,
+                    "NUMBER-INTEGER" => Token::NumberInteger,
+                    "NUMBER-DECIMAL" => Token::NumberDecimal,
+                    "FILE-HANDLE" => Token::FileHandle,
+                    "RECORD-STREAM" => Token::RecordStream,
+                    
+                    // Control flow
+                    "IF" => Token::If,
+                    "THEN" => Token::Then,
+                    "ELSE" => Token::Else,
+                    "END-IF" => Token::EndIf,
+                    "FOR" => Token::For,
+                    "IN" => Token::In,
+                    "END-FOR" => Token::EndFor,
+                    "WHILE" => Token::While,
+                    "DO" => Token::Do,
+                    "END-WHILE" => Token::EndWhile,
+                    
+                    // Functions
+                    "FUNCTION" => Token::Function,
+                    "DEFINE" => Token::Define,
+                    "END-FUNCTION" => Token::EndFunction,
+                    "PARAMETERS" => Token::Parameters,
+                    "RETURNS" => Token::Returns,
+                    "RETURN" => Token::Returns, // Alias
+                    
+                    // Conditionals
+                    "AS" => Token::As,
+                    
+                    // Aggregation
+                    "AGGREGATE" => Token::Aggregate,
+                    "FILTER" => Token::Filter,
+                    "TRANSCODE" => Token::Transcode,
+                    "CONVERT" => Token::Convert,
+                    "MERGE" => Token::Merge,
+                    "SPLIT" => Token::Split,
+                    "VALIDATE" => Token::Validate,
+                    "EXTRACT" => Token::Extract,
+                    
+                    // String operations
+                    "CONCATENATE" => Token::Concatenate,
+                    "SUBSTRING" => Token::Substring,
+                    "LENGTH" => Token::Length,
+                    "UPPERCASE" => Token::Uppercase,
+                    "LOWERCASE" => Token::Lowercase,
+                    "TRIM" => Token::Trim,
+                    
+                    // Verification and Governance
+                    "PRE-CONDITION" => Token::PreCondition,
+                    "POST-CONDITION" => Token::PostCondition,
+                    "INVARIANT" => Token::Invariant,
+                    "PROVE" => Token::Prove,
+                    "ASSERT" => Token::AssertKw,
+                    "SATISFIES" => Token::Satisfies,
+                    "AUDIT-LOG" => Token::AuditLog,
+                    "COMPLIANCE-REPORT" => Token::ComplianceReport,
+                    "POLICY" => Token::Policy,
+                    "FORMULA" => Token::Formula,
+                    "REGULATION" => Token::Regulation,
+                    "CLAUSE" => Token::Clause,
+                    "DATA-SOVEREIGNTY" => Token::DataSovereignty,
+                    "ACCESS-CONTROL" => Token::AccessControl,
+                    "AUDIT-LEDGER" => Token::AuditLedger,
+                    "DECISION-QUORUM" => Token::DecisionQuorum,
+                    "VOTES" => Token::Votes,
+                    "THRESHOLD" => Token::Threshold,
+                    "STANDARD" => Token::Standard,
+                    "USER" => Token::User,
+                    "RESOURCE" => Token::Resource,
+                    "ACTION" => Token::Action,
+                    "ENTRY" => Token::Entry,
+                    
+                    // Signature
+                    "SIGNATURE" => Token::Signature,
+                    "ALGORITHM" => Token::Algorithm,
+                    "SIGNED-BY" => Token::SignedBy,
+                    "WITH" => Token::With,
+                    
+                    // Network
+                    "NETWORK" => Token::Network,
+                    "NODE" => Token::Node,
+                    "AT" => Token::At,
+                    "SELF" => Token::Self_,
+                    "TOPOLOGY" => Token::Topology,
+                    "PIPELINE" => Token::Pipeline,
+                    "MESH" => Token::Mesh,
+                    "STAR" => Token::Star,
+                    "TIMEOUT" => Token::Timeout,
+                    "SEND" => Token::Send,
+                    "RECEIVE" => Token::Receive,
+                    "TO" => Token::To,
+                    "FROM" => Token::From,
+                    "PIPE" => Token::Pipe,
+                    "CALL-REMOTE" => Token::CallRemote,
+                    
+                    // Environment
+                    "OS" => Token::Os,
+                    "ARCH" => Token::Arch,
+                    "RUNTIME-VERSION" => Token::RuntimeVersion,
+                    "INPUT" => Token::Input,
+                    "OUTPUT" => Token::Output,
+                    
+                    // CSM  
+                    "PROTOCOL-VERSION" => Token::ProtocolVersion,
+                    "DENSITY" => Token::Density,
+                    "DICTIONARY-REF" => Token::DictionaryRef,
+                    
+                    // Checkpoint/Replay
+                    "CHECKPOINT" => Token::Checkpoint,
+                    "REPLAY" => Token::Replay,
+                    
+                    // Fallback to identifier
+                    _ => Token::Identifier(word),
+                };
+                
+                tokens.push(token);
+            }
+            
+            // Unrecognized character
+            _ => {
+                return Err(format!("Unrecognized character '{}'", ch));
+            }
+        }
     }
-
+    
     tokens.push(Token::Eof);
     Ok(tokens)
 }
