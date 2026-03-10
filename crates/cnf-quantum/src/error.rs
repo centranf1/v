@@ -37,4 +37,8 @@ pub enum CnfQuantumError {
     /// L8.008.E - Hybrid decryption failed
     #[error("Hybrid decryption failed: {reason}")]
     HybridDecryptionFailed { reason: String },
+
+    /// L8.009.E - Key generation failed during initialization
+    #[error("Keygen initialization failed: {0}")]
+    KeygenFailed(String),
 }

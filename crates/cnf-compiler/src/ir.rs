@@ -646,7 +646,7 @@ impl std::fmt::Display for Instruction {
             Instruction::DecisionQuorum { votes, threshold } => {
                 write!(f, "DECISION_QUORUM({} votes, {} threshold)", votes, threshold)
             }
-            _ => todo!(),
+            _ => write!(f, "INSTRUCTION({:?})", std::mem::discriminant(self)),
         }
     }
 }

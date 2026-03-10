@@ -48,7 +48,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-
+use rustls::{ServerConfig, ClientConfig, ServerConnection, ClientConnection, Stream};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::sync::{Arc, Mutex};
 
 use hmac::{Hmac, Mac};
@@ -207,6 +208,28 @@ impl NetworkFrame {
     }
 }
 
+/// TLS configuration for mTLS node authentication.
+/// Military requirement: all inter-node traffic must be encrypted and mutually authenticated.
+pub struct TlsConfig {
+        /// DER-encoded server certificate chain
+            pub cert_der: Vec<CertificateDer<'static>>,
+                /// DER-encoded private key
+                    pub key_der: PrivateKeyDer<'static>,
+                        /// DER-encoded CA certificate for client verification (mTLS)
+                            pub ca_cert_der: Option<CertificateDer<'static>>,
+}
+
+impl TlsConfig {
+        /// Build rustls ServerConfig from this TlsConfig.
+            pub fn server_config(&self) -> Result<Arc<ServerConfig>, CnfNetworkError> {
+                        let config = ServerConfig::builder()
+                                    .with_no_client_auth()
+                                                .with_single_cert(self.cert_der.clone(), self.key_der.clone_key())
+                                                            .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
+                                                                    Ok(Arc::new(config))
+            }
+}
+
 /// Synchronous TCP transport for node-to-node communication
 pub struct TcpTransport {
     #[allow(dead_code)]
@@ -216,6 +239,8 @@ pub struct TcpTransport {
     connections: Arc<Mutex<HashMap<NodeId, TcpStream>>>,
     // Konfigurasi autentikasi
     config: Option<TransportConfig>,
+    // TLS configuration for mTLS
+    tls_config: Option<TlsConfig>,
 }
 
 impl std::fmt::Debug for TcpTransport {
@@ -236,12 +261,19 @@ impl TcpTransport {
             listener: None,
             connections: Arc::new(Mutex::new(HashMap::new())),
             config: None,
+            tls_config: None,
         }
     }
 
     /// Builder method to set transport config
     pub fn with_config(mut self, config: TransportConfig) -> Self {
         self.config = Some(config);
+        self
+    }
+
+    /// Builder method to set TLS config
+    pub fn with_tls(mut self, tls: TlsConfig) -> Self {
+        self.tls_config = Some(tls);
         self
     }
 

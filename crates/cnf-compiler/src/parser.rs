@@ -618,7 +618,7 @@ impl Parser {
 
         let mut config = HashMap::new();
 
-        while self.current() != &Token::DataDiv {
+        while self.current() != &Token::DataDiv && self.current() != &Token::GovernanceDiv {
             match self.current() {
                 Token::Os | Token::Arch | Token::RuntimeVersion => {
                     let key = match self.current() {
@@ -1853,4 +1853,5 @@ mod tests {
         let prog = parse(tokens).expect("should parse quantum ops");
         assert_eq!(prog.procedure.statements.len(), 8);
     }
+
 }

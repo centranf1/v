@@ -24,7 +24,7 @@ impl WalEntry {
     pub fn new(sequence: u64, operation: String, key: String, data_hash: [u8; 32]) -> Self {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         // Compute CRC32 of the entry data first

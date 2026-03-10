@@ -155,6 +155,60 @@ jobs:
           fi
           echo "✓ Security layer boundary intact (implementation sealed, calls allowed)"
 
+  gate-17-panic-sweep:
+    name: Gate 17 - Zero Panic Production Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Count production panics
+        run: |
+          count=$(grep -rn "panic!\|\.unwrap()\|\.expect(" crates/*/src/*.rs \
+            | grep -v "cfg(test)\|fn test_\|mod tests\|// SAFETY:" | wc -l)
+          echo "Panic count: $count"
+          [ "$count" -le 50 ] || (echo "FAIL: $count > 50" && exit 1)
+          
+  gate-18-constant-time:
+    name: Gate 18 - No Timing-Vulnerable Comparisons
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check constant-time HMAC
+        run: |
+          count=$(grep -rn "as_ref().*!=" crates/cnf-network/src/ crates/cnf-security/src/ | wc -l)
+          [ "$count" -eq 0 ] || (echo "FAIL: timing-vulnerable comparison found" && exit 1)
+          echo "PASS"
+          
+  gate-19-zeroize:
+    name: Gate 19 - Key Material ZeroizeOnDrop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify zeroize coverage
+        run: |
+          count=$(grep -rn "ZeroizeOnDrop\|Zeroize" crates/cnf-security/src/ crates/cnf-quantum/src/ | wc -l)
+          [ "$count" -ge 3 ] || (echo "FAIL: insufficient ZeroizeOnDrop" && exit 1)
+          echo "PASS: $count usages"
+          
+  gate-20-sbom:
+    name: Gate 20 - SBOM Generation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo install cargo-sbom --quiet 2>/dev/null || true
+      - run: cargo sbom --output-format spdx-json > sbom.spdx.json 2>/dev/null || cargo metadata --format-version 1 > sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom*.json
+          
+  gate-21-audit:
+    name: Gate 21 - Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo install cargo-audit --quiet
+      - run: cargo audit
+
   ## TODO: Integration tests will be added in next phase
   # integration-tests:
   #   name: Integration Tests

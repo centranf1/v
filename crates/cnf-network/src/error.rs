@@ -46,4 +46,8 @@ pub enum CnfNetworkError {
     /// L6.010: Frame size exceeds configured maximum
     #[error("L6.010 FrameTooLarge: {0} bytes exceeds limit")]
     FrameTooLarge(usize),
+
+    /// L6.011: TLS configuration or handshake failed
+    #[error("L6.011 TlsError: {0}")]
+    TlsError(String),
 }

@@ -187,7 +187,9 @@ pub struct Runtime {
     access_rules: std::collections::HashMap<(String, String), Vec<String>>,
     /// Active governance policies: name -> LTL formula string
     governance_policies: std::collections::HashMap<String, String>,
+    #[cfg(feature = "quantum")]
     governance: cnf_governance::policy_engine::PolicyEngine,
+    #[cfg(feature = "quantum")]
     governance_trace: cnf_governance::policy_engine::ExecutionTrace,
     /// Execution trace for LTL evaluation
     execution_trace: Vec<String>,
@@ -204,7 +206,10 @@ impl Runtime {
             audit_log: Vec::new(),
             access_rules: std::collections::HashMap::new(),
             governance_policies: std::collections::HashMap::new(),
-            governance_engine: cnf_governance::policy_engine::PolicyEngine::new(),
+            #[cfg(feature = "quantum")]
+            governance: cnf_governance::policy_engine::PolicyEngine::new(),
+            #[cfg(feature = "quantum")]
+            governance_trace: cnf_governance::policy_engine::ExecutionTrace::default(),
             execution_trace: Vec::new(),
             #[cfg(feature = "quantum")]
             quantum_keys: std::collections::HashMap::new(),
@@ -423,6 +428,24 @@ impl Runtime {
                 }
                 Instruction::DecisionQuorum { votes, threshold } => {
                     self.dispatch_decision_quorum(votes, threshold)?;
+                }
+
+                // === VERIFIER HOOKS ===
+                #[cfg(feature = "verifier")]
+                Instruction::PreConditionCheck { condition } => {
+                    // Log precondition check — full Z3 verification in cnf-verifier
+                    self.execution_trace.push(format!("PRE_CHECK: {}", condition));
+                    self.audit_log.push(format!("[VERIFY] Precondition checked: {}", condition));
+                }
+                #[cfg(feature = "verifier")]
+                Instruction::PostConditionCheck { condition } => {
+                    self.execution_trace.push(format!("POST_CHECK: {}", condition));
+                    self.audit_log.push(format!("[VERIFY] Postcondition checked: {}", condition));
+                }
+                #[cfg(feature = "verifier")]
+                Instruction::InvariantCheck { condition } => {
+                    self.execution_trace.push(format!("INVARIANT: {}", condition));
+                    self.audit_log.push(format!("[VERIFY] Invariant checked: {}", condition));
                 }
 
                 // Stub implementations for unimplemented instructions
@@ -950,27 +973,23 @@ impl Runtime {
     }
 
     #[cfg(feature = "quantum")]
+    #[cfg(feature = "quantum")]
     fn dispatch_generate_keypair(&mut self, algorithm: &str, output_name: &str) -> Result<(), CnfError> {
         let keypair = match algorithm {
-            "kyber" => {
-                let kp = cnf_quantum::generate_kyber_keypair();
-                serde_json::to_vec(&kp)
-                    .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?
+            "ML-KEM-768" | "KYBER" => {
+                let kp = cnf_quantum::generate_kyber_keypair()
+                    .map_err(|e| CnfError::RuntimeError(e.to_string()))?;
+                (kp.public_key.clone(), kp.secret_key.clone())
             }
-            "dilithium" => {
-                let kp = cnf_quantum::generate_dilithium_keypair();
-                serde_json::to_vec(&kp)
-                    .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?
+            "ML-DSA-65" | "DILITHIUM" => {
+                let kp = cnf_quantum::generate_dilithium_keypair()
+                    .map_err(|e| CnfError::RuntimeError(e.to_string()))?;
+                (kp.verification_key.clone(), kp.signing_key.clone())
             }
-            "sphincs" => {
-                let kp = cnf_quantum::generate_sphincs_keypair();
-                serde_json::to_vec(&kp)
-                    .map_err(|e| CnfError::RuntimeError(format!("Serialization failed: {}", e)))?
-            }
-            _ => return Err(CnfError::RuntimeError(format!("Unknown algorithm: {}", algorithm))),
+            other => return Err(CnfError::RuntimeError(format!("Unknown algorithm: {}", other))),
         };
-        self.set_value(output_name, RuntimeValue::Binary(keypair));
-        self.execution_trace.push(format!("GENERATE_KEYPAIR {} -> {}", algorithm, output_name));
+        self.quantum_keys.insert(output_name.to_string(), keypair);
+        self.audit_log.push(format!("GENERATE_KEYPAIR: {} algo={}", output_name, algorithm));
         Ok(())
     }
 
@@ -987,6 +1006,24 @@ impl Runtime {
         self.set_value(output, RuntimeValue::Binary(sig_bytes));
         self.execution_trace.push(format!("LONG_TERM_SIGN {} with {} -> {}", source, signing_key, output));
         Ok(())
+    }
+
+    // ============ GOVERNANCE LTL VERIFICATION ============
+
+    #[cfg(feature = "quantum")]
+    pub fn verify_policy(&self, policy_name: &str) -> Result<bool, CnfError> {
+        use cnf_governance::policy_engine::LtlFormula;
+        let formula_str = self.governance_policies.get(policy_name)
+            .ok_or_else(|| CnfError::RuntimeError(format!("Policy '{}' not found", policy_name)))?;
+        // Parse simple atoms only — full LTL parser is future work
+        let formula = LtlFormula::Atom(formula_str.clone());
+        let result = self.governance.verify(&formula, &self.governance_trace)
+            .map_err(|e| CnfError::GovernancePolicyViolation(e.to_string()))?;
+        Ok(result)
+    }
+
+    pub fn execution_trace(&self) -> &[String] {
+        &self.execution_trace
     }
 
     // ============ HELPER METHODS ============

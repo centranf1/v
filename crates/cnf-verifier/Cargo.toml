@@ -18,4 +18,5 @@ hmac = "0.12"
 sha2 = "0.10"
 
 [features]
+default = ["z3-solver"]
 z3-solver = ["z3"]

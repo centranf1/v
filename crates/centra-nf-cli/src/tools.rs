@@ -75,7 +75,7 @@ pub fn lint_source(source: &str) -> ToolResult {
     let mut issues = Vec::new();
 
     // Tokenization check
-    match tokenize(source) {
+    let tokens = match tokenize(source) {
         Err(e) => {
             issues.push(Issue {
                 level: IssueLevelity::Error,
@@ -89,29 +89,17 @@ pub fn lint_source(source: &str) -> ToolResult {
                 issues,
             };
         }
-        Ok(_tokens) => {
-            // Tokenization passed
-        }
-    }
+        Ok(tokens) => tokens,
+    };
 
     // Parser check
-    match Parser::new(source) {
-        Err(e) => {
-            issues.push(Issue {
-                level: IssueLevelity::Error,
-                message: format!("Parser initialization failed: {}", e),
-                line: None,
-            });
-        }
-        Ok(mut parser) => {
-            if let Err(e) = parser.parse() {
-                issues.push(Issue {
-                    level: IssueLevelity::Error,
-                    message: format!("Parse error: {}", e),
-                    line: None,
-                });
-            }
-        }
+    let parser = Parser::new(tokens);
+    if let Err(e) = parser.parse() {
+        issues.push(Issue {
+            level: IssueLevelity::Error,
+            message: format!("Parse error: {}", e),
+            line: None,
+        });
     }
 
     // Style linting

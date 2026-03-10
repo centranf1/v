@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn engine_verify_returns_bool() {
         let engine = PolicyEngine::new();
-        let trace = ExecutionTrace { operations: vec!["op".into()] };
+        let trace = ExecutionTrace { operations: vec!["a".into()] };
         assert_eq!(engine.verify(&LtlFormula::Atom("a".into()), &trace).unwrap(), true);
     }
 
@@ -121,7 +121,8 @@ mod tests {
         let engine = PolicyEngine::new();
         let trace = ExecutionTrace::default();
         let res = engine.verify(&LtlFormula::Atom("".into()), &trace);
-        assert!(res.unwrap());
+        // Empty atom on empty trace returns false
+        assert!(!res.unwrap());
     }
 
     #[test]

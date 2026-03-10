@@ -2,6 +2,9 @@ use crate::assertion::{CmpOp, Predicate};
 use crate::error::CnfVerifierError;
 use crate::hoare::{HoareContext, HoareTriple};
 
+#[cfg(feature = "z3-solver")]
+use z3::{Config as Z3CfgNative, Context, Solver, ast::{Ast, Bool, Int}};
+
 #[derive(Debug, Clone)]
 pub struct Z3Config {
     pub timeout_ms: u64,
@@ -143,35 +146,45 @@ impl Z3Solver {
     }
 
     #[cfg(feature = "z3-solver")]
-    fn encode_predicate(
+    fn encode_predicate<'a>(
         &self,
         pred: &Predicate,
-        z3_ctx: &z3::Context,
-        _ctx: &HoareContext,
-    ) -> Result<z3::ast::Bool, CnfVerifierError> {
-        use z3::ast::Ast;
-        use z3::*;
-
+        ctx: &'a Context,
+        hctx: &HoareContext,
+    ) -> Result<Bool<'a>, CnfVerifierError> {
         match pred {
-            Predicate::True => Ok(Bool::from_bool(z3_ctx, true)),
-            Predicate::False => Ok(Bool::from_bool(z3_ctx, false)),
+            Predicate::True => Ok(Bool::from_bool(ctx, true)),
+            Predicate::False => Ok(Bool::from_bool(ctx, false)),
             Predicate::And(a, b) => {
-                let a_enc = self.encode_predicate(a, z3_ctx, _ctx)?;
-                let b_enc = self.encode_predicate(b, z3_ctx, _ctx)?;
-                Ok(Bool::and(z3_ctx, &[&a_enc, &b_enc]))
+                let fa = self.encode_predicate(a, ctx, hctx)?;
+                let fb = self.encode_predicate(b, ctx, hctx)?;
+                Ok(Bool::and(ctx, &[&fa, &fb]))
             }
             Predicate::Or(a, b) => {
-                let a_enc = self.encode_predicate(a, z3_ctx, _ctx)?;
-                let b_enc = self.encode_predicate(b, z3_ctx, _ctx)?;
-                Ok(Bool::or(z3_ctx, &[&a_enc, &b_enc]))
+                let fa = self.encode_predicate(a, ctx, hctx)?;
+                let fb = self.encode_predicate(b, ctx, hctx)?;
+                Ok(Bool::or(ctx, &[&fa, &fb]))
             }
             Predicate::Not(p) => {
-                let p_enc = self.encode_predicate(p, z3_ctx, _ctx)?;
-                Ok(p_enc.not())
+                let fp = self.encode_predicate(p, ctx, hctx)?;
+                Ok(fp.not())
+            }
+            Predicate::NumericBound { variable, op, value } => {
+                let var = Int::new_const(ctx, variable.as_str());
+                let val = Int::from_i64(ctx, *value as i64);
+                Ok(match op {
+                    CmpOp::Lt => var.lt(&val),
+                    CmpOp::Le => var.le(&val),
+                    CmpOp::Gt => var.gt(&val),
+                    CmpOp::Ge => var.ge(&val),
+                    CmpOp::Eq => var._eq(&val),
+                    CmpOp::Ne => var._eq(&val).not(),
+                })
             }
             _ => {
-                // For other predicates, encode as true (stub for now)
-                Ok(Bool::from_bool(z3_ctx, true))
+                // Complex predicates: fall back to symbolic evaluation
+                let result = Self::eval_predicate_symbolic(pred, hctx);
+                Ok(Bool::from_bool(ctx, result))
             }
         }
     }
@@ -181,20 +194,56 @@ impl Z3Solver {
         triple: &HoareTriple,
         ctx: &HoareContext,
     ) -> Result<VerificationResult, CnfVerifierError> {
-        // Verifikasi pre → body → post
-        // Jika pre Refuted → L7.001.F PreconditionFailed
-        let pre_result = self.verify_predicate(&triple.pre, ctx)?;
-        match pre_result {
-            VerificationResult::Refuted { .. } => Err(CnfVerifierError::PreconditionFailed {
-                procedure: triple.body_description.clone(),
-                predicate: triple.pre.to_string(),
-            }),
-            VerificationResult::Proved => {
-                // For now, assume post holds if pre holds
-                Ok(VerificationResult::Proved)
+        #[cfg(feature = "z3-solver")]
+        {
+            self.verify_with_z3(triple, ctx)
+        }
+        #[cfg(not(feature = "z3-solver"))]
+        {
+            // original fallback
+            let pre_result = self.verify_predicate(&triple.pre, ctx)?;
+            match pre_result {
+                VerificationResult::Refuted { .. } => {
+                    Err(CnfVerifierError::PreconditionFailed {
+                        procedure: triple.body_description.clone(),
+                        predicate: triple.pre.to_string(),
+                    })
+                }
+                VerificationResult::Proved => Ok(VerificationResult::Proved),
+                _ => Ok(VerificationResult::Unknown {
+                    reason: "precondition unknown".to_string(),
+                }),
             }
-            _ => Ok(VerificationResult::Unknown {
-                reason: "precondition unknown".to_string(),
+        }
+    }
+
+    #[cfg(feature = "z3-solver")]
+    fn verify_with_z3(
+        &self,
+        triple: &HoareTriple,
+        ctx: &HoareContext,
+    ) -> Result<VerificationResult, CnfVerifierError> {
+        let timeout_ms = self.config.timeout_ms;
+        let mut cfg = Z3CfgNative::new();
+        cfg.set_timeout_msec(timeout_ms);
+        let z3_ctx = Context::new(&cfg);
+        let solver = Solver::new(&z3_ctx);
+
+        let pre = self.encode_predicate(&triple.pre, &z3_ctx, ctx)?;
+        let post = self.encode_predicate(&triple.post, &z3_ctx, ctx)?;
+        let negated_post = post.not();
+
+        solver.assert(&pre);
+        solver.assert(&negated_post);
+
+        match solver.check() {
+            z3::SatResult::Unsat => Ok(VerificationResult::Proved),
+            z3::SatResult::Sat => {
+                let model = solver.get_model().map(|m| format!("{}", m)).unwrap_or_default();
+                Ok(VerificationResult::Refuted { counterexample: model })
+            }
+            z3::SatResult::Unknown => Ok(VerificationResult::Unknown {
+                reason: "Z3 timeout or undecidable".to_string(),
             }),
         }
     }
