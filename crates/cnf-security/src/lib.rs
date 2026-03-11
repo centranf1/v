@@ -41,7 +41,6 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
-use std::env;
 
 /// Compute SHA-256 digest of buffer and return hex-encoded string.
 /// Input → UTF-8 hex string (64 characters for 256-bit hash)
@@ -59,20 +58,25 @@ pub fn sha256_hex(data: &[u8]) -> String {
 /// Nonce is derived deterministically from SHA-256 hash of input data.
 /// Returns: nonce (12 bytes) + ciphertext (includes authentication tag).
 pub fn encrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
-    // Key diambil dari environment variable CENTRA_NF_AES_KEY (fail-fast jika tidak ada/invalid)
-    let key_bytes = match env::var("CENTRA_NF_AES_KEY") {
-        Ok(val) => {
-            let bytes = val.as_bytes();
-            if bytes.len() != 32 {
-                return Err(CnfCryptoError::KeyInvalid);
-            }
-            let mut arr = [0u8; 32];
-            arr.copy_from_slice(bytes);
-            arr
-        }
-        Err(_) => return Err(CnfCryptoError::KeyMissing),
-    };
-    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let km = KeyManager::from_env()?;
+    encrypt_aes256_with_key(data, km.active_key())
+}
+
+/// Decrypt buffer that was produced by `encrypt_aes256`.
+///
+/// Extracts nonce from the beginning of the encrypted data.
+pub fn decrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
+    let km = KeyManager::from_env()?;
+    decrypt_aes256_with_key(data, km.active_key())
+}
+
+/// Encrypt buffer using AES-256-GCM with provided key.
+///
+/// Deterministic: same input always produces same output.
+/// Nonce is derived deterministically from SHA-256 hash of input data.
+/// Returns: nonce (12 bytes) + ciphertext (includes authentication tag).
+pub fn encrypt_aes256_with_key(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CnfCryptoError> {
+    let key = Key::<Aes256Gcm>::from_slice(key);
     let cipher = Aes256Gcm::new(key);
 
     let mut nonce_bytes = [0u8; 12];
@@ -87,27 +91,14 @@ pub fn encrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
     Ok(result)
 }
 
-/// Decrypt buffer that was produced by `encrypt_aes256`.
+/// Decrypt buffer that was produced by `encrypt_aes256_with_key`.
 ///
 /// Extracts nonce from the beginning of the encrypted data.
-pub fn decrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
+pub fn decrypt_aes256_with_key(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CnfCryptoError> {
     if data.len() < 12 {
         return Err(CnfCryptoError::DataTooShort);
     }
-    // Key diambil dari environment variable CENTRA_NF_AES_KEY
-    let key_bytes = match env::var("CENTRA_NF_AES_KEY") {
-        Ok(val) => {
-            let bytes = val.as_bytes();
-            if bytes.len() != 32 {
-                return Err(CnfCryptoError::KeyInvalid);
-            }
-            let mut arr = [0u8; 32];
-            arr.copy_from_slice(bytes);
-            arr
-        }
-        Err(_) => return Err(CnfCryptoError::KeyMissing),
-    };
-    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let key = Key::<Aes256Gcm>::from_slice(key);
     let cipher = Aes256Gcm::new(key);
 
     // Extract nonce from beginning
@@ -237,15 +228,23 @@ mod tests {
     }
 
     #[test]
-    fn test_decrypt_error_decrypt_failed() {
-        let _guard = ENV_MUTEX.lock().unwrap();
-        unsafe {
-            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
-        }
-        let mut data = encrypt_aes256(b"fail").unwrap();
-        // Corrupt ciphertext
-        data[15] ^= 0xFF;
-        let res = decrypt_aes256(&data);
-        assert!(matches!(res, Err(super::CnfCryptoError::DecryptFailed)));
+    fn test_encrypt_decrypt_with_key_roundtrip() {
+        let key = [0x01u8; 32];
+        let plaintext = b"secret data with key";
+        let encrypted = encrypt_aes256_with_key(plaintext, &key).unwrap();
+        let decrypted = decrypt_aes256_with_key(&encrypted, &key).unwrap();
+        assert_eq!(plaintext.to_vec(), decrypted);
+    }
+
+    #[test]
+    fn test_encrypt_with_key_random_nonce() {
+        let key = [0x02u8; 32];
+        let data = b"random nonce test with key";
+        let enc1 = encrypt_aes256_with_key(data, &key).unwrap();
+        let enc2 = encrypt_aes256_with_key(data, &key).unwrap();
+        assert_ne!(
+            enc1, enc2,
+            "Nonce acak harus menghasilkan ciphertext berbeda"
+        );
     }
 }

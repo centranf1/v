@@ -47,7 +47,11 @@ pub enum CnfNetworkError {
     #[error("L6.010 FrameTooLarge: {0} bytes exceeds limit")]
     FrameTooLarge(usize),
 
-    /// L6.011: TLS configuration or handshake failed
-    #[error("L6.011 TlsError: {0}")]
+    /// L6.011: Mutex lock is poisoned (thread panic detected)
+    #[error("L6.011 LockPoisoned: mutex lock poisoned")]
+    LockPoisoned,
+
+    /// L6.012: TLS configuration or handshake failed
+    #[error("L6.012 TlsError: {0}")]
     TlsError(String),
 }

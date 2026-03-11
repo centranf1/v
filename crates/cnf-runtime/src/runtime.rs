@@ -21,6 +21,7 @@ pub enum CnfError {
     AccessDenied { user: String, resource: String, action: String },
     GovernancePolicyViolation(String),
     BufferCorrupted(String),
+    IntegrityViolation(String),
     #[cfg(feature = "verifier")]
     PreconditionFailed(String),
     #[cfg(feature = "verifier")]
@@ -50,6 +51,7 @@ impl std::fmt::Display for CnfError {
             CnfError::AccessDenied { user, resource, action } => write!(f, "Access denied: {} cannot {} on {}", user, action, resource),
             CnfError::GovernancePolicyViolation(msg) => write!(f, "Governance policy violation: {}", msg),
             CnfError::BufferCorrupted(msg) => write!(f, "Buffer corrupted: {}", msg),
+            CnfError::IntegrityViolation(msg) => write!(f, "Integrity violation: {}", msg),
             #[cfg(feature = "verifier")]
             CnfError::PreconditionFailed(loc) => write!(f, "Precondition failed at {}", loc),
             #[cfg(feature = "verifier")]
@@ -190,9 +192,9 @@ pub struct Runtime {
     access_rules: std::collections::HashMap<(String, String), Vec<String>>,
     /// Active governance policies: name -> LTL formula string
     governance_policies: std::collections::HashMap<String, String>,
-    #[cfg(feature = "quantum")]
+    #[cfg(feature = "governance")]
     governance: cnf_governance::policy_engine::PolicyEngine,
-    #[cfg(feature = "quantum")]
+    #[cfg(feature = "governance")]
     governance_trace: cnf_governance::policy_engine::ExecutionTrace,
     /// Execution trace for LTL evaluation
     execution_trace: Vec<String>,
@@ -209,9 +211,9 @@ impl Runtime {
             audit_log: Vec::new(),
             access_rules: std::collections::HashMap::new(),
             governance_policies: std::collections::HashMap::new(),
-            #[cfg(feature = "quantum")]
+            #[cfg(feature = "governance")]
             governance: cnf_governance::policy_engine::PolicyEngine::new(),
-            #[cfg(feature = "quantum")]
+            #[cfg(feature = "governance")]
             governance_trace: cnf_governance::policy_engine::ExecutionTrace::default(),
             execution_trace: Vec::new(),
             #[cfg(feature = "quantum")]
@@ -322,9 +324,44 @@ impl Runtime {
                 Instruction::Aggregate { targets, operation } => {
                     self.dispatch_aggregate(targets, operation)?;
                 }
-                Instruction::VerifyIntegrity { target: _ } => {
-                    // Placeholder: just log the operation
-                    self.execution_trace.push("VERIFY-INTEGRITY".to_string());
+                Instruction::Convert { target, output_type } => {
+                    self.dispatch_convert(target, output_type)?;
+                }
+                Instruction::VerifyIntegrity { target } => {
+                    match self.variables.get(target) {
+                        Some(RuntimeValue::Binary(data)) => {
+                            let hash = cnf_security::sha256_hex(&data);
+                            let key = format!("__integrity__{}", target);
+                            // Jika hash sebelumnya sudah tersimpan, bandingkan
+                            if let Some(RuntimeValue::Text(prev_hash)) = self.variables.get(&key) {
+                                if prev_hash != hash {
+                                    return Err(CnfError::IntegrityViolation(
+                                        format!("Integrity check failed for '{}': hash mismatch", target)
+                                    ));
+                                }
+                            }
+                            // Simpan hash untuk referensi berikutnya
+                            self.variables.set(key, RuntimeValue::Text(hash.clone()));
+                            self.execution_trace.push(format!("VERIFY-INTEGRITY {} sha256={}", target, &hash[..16]));
+                            self.audit_log.push(format!("INTEGRITY_VERIFIED: {} hash={}", target, hash));
+                        }
+                        Some(_) => return Err(CnfError::RuntimeError(
+                            format!("VERIFY-INTEGRITY: '{}' is not binary data", target)
+                        )),
+                        None => return Err(CnfError::BufferNotFound(target.to_string())),
+                    }
+                }
+                Instruction::Merge { targets, output_name } => {
+                    self.dispatch_merge(targets, output_name)?;
+                }
+                Instruction::Split { target, parts } => {
+                    self.dispatch_split(target, parts)?;
+                }
+                Instruction::Validate { target, schema } => {
+                    self.dispatch_validate(target, schema)?;
+                }
+                Instruction::Extract { target, path } => {
+                    self.dispatch_extract(target, path)?;
                 }
                 Instruction::Display { message } => {
                     println!("{}", message);
@@ -425,6 +462,7 @@ impl Runtime {
                 Instruction::Regulation { standard, clause } => {
                     self.dispatch_regulation(standard, clause)?;
                 }
+                #[cfg(feature = "governance")]
                 Instruction::DataSovereignty { from, to } => {
                     self.dispatch_data_sovereignty(from, to)?;
                 }
@@ -434,6 +472,7 @@ impl Runtime {
                 Instruction::AuditLedger { message } => {
                     self.dispatch_audit_ledger(message)?;
                 }
+                #[cfg(feature = "governance")]
                 Instruction::DecisionQuorum { votes, threshold } => {
                     self.dispatch_decision_quorum(votes, threshold)?;
                 }
@@ -688,27 +727,73 @@ impl Runtime {
         Ok(())
     }
 
-    fn dispatch_filter(&mut self, target: &str, _condition: &str) -> Result<(), CnfError> {
-        // TODO: Implement filtering logic based on condition
-        // For now, just copy the target to itself
-        if let Some(val) = self.variables.get(target) {
-            self.set_value(target, val.clone());
+    fn dispatch_filter(&mut self, target: &str, condition: &str) -> Result<(), CnfError> {
+        // Basic filter: if the variable exists and is Text, split into lines and
+        // retain only those containing the condition substring.
+        if let Some(RuntimeValue::Text(text)) = self.variables.get(target) {
+            let filtered: String = text
+                .lines()
+                .filter(|line| line.contains(condition))
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.set_value(target, RuntimeValue::Text(filtered));
+            self.execution_trace.push(format!(
+                "FILTER {} where contains '{}'",
+                target, condition
+            ));
         }
         Ok(())
     }
 
-    fn dispatch_aggregate(&mut self, targets: &[String], _operation: &str) -> Result<(), CnfError> {
-        // Simple aggregation: sum the values
-        // For now, assume the target contains newline-separated numbers
-        if let Some(first_target) = targets.first() {
-            if let Some(RuntimeValue::Binary(buf)) = self.variables.get(first_target) {
-                let data = String::from_utf8_lossy(&buf);
-                let sum: i64 = data.lines()
-                    .filter_map(|line| line.trim().parse::<i64>().ok())
-                    .sum();
-                println!("sum_{}: {}", first_target, sum);
+    fn dispatch_aggregate(&mut self, targets: &[String], operation: &str) -> Result<(), CnfError> {
+        let result = match operation {
+            "SUM" => {
+                let mut sum: i64 = 0;
+                for t in targets {
+                    if let Some(val) = self.variables.get(t) {
+                        if let Ok(i) = val.as_integer() {
+                            sum += i;
+                        }
+                    }
+                }
+                RuntimeValue::Integer(sum)
             }
-        }
+            "COUNT" => RuntimeValue::Integer(targets.len() as i64),
+            _ => return Err(CnfError::RuntimeError(format!("Unknown aggregate: {}", operation))),
+        };
+        self.set_value("__aggregate_result", result);
+        self.execution_trace
+            .push(format!("AGGREGATE {} on {:?}", operation, targets));
+        Ok(())
+    }
+
+    fn dispatch_convert(&mut self, target: &str, _output_type: &str) -> Result<(), CnfError> {
+        // Placeholder: just log the operation
+        self.execution_trace.push(format!("CONVERT {} to {}", target, _output_type));
+        Ok(())
+    }
+
+    fn dispatch_merge(&mut self, _targets: &[String], _output_name: &str) -> Result<(), CnfError> {
+        // Placeholder: just log the operation
+        self.execution_trace.push("MERGE".to_string());
+        Ok(())
+    }
+
+    fn dispatch_split(&mut self, _target: &str, _parts: &str) -> Result<(), CnfError> {
+        // Placeholder: just log the operation
+        self.execution_trace.push("SPLIT".to_string());
+        Ok(())
+    }
+
+    fn dispatch_validate(&mut self, _target: &str, _schema: &str) -> Result<(), CnfError> {
+        // Placeholder: just log the operation
+        self.execution_trace.push("VALIDATE".to_string());
+        Ok(())
+    }
+
+    fn dispatch_extract(&mut self, _target: &str, _path: &str) -> Result<(), CnfError> {
+        // Placeholder: just log the operation
+        self.execution_trace.push("EXTRACT".to_string());
         Ok(())
     }
 
@@ -821,6 +906,7 @@ impl Runtime {
         self.dispatch_regulation(standard, "compliant")
     }
 
+    #[cfg(feature = "governance")]
     pub fn dispatch_governance_data_sovereignty(&mut self, from: &str, to: &str) -> Result<(), CnfError> {
         self.dispatch_data_sovereignty(from, to)
     }
@@ -861,6 +947,7 @@ impl Runtime {
         Ok(())
     }
 
+    #[cfg(feature = "governance")]
     fn dispatch_data_sovereignty(&mut self, from: &str, to: &str) -> Result<(), CnfError> {
         // Check data sovereignty rules
         use cnf_governance::data_sovereignty::{SovereigntyChecker, Region};
@@ -896,16 +983,19 @@ impl Runtime {
         Ok(())
     }
 
+    #[cfg(feature = "governance")]
     fn dispatch_decision_quorum(&mut self, votes: &str, threshold: &str) -> Result<(), CnfError> {
-        // Parse votes as number, check against threshold
-        let vote_count: usize = votes.parse().map_err(|_| CnfError::RuntimeError("Invalid vote count".to_string()))?;
-        let thresh: usize = threshold.parse().map_err(|_| CnfError::RuntimeError("Invalid threshold".to_string()))?;
-        if vote_count < thresh {
-            return Err(CnfError::GovernancePolicyViolation(
-                format!("Quorum not reached: {} votes, threshold {}", vote_count, thresh)
-            ));
-        }
-        self.execution_trace.push(format!("DECISION_QUORUM {} votes, threshold {}", vote_count, thresh));
+        use cnf_governance::distributed_rules::ConsensusQuorum;
+        let vote_count: usize = votes.parse()
+            .map_err(|_| CnfError::RuntimeError("Invalid vote count".to_string()))?;
+        let node_count: usize = threshold.parse()
+            .map_err(|_| CnfError::RuntimeError("Invalid node count".to_string()))?;
+        let quorum = ConsensusQuorum::new(node_count);
+        quorum.check(vote_count)
+            .map_err(|e| CnfError::GovernancePolicyViolation(e.to_string()))?;
+        self.execution_trace.push(
+            format!("DECISION_QUORUM: {}/{} votes (required: {})", vote_count, node_count, quorum.agreement)
+        );
         Ok(())
     }
 
@@ -1047,7 +1137,7 @@ impl Runtime {
 
     // ============ GOVERNANCE LTL VERIFICATION ============
 
-    #[cfg(feature = "quantum")]
+    #[cfg(feature = "governance")]
     pub fn verify_policy(&self, policy_name: &str) -> Result<bool, CnfError> {
         use cnf_governance::policy_engine::LtlFormula;
         let formula_str = self.governance_policies.get(policy_name)
@@ -1313,6 +1403,46 @@ mod tests {
             }
             _ => panic!("Expected RuntimeError for division by zero"),
         }
+    }
+
+    #[test]
+    fn test_dispatch_filter_basic() {
+        let mut runtime = Runtime::new();
+        runtime.variables.set(
+            "buf".to_string(),
+            RuntimeValue::Text("foo\nbar\nbaz".to_string()),
+        );
+        runtime.dispatch_filter("buf", "ba").unwrap();
+        assert_eq!(
+            runtime.variables.get("buf"),
+            Some(RuntimeValue::Text("bar\nbaz".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_dispatch_aggregate_sum_and_count() {
+        let mut runtime = Runtime::new();
+        runtime
+            .variables
+            .set("a".to_string(), RuntimeValue::Integer(2));
+        runtime
+            .variables
+            .set("b".to_string(), RuntimeValue::Integer(3));
+        runtime
+            .dispatch_aggregate(&vec!["a".to_string(), "b".to_string()], "SUM")
+            .unwrap();
+        assert_eq!(
+            runtime.variables.get("__aggregate_result"),
+            Some(RuntimeValue::Integer(5))
+        );
+
+        runtime
+            .dispatch_aggregate(&vec!["a".to_string()], "COUNT")
+            .unwrap();
+        assert_eq!(
+            runtime.variables.get("__aggregate_result"),
+            Some(RuntimeValue::Integer(1))
+        );
     }
 
     #[test]

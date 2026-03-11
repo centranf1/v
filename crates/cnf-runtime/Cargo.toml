@@ -21,12 +21,13 @@ cobol-protocol-v153 = { path = "../cobol-protocol-v153" }
 hex = "0.4"
 cobol-protocol-v154 = { path = "../cobol-protocol-v154" }
 
-cnf-governance = { path = "../cnf-governance" }
+cnf-governance = { path = "../cnf-governance", optional = true }
 
 [features]
 network = ["cnf-network"]
 verifier = ["cnf-verifier"]
 quantum = ["dep:cnf-quantum", "serde", "serde_json"]
+governance = ["dep:cnf-governance"]
 
 [dev-dependencies]
 criterion = "0.5"

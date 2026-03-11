@@ -116,11 +116,11 @@ impl Parser {
                 self.advance();
                 Ok(DataType::TextString)
             }
-            Token::NumberInteger => {
+            Token::NumberIntegerType => {
                 self.advance();
                 Ok(DataType::NumberInteger)
             }
-            Token::NumberDecimal => {
+            Token::NumberDecimalType => {
                 self.advance();
                 Ok(DataType::NumberDecimal)
             }
@@ -175,13 +175,23 @@ impl Parser {
                 self.advance();
                 Ok("TEXT-STRING".to_string())
             }
-            Token::NumberInteger => {
+            Token::NumberIntegerType => {
                 self.advance();
                 Ok("NUMBER-INTEGER".to_string())
             }
-            Token::NumberDecimal => {
+            Token::NumberDecimalType => {
                 self.advance();
                 Ok("NUMBER-DECIMAL".to_string())
+            }
+            Token::NumberIntegerLiteral(val) => {
+                let lit = val.clone();
+                self.advance();
+                Ok(lit)
+            }
+            Token::NumberDecimalLiteral(val) => {
+                let lit = val.clone();
+                self.advance();
+                Ok(lit)
             }
             _ => Err(format!(
                 "Expected variable name or type, got {}",
@@ -888,6 +898,14 @@ impl Parser {
                     predicate_parts.push(s.clone());
                     self.advance();
                 }
+                Token::NumberIntegerLiteral(val) => {
+                    predicate_parts.push(val.clone());
+                    self.advance();
+                }
+                Token::NumberDecimalLiteral(val) => {
+                    predicate_parts.push(val.clone());
+                    self.advance();
+                }
                 _ => {
                     return Err(format!("Unexpected token in predicate: {}", self.current()));
                 }
@@ -903,6 +921,14 @@ impl Parser {
             match self.current() {
                 Token::Identifier(s) => {
                     parts.push(s.clone());
+                    self.advance();
+                }
+                Token::NumberIntegerLiteral(val) => {
+                    parts.push(val.clone());
+                    self.advance();
+                }
+                Token::NumberDecimalLiteral(val) => {
+                    parts.push(val.clone());
                     self.advance();
                 }
                 Token::Equals => {
@@ -1011,11 +1037,11 @@ impl Parser {
                             self.advance();
                             DataType::TextString
                         }
-                        Token::NumberInteger => {
+                        Token::NumberIntegerType => {
                             self.advance();
                             DataType::NumberInteger
                         }
-                        Token::NumberDecimal => {
+                        Token::NumberDecimalType => {
                             self.advance();
                             DataType::NumberDecimal
                         }
@@ -1798,6 +1824,52 @@ mod tests {
         assert!(program.governance.is_some());
         let gov = program.governance.unwrap();
         assert_eq!(gov.statements.len(), 2);
+    }
+
+    #[test]
+    fn test_parser_numeric_literals_as_operands() {
+        let source = r#"
+IDENTIFICATION DIVISION.
+    PROGRAM-ID. p.
+ENVIRONMENT DIVISION.
+DATA DIVISION.
+PROCEDURE DIVISION.
+    SET X "0".
+    ADD X 5 3.
+"#;
+        let tokens = tokenize(source).unwrap();
+        let program = parse(tokens).unwrap();
+        // should produce an Add statement with literal operands
+        let stmt = &program.procedure.statements[1];
+        if let ProcedureStatement::Add { target, operand1, operand2 } = stmt {
+            assert_eq!(target, "X");
+            assert_eq!(operand1, "5");
+            assert_eq!(operand2, "3");
+        } else {
+            panic!("expected Add statement");
+        }
+    }
+
+    #[test]
+    fn test_parser_numeric_literals_in_condition() {
+        let source = r#"
+IDENTIFICATION DIVISION.
+    PROGRAM-ID. p.
+ENVIRONMENT DIVISION.
+DATA DIVISION.
+PROCEDURE DIVISION.
+    IF 5 > 3 THEN
+        DISPLAY "ok".
+    END-IF.
+"#;
+        let tokens = tokenize(source).unwrap();
+        let program = parse(tokens).unwrap();
+        let stmt = &program.procedure.statements[0];
+        if let ProcedureStatement::If { condition, .. } = stmt {
+            assert_eq!(condition.trim(), "5 > 3");
+        } else {
+            panic!("expected If statement");
+        }
     }
 
     #[test]

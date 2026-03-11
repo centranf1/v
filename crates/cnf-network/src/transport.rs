@@ -248,7 +248,7 @@ impl std::fmt::Debug for TcpTransport {
         f.debug_struct("TcpTransport")
             .field("node_id", &self.node_id)
             .field("listener", &self.listener.is_some())
-            .field("connections_count", &self.connections.lock().unwrap().len())
+            .field("connections_count", &self.connections.lock().map(|g| g.len()).unwrap_or(0))
             .finish()
     }
 }
@@ -292,7 +292,7 @@ impl TcpTransport {
             CnfNetworkError::ConnectionFailed(format!("Failed to connect to {}: {}", node_id, e))
         })?;
 
-        let mut conns = self.connections.lock().unwrap();
+        let mut conns = self.connections.lock().map_err(|_| CnfNetworkError::LockPoisoned)?;
         conns.insert(node_id, stream);
         Ok(())
     }
@@ -302,7 +302,7 @@ impl TcpTransport {
         let frame = NetworkFrame::from_message(msg)?;
         let serialized = frame.serialize()?;
 
-        let mut conns = self.connections.lock().unwrap();
+        let mut conns = self.connections.lock().map_err(|_| CnfNetworkError::LockPoisoned)?;
         let stream = conns
             .get_mut(target)
             .ok_or_else(|| CnfNetworkError::NodeNotFound(target.to_string()))?;
@@ -364,7 +364,7 @@ impl TcpTransport {
         let frame = NetworkFrame::from_message(msg)?;
         let serialized = frame.serialize()?;
 
-        let mut conns = self.connections.lock().unwrap();
+        let mut conns = self.connections.lock().map_err(|_| CnfNetworkError::LockPoisoned)?;
         let mut errors = Vec::new();
 
         for (_node_id, stream) in conns.iter_mut() {
@@ -382,7 +382,7 @@ impl TcpTransport {
 
     /// Disconnect from target node
     pub fn disconnect(&self, node_id: &NodeId) -> Result<(), CnfNetworkError> {
-        let mut conns = self.connections.lock().unwrap();
+        let mut conns = self.connections.lock().map_err(|_| CnfNetworkError::LockPoisoned)?;
         conns
             .remove(node_id)
             .ok_or_else(|| CnfNetworkError::NodeNotFound(node_id.to_string()))?;
@@ -408,7 +408,7 @@ impl TcpTransport {
         // Perform client-side handshake
         Self::client_handshake(&mut stream, config)?;
 
-        let mut conns = self.connections.lock().unwrap();
+        let mut conns = self.connections.lock().map_err(|_| CnfNetworkError::LockPoisoned)?;
         conns.insert(node_id, stream);
         Ok(())
     }

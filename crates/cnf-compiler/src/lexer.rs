@@ -153,8 +153,13 @@ pub enum Token {
     XmlDocument,
     ParquetTable,
     TextString,
-    NumberInteger,
-    NumberDecimal,
+    // Number tokens come in two flavors: the keyword types used in DATA declarations
+    // and standalone literals that appear in expressions.  We distinguish them to avoid
+    // ambiguities during parsing (e.g. `X NUMBER-INTEGER` vs `X 42`).
+    NumberIntegerType,
+    NumberDecimalType,
+    NumberIntegerLiteral(String),
+    NumberDecimalLiteral(String),
     FileHandle,
     RecordStream,
     // Quantum operations (v0.8.0)
@@ -314,8 +319,10 @@ impl std::fmt::Display for Token {
             Token::XmlDocument => write!(f, "XML-DOCUMENT"),
             Token::ParquetTable => write!(f, "PARQUET-TABLE"),
             Token::TextString => write!(f, "TEXT-STRING"),
-            Token::NumberInteger => write!(f, "NUMBER-INTEGER"),
-            Token::NumberDecimal => write!(f, "NUMBER-DECIMAL"),
+            Token::NumberIntegerType => write!(f, "NUMBER-INTEGER"),
+            Token::NumberDecimalType => write!(f, "NUMBER-DECIMAL"),
+            Token::NumberIntegerLiteral(val) => write!(f, "{}", val),
+            Token::NumberDecimalLiteral(val) => write!(f, "{}", val),
             Token::FileHandle => write!(f, "FILE-HANDLE"),
             Token::RecordStream => write!(f, "RECORD-STREAM"),
             Token::QuantumEncrypt => write!(f, "QUANTUM-ENCRYPT"),
@@ -436,8 +443,40 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                 tokens.push(Token::RightParen);
             }
             
+// Numbers (must come before identifiers).  Distinguish between
+                // bare literals and the `NUMBER-INTEGER`/`NUMBER-DECIMAL` keywords,
+                // which are alphabetic and therefore handled later.
+            c if c.is_ascii_digit() => {
+                let mut num_str = String::new();
+                num_str.push(c);
+                chars.next();
+
+                while let Some(&next_c) = chars.peek() {
+                    if next_c.is_ascii_digit() || next_c == '.' {
+                        num_str.push(next_c);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+
+                if num_str.contains('.') {
+                    // Try to parse as f64 to validate
+                    match num_str.parse::<f64>() {
+                        Ok(_) => tokens.push(Token::NumberDecimalLiteral(num_str.clone())),
+                        Err(_) => return Err(format!("Invalid number: {}", num_str)),
+                    }
+                } else {
+                    match num_str.parse::<i64>() {
+                        Ok(_) => tokens.push(Token::NumberIntegerLiteral(num_str.clone())),
+                        Err(_) => return Err(format!("Invalid integer: {}", num_str)),
+                    }
+                }
+                continue;
+            }
+            
             // Keywords and identifiers (must be alphanumeric or dash)
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '_' => {
+            'A'..='Z' | 'a'..='z' | '_' => {
                 let mut word = String::new();
                 while let Some(&c) = chars.peek() {
                     if c.is_alphanumeric() || c == '-' || c == '_' {
@@ -517,8 +556,8 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                     "XML-DOCUMENT" => Token::XmlDocument,
                     "PARQUET-TABLE" => Token::ParquetTable,
                     "TEXT-STRING" => Token::TextString,
-                    "NUMBER-INTEGER" => Token::NumberInteger,
-                    "NUMBER-DECIMAL" => Token::NumberDecimal,
+                    "NUMBER-INTEGER" => Token::NumberIntegerType,
+                    "NUMBER-DECIMAL" => Token::NumberDecimalType,
                     "FILE-HANDLE" => Token::FileHandle,
                     "RECORD-STREAM" => Token::RecordStream,
                     
@@ -726,6 +765,14 @@ mod tests {
     fn test_lexer_recognizes_quantum_verify_decrypt() {
         let tokens = tokenize("QUANTUM-VERIFY-DECRYPT").unwrap();
         assert_eq!(tokens[0], Token::QuantumVerifyDecrypt);
+    }
+
+    #[test]
+    fn test_lexer_recognizes_numbers() {
+        let tokens = tokenize("42").unwrap();
+        assert_eq!(tokens[0], Token::NumberIntegerLiteral("42".to_string()));
+        let tokens = tokenize("3.14").unwrap();
+        assert_eq!(tokens[0], Token::NumberDecimalLiteral("3.14".to_string()));
     }
 
     #[test]

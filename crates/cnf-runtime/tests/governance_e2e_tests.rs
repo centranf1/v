@@ -2,8 +2,10 @@
 //!
 //! Tests for GOVERNANCE DIVISION runtime enforcement.
 
-use cnf_runtime::Runtime;
-use cnf_compiler::ir::Instruction;
+#[cfg(feature = "governance")]
+mod tests {
+    use cnf_runtime::Runtime;
+    use cnf_compiler::ir::Instruction;
 
 #[test]
 fn test_access_control_enforcement() {
@@ -123,4 +125,4 @@ fn test_audit_master_ledger_tamper() {
     }
     // Verify chain (still true in dummy, but in real impl should fail)
     assert!(ledger.verify());
-}
+}}

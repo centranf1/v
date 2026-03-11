@@ -10,8 +10,8 @@ fn test_compile_csm_statements_to_ir() {
         ENVIRONMENT DIVISION.
         OS "Linux".
         DATA DIVISION.
-        SRC VIDEO-MP4.
-        OUT VIDEO-MP4.
+        INPUT VIDEO-MP4 AS SRC.
+        OUTPUT VIDEO-MP4 AS OUT.
         PROCEDURE DIVISION.
         COMPRESS-CSM SRC INTO OUT.
         DECOMPRESS-CSM OUT INTO SRC.
