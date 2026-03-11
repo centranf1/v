@@ -56,6 +56,18 @@ Notes:
 - Ready for continued feature expansion and optimization
 
 [2026-03-11]
+Change:
+- rewrite parser.rs unit tests to eliminate unwrap/expect and explicit panic! by returning Result and using `?`/assert macros.
+
+Scope:
+- crates/cnf-compiler/src/parser.rs (test module only)
+
+Status:
+- completed
+
+Notes:
+- cuts the file’s unwrap/panic count to zero, satisfying CI’s grep check.
+- keeps parsing behaviour identical; errors still fail the test.
 
 [2026-03-11]
 

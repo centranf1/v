@@ -452,9 +452,24 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                 chars.next();
 
                 while let Some(&next_c) = chars.peek() {
-                    if next_c.is_ascii_digit() || next_c == '.' {
+                    if next_c.is_ascii_digit() {
                         num_str.push(next_c);
                         chars.next();
+                    } else if next_c == '.' {
+                        // only consume the dot if followed by a digit; otherwise leave
+                        // the period as a separate token so statements like `5 .` are
+                        // handled correctly (e.g. `ADD X 5 3.` should see the `.` as a
+                        // terminator, not part of the number literal).
+                        let mut lookahead = chars.clone();
+                        lookahead.next(); // consume '.' in lookahead
+                        if let Some(&after) = lookahead.peek() {
+                            if after.is_ascii_digit() {
+                                num_str.push('.');
+                                chars.next();
+                                continue;
+                            }
+                        }
+                        break;
                     } else {
                         break;
                     }

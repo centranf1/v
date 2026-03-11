@@ -417,6 +417,30 @@ impl Parser {
                 self.expect(Token::Period)?;
                 Ok(ProcedureStatement::Replay { target })
             }
+            Token::Display => {
+                self.advance();
+                let message = self.expect_string()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Display { message })
+            }
+            Token::Print => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                let format = if self.current() == &Token::Identifier("WITH".to_string()) {
+                    self.advance();
+                    Some(self.expect_identifier()?)
+                } else {
+                    None
+                };
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Print { target, format })
+            }
+            Token::Read => {
+                self.advance();
+                let target = self.expect_variable_or_type()?;
+                self.expect(Token::Period)?;
+                Ok(ProcedureStatement::Read { target })
+            }
             // QUANTUM operations
             Token::QuantumEncrypt => {
                 self.advance();
@@ -1720,21 +1744,31 @@ mod tests {
     use super::*;
     use crate::lexer::tokenize;
 
+    // helper to avoid unwrap/panic in tests
+    macro_rules! ensure {
+        ($cond:expr, $msg:expr) => {
+            if !($cond) {
+                return Err($msg.to_string());
+            }
+        };
+    }
+
     #[test]
-    fn test_parser_rejects_wrong_division_order() {
+    fn test_parser_rejects_wrong_division_order() -> Result<(), String> {
         let source = r#"
             DATA DIVISION.
             IDENTIFICATION DIVISION.
             ENVIRONMENT DIVISION.
             PROCEDURE DIVISION.
         "#;
-        let tokens = tokenize(source).unwrap();
+        let tokens = tokenize(source)?;
         let result = parse(tokens);
-        assert!(result.is_err());
+        ensure!(result.is_err(), "expected error for wrong division order");
+        Ok(())
     }
 
     #[test]
-    fn test_parser_rejects_unquoted_env_value() {
+    fn test_parser_rejects_unquoted_env_value() -> Result<(), String> {
         let source = r#"
             IDENTIFICATION DIVISION.
                 PROGRAM-ID. TestApp.
@@ -1743,13 +1777,14 @@ mod tests {
             DATA DIVISION.
             PROCEDURE DIVISION.
         "#;
-        let tokens = tokenize(source).unwrap();
+        let tokens = tokenize(source)?;
         let result = parse(tokens);
-        assert!(result.is_err());
+        ensure!(result.is_err(), "unquoted environment value should fail");
+        Ok(())
     }
 
     #[test]
-    fn test_parser_rejects_misspelled_environment_division() {
+    fn test_parser_rejects_misspelled_environment_division() -> Result<(), String> {
         let source = r#"
             IDENTIFICATION DIVISION.
                 PROGRAM-ID. TestApp.
@@ -1757,44 +1792,49 @@ mod tests {
             DATA DIVISION.
             PROCEDURE DIVISION.
         "#;
-        let tokens = tokenize(source).unwrap();
+        let tokens = tokenize(source)?;
         let result = parse(tokens);
-        assert!(
-            result.is_err(),
-            "Parser should reject misspelled ENVIROMENT (missing N)"
-        );
+        ensure!(result.is_err(), "Parser should reject misspelled ENVIROMENT (missing N)");
+        Ok(())
     }
 
     #[test]
-    fn test_parser_error_message_mentions_expected_division() {
+    fn test_parser_error_message_mentions_expected_division() -> Result<(), String> {
         let source = r#"
             DATA DIVISION.
             IDENTIFICATION DIVISION.
         "#;
-        let tokens = tokenize(source).unwrap();
+        let tokens = tokenize(source)?;
         let result = parse(tokens);
-        assert!(result.is_err());
-        let error = result.unwrap_err();
-        assert!(error.contains("IDENTIFICATION DIVISION"));
-        assert!(error.contains("Division order error"));
+        let error = match result {
+            Err(e) => e,
+            Ok(_) => return Err("expected parsing to fail".to_string()),
+        };
+        ensure!(error.contains("IDENTIFICATION DIVISION"), "error should mention IDENTIFICATION DIVISION");
+        ensure!(error.contains("Division order error"), "error should include 'Division order error'");
+        Ok(())
     }
 
     #[test]
-    fn test_parser_error_explains_division_order() {
+    fn test_parser_error_explains_division_order() -> Result<(), String> {
         let source = r#"
             PROCEDURE DIVISION.
             IDENTIFICATION DIVISION.
         "#;
-        let tokens = tokenize(source).unwrap();
+        let tokens = tokenize(source)?;
         let result = parse(tokens);
-        assert!(result.is_err());
-        let error = result.unwrap_err();
+        let error = match result {
+            Err(e) => e,
+            Ok(_) => return Err("expected parsing to fail".to_string()),
+        };
         // Error should explain the required order
-        assert!(error.contains("IDENTIFICATION → ENVIRONMENT → DATA → PROCEDURE"));
+        ensure!(error.contains("IDENTIFICATION → ENVIRONMENT → DATA → PROCEDURE"),
+                "division order explanation missing");
+        Ok(())
     }
 
     #[test]
-    fn test_parser_accepts_empty_governance() {
+    fn test_parser_accepts_empty_governance() -> Result<(), String> {
         let source = r#"
             IDENTIFICATION DIVISION.
                 PROGRAM-ID. p.
@@ -1802,13 +1842,14 @@ mod tests {
             DATA DIVISION.
             PROCEDURE DIVISION.
         "#;
-        let tokens = tokenize(source).unwrap();
-        let program = parse(tokens).unwrap();
-        assert!(program.governance.is_none());
+        let tokens = tokenize(source)?;
+        let program = parse(tokens)?;
+        ensure!(program.governance.is_none(), "governance should be None");
+        Ok(())
     }
 
     #[test]
-    fn test_parser_parses_simple_governance() {
+    fn test_parser_parses_simple_governance() -> Result<(), String> {
         let source = r#"
             IDENTIFICATION DIVISION.
                 PROGRAM-ID. p.
@@ -1819,15 +1860,18 @@ mod tests {
             DATA DIVISION.
             PROCEDURE DIVISION.
         "#;
-        let tokens = tokenize(source).unwrap();
-        let program = parse(tokens).unwrap();
-        assert!(program.governance.is_some());
-        let gov = program.governance.unwrap();
-        assert_eq!(gov.statements.len(), 2);
+        let tokens = tokenize(source)?;
+        let program = parse(tokens)?;
+        let gov = match program.governance {
+            Some(g) => g,
+            None => return Err("expected governance section".to_string()),
+        };
+        ensure!(gov.statements.len() == 2, "two governance statements expected");
+        Ok(())
     }
 
     #[test]
-    fn test_parser_numeric_literals_as_operands() {
+    fn test_parser_numeric_literals_as_operands() -> Result<(), String> {
         let source = r#"
 IDENTIFICATION DIVISION.
     PROGRAM-ID. p.
@@ -1837,21 +1881,23 @@ PROCEDURE DIVISION.
     SET X "0".
     ADD X 5 3.
 "#;
-        let tokens = tokenize(source).unwrap();
-        let program = parse(tokens).unwrap();
+        let tokens = tokenize(source)?;
+        let program = parse(tokens)?;
         // should produce an Add statement with literal operands
         let stmt = &program.procedure.statements[1];
-        if let ProcedureStatement::Add { target, operand1, operand2 } = stmt {
-            assert_eq!(target, "X");
-            assert_eq!(operand1, "5");
-            assert_eq!(operand2, "3");
-        } else {
-            panic!("expected Add statement");
+        match stmt {
+            ProcedureStatement::Add { target, operand1, operand2 } => {
+                ensure!(target == "X", "target mismatch");
+                ensure!(operand1 == "5", "operand1 mismatch");
+                ensure!(operand2 == "3", "operand2 mismatch");
+            }
+            _ => return Err("expected Add statement".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parser_numeric_literals_in_condition() {
+    fn test_parser_numeric_literals_in_condition() -> Result<(), String> {
         let source = r#"
 IDENTIFICATION DIVISION.
     PROGRAM-ID. p.
@@ -1862,18 +1908,20 @@ PROCEDURE DIVISION.
         DISPLAY "ok".
     END-IF.
 "#;
-        let tokens = tokenize(source).unwrap();
-        let program = parse(tokens).unwrap();
+        let tokens = tokenize(source)?;
+        let program = parse(tokens)?;
         let stmt = &program.procedure.statements[0];
-        if let ProcedureStatement::If { condition, .. } = stmt {
-            assert_eq!(condition.trim(), "5 > 3");
-        } else {
-            panic!("expected If statement");
+        match stmt {
+            ProcedureStatement::If { condition, .. } => {
+                ensure!(condition.trim() == "5 > 3", "condition text mismatch");
+            }
+            _ => return Err("expected If statement".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parser_handles_encrypt_decrypt() {
+    fn test_parser_handles_encrypt_decrypt() -> Result<(), String> {
         let source = r#"
             IDENTIFICATION DIVISION.
                 PROGRAM-ID. EncDec.
@@ -1885,22 +1933,23 @@ PROCEDURE DIVISION.
                 ENCRYPT BINARY-BLOB.
                 DECRYPT BINARY-BLOB.
         "#;
-        let tokens = tokenize(source).unwrap();
-        let prog = parse(tokens).expect("should parse encrypt/decrypt");
+        let tokens = tokenize(source)?;
+        let prog = parse(tokens)?;
         let stmts = &prog.procedure.statements;
-        assert_eq!(stmts.len(), 2);
+        ensure!(stmts.len() == 2, "expected two statements");
         match &stmts[0] {
-            ProcedureStatement::Encrypt { target } => assert_eq!(target, "BINARY-BLOB"),
-            _ => panic!("first statement should be Encrypt"),
+            ProcedureStatement::Encrypt { target } => ensure!(target == "BINARY-BLOB", "encrypt target"),
+            _ => return Err("first statement should be Encrypt".to_string()),
         }
         match &stmts[1] {
-            ProcedureStatement::Decrypt { target } => assert_eq!(target, "BINARY-BLOB"),
-            _ => panic!("second statement should be Decrypt"),
+            ProcedureStatement::Decrypt { target } => ensure!(target == "BINARY-BLOB", "decrypt target"),
+            _ => return Err("second statement should be Decrypt".to_string()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parser_quantum_operations() {
+    fn test_parser_quantum_operations() -> Result<(), String> {
         let source = r#"
             IDENTIFICATION DIVISION.
                 PROGRAM-ID. QuantumTest.
@@ -1921,9 +1970,10 @@ PROCEDURE DIVISION.
                 GENERATE-KEYPAIR ALGORITHM algo AS result.
                 LONG-TERM-SIGN BINARY-BLOB WITH ciphertext AS result.
         "#;
-        let tokens = tokenize(source).unwrap();
-        let prog = parse(tokens).expect("should parse quantum ops");
-        assert_eq!(prog.procedure.statements.len(), 8);
+        let tokens = tokenize(source)?;
+        let prog = parse(tokens)?;
+        ensure!(prog.procedure.statements.len() == 8, "eight quantum statements expected");
+        Ok(())
     }
 
 }

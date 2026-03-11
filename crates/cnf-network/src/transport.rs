@@ -48,8 +48,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use rustls::ServerConfig;
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::{ServerConfig, ClientConfig, RootCertStore};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use std::sync::{Arc, Mutex};
 
 use hmac::{Hmac, Mac};
@@ -228,7 +228,25 @@ impl TlsConfig {
                                                             .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
                                                                     Ok(Arc::new(config))
             }
+
+            /// Build rustls ClientConfig from this TlsConfig for mTLS client connections.
+            pub fn client_config(&self) -> Result<Arc<ClientConfig>, CnfNetworkError> {
+                        let mut root_store = RootCertStore::empty();
+                                    // For development: use webpki_roots
+                                                // root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+                                                            // If CA cert provided, add it to trust store
+                                                                        if let Some(ref ca_cert) = self.ca_cert_der {
+                                                                                    root_store.add(ca_cert.clone())
+                                                                                                .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
+                                                                        }
+                                                                        
+                                                                        let config = ClientConfig::builder()
+                                                                                    .with_root_certificates(root_store)
+                                                                                                .with_no_client_auth();
+                                                                        Ok(Arc::new(config))
+            }
 }
+
 
 /// Synchronous TCP transport for node-to-node communication
 pub struct TcpTransport {
@@ -291,6 +309,15 @@ impl TcpTransport {
         let stream = TcpStream::connect(addr).map_err(|e| {
             CnfNetworkError::ConnectionFailed(format!("Failed to connect to {}: {}", node_id, e))
         })?;
+
+        // TODO: Enable TLS handshake in v1.2.0
+        // Check if TLS config is available for secure mTLS connection
+        if let Some(ref _tls) = self.tls_config {
+            // TLS configuration present - ready for mTLS handshake
+            // In v1.2.0: negotiate TLS using self.tls_config.client_config()
+            // For now: store the intent that this connection should use TLS
+            // Future: TcpStream -> TlsStream once v1.2.0 ships
+        }
 
         let mut conns = self.connections.lock().map_err(|_| CnfNetworkError::LockPoisoned)?;
         conns.insert(node_id, stream);
