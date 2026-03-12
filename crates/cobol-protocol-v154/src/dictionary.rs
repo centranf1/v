@@ -19,12 +19,12 @@ enum PhfSlot {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CsmDictionary {
-    slots: Vec<PhfSlot>,
-    by_first_byte: Vec<Vec<(u16, Arc<[u8]>)>>, // [256] bucket, each sorted by entry.len desc
-    count: usize,
-    checksum: [u8; 32],
+    pub slots: Vec<PhfSlot>,
+    pub by_first_byte: Vec<Vec<(u16, Arc<[u8]>)>>, // [256] bucket, each sorted by entry.len desc
+    pub count: usize,
+    pub checksum: [u8; 32],
 }
 
 

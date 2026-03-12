@@ -1,3 +1,5 @@
+pub mod dictionary;
+pub use dictionary::CsmDictionary;
 //! Compact Symbol Mapping (CSM) compression engine v154
 //! Tidak mengimpor atau mengubah cobol-protocol-v153 (CORE-FROZEN)
 

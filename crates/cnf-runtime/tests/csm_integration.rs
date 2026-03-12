@@ -4,7 +4,7 @@ use cnf_compiler::ir::Instruction;
 use cnf_runtime::Runtime;
 #[test]
 fn test_csm_pipeline_dag_scheduler() {
-    use cobol_protocol_v154::dictionary::CsmDictionary;
+    use cobol_protocol_v154::CsmDictionary;
     use cnf_compiler::ir::Instruction;
     use cnf_runtime::Runtime;
 
@@ -32,7 +32,7 @@ fn test_csm_pipeline_dag_scheduler() {
 
 #[test]
 fn test_csm_template_compression_ratio() {
-    use cobol_protocol_v154::dictionary::CsmDictionary;
+    use cobol_protocol_v154::CsmDictionary;
     let mut dict = CsmDictionary::new();
     let template = vec![0xAB; 10];
     dict.insert(1, &template);
@@ -48,7 +48,7 @@ fn test_csm_template_compression_ratio() {
 
 #[test]
 fn test_csm_bit_flip_atomic_integrity() {
-    use cobol_protocol_v154::dictionary::CsmDictionary;
+    use cobol_protocol_v154::CsmDictionary;
     let mut dict = CsmDictionary::new();
     dict.insert(1, &[0xCD; 8]);
     let mut runtime = Runtime::new();
@@ -69,7 +69,7 @@ fn test_csm_bit_flip_atomic_integrity() {
 
 #[test]
 fn test_csm_compress_decompress_roundtrip() {
-    use cobol_protocol_v154::dictionary::CsmDictionary;
+    use cobol_protocol_v154::CsmDictionary;
     use cnf_compiler::ir::Instruction;
     use cnf_runtime::Runtime;
     let mut runtime = Runtime::new();
