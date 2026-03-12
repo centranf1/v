@@ -40,6 +40,17 @@ pub enum Token {
     DataDiv,
     ProcedureDiv,
     VerificationDiv,
+    GovernanceDiv,
+    ProfileDiv,
+    // Profile keywords
+    HardwareKw,
+    MemoryLimit,
+    Parallelism,
+    EdgeLow,
+    EdgeHigh,
+    DatacenterLow,
+    DatacenterHigh,
+    BalancedProfile,
     // Verification keywords
     PreCondition,
     PostCondition,
@@ -172,7 +183,6 @@ pub enum Token {
     GenerateKeypair,
     LongTermSign,
     // Governance-related (v0.9.0)
-    GovernanceDiv,
     Policy,
     Formula,
     Regulation,
@@ -215,6 +225,15 @@ impl std::fmt::Display for Token {
             Token::ProcedureDiv => write!(f, "PROCEDURE DIVISION"),
             Token::VerificationDiv => write!(f, "VERIFICATION DIVISION"),
             Token::GovernanceDiv => write!(f, "GOVERNANCE DIVISION"),
+            Token::ProfileDiv => write!(f, "PROFILE DIVISION"),
+            Token::HardwareKw => write!(f, "HARDWARE"),
+            Token::MemoryLimit => write!(f, "MEMORY-LIMIT"),
+            Token::Parallelism => write!(f, "PARALLELISM"),
+            Token::EdgeLow => write!(f, "EDGE-LOW"),
+            Token::EdgeHigh => write!(f, "EDGE-HIGH"),
+            Token::DatacenterLow => write!(f, "DATACENTER-LOW"),
+            Token::DatacenterHigh => write!(f, "DATACENTER-HIGH"),
+            Token::BalancedProfile => write!(f, "BALANCED"),
             Token::PreCondition => write!(f, "PRE-CONDITION"),
             Token::PostCondition => write!(f, "POST-CONDITION"),
             Token::Invariant => write!(f, "INVARIANT"),
@@ -713,6 +732,22 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
 }
 
 // ...existing code...
+
+// Keyword mapping for PROFILE DIVISION and related
+fn keyword_token(word: &str) -> Option<Token> {
+    match word {
+        "PROFILE" => Some(Token::ProfileDiv),
+        "HARDWARE" => Some(Token::HardwareKw),
+        "MEMORY-LIMIT" => Some(Token::MemoryLimit),
+        "PARALLELISM" => Some(Token::Parallelism),
+        "EDGE-LOW" => Some(Token::EdgeLow),
+        "EDGE-HIGH" => Some(Token::EdgeHigh),
+        "DATACENTER-LOW" => Some(Token::DatacenterLow),
+        "DATACENTER-HIGH" => Some(Token::DatacenterHigh),
+        "BALANCED" => Some(Token::BalancedProfile),
+        _ => None,
+    }
+}
 
 /// Tokenize CENTRA-NF source code.
 /// Rejects unrecognized characters immediately.

@@ -13,8 +13,25 @@ pub struct Program {
     pub network: Option<NetworkDivision>,
     pub verification: Option<VerificationDivision>,
     pub governance: Option<GovernanceDivision>,
+    pub profile: Option<ProfileDivision>,
     pub data: DataDivision,
     pub procedure: ProcedureDivision,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum HardwareProfile {
+    EdgeLow,
+    EdgeHigh,
+    DatacenterLow,
+    DatacenterHigh,
+    Balanced,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileDivision {
+    pub hardware: HardwareProfile,
+    pub memory_limit_mb: Option<u64>,
+    pub parallelism: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

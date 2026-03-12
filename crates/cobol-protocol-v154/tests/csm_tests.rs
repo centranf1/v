@@ -54,3 +54,64 @@ fn compress_decompress_roundtrip() {
     let decompressed = decompress_csm(&compressed, &dict).unwrap();
     assert_eq!(data, &decompressed[..]);
 }
+
+#[test]
+fn test_compress_decompress_binary_zeros() {
+    let dict = CsmDictionary::new();
+    let input = vec![0u8; 1024];
+    let compressed = compress_csm(&input, &dict).unwrap();
+    let decompressed = decompress_csm(&compressed, &dict).unwrap();
+    assert_eq!(input, decompressed);
+}
+
+#[test]
+fn test_compress_decompress_all_same_byte() {
+    let dict = CsmDictionary::new();
+    let input = vec![0xABu8; 512];
+    let compressed = compress_csm(&input, &dict).unwrap();
+    let decompressed = decompress_csm(&compressed, &dict).unwrap();
+    assert_eq!(input, decompressed);
+}
+
+#[test]
+fn test_compress_decompress_alternating() {
+    let dict = CsmDictionary::new();
+    let mut input = Vec::with_capacity(1024);
+    for i in 0..512 {
+        input.push(0x00);
+        input.push(0xFF);
+    }
+    let compressed = compress_csm(&input, &dict).unwrap();
+    let decompressed = decompress_csm(&compressed, &dict).unwrap();
+    assert_eq!(input, decompressed);
+}
+
+#[test]
+fn test_compress_empty_dict() {
+    let dict = CsmDictionary::new();
+    let input = (0..256u8).collect::<Vec<_>>();
+    let compressed = compress_csm(&input, &dict).unwrap();
+    let decompressed = decompress_csm(&compressed, &dict).unwrap();
+    assert_eq!(input, decompressed);
+}
+
+#[test]
+fn test_metadata_roundtrip() {
+    let dict = CsmDictionary::new();
+    let input = (0..128u8).cycle().take(1024).collect::<Vec<_>>();
+    let compressed = compress_csm(&input, &dict).unwrap();
+    let meta = stream::read_metadata(&compressed).unwrap();
+    assert_eq!(meta.magic, [0x43, 0x53]);
+    assert_eq!(meta.version, 0x9A);
+    assert_eq!(meta.flags & 0x01, 0x00); // dict unused
+    assert_eq!(meta.orig_size, input.len() as u32);
+}
+
+#[test]
+fn test_large_input_chunked() {
+    let dict = CsmDictionary::new();
+    let input = (0..=255u8).cycle().take(65535).collect::<Vec<_>>();
+    let compressed = compress_csm(&input, &dict).unwrap();
+    let decompressed = decompress_csm(&compressed, &dict).unwrap();
+    assert_eq!(input, decompressed);
+}

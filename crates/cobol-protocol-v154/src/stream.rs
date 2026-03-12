@@ -13,33 +13,84 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>
     out.push(0u8); // flags: 0x01 = dict used
     out.extend_from_slice(&[0u8; 8]); // layer_map reserved
 
-    let mut tokens: Vec<u16> = Vec::new();
+    // Pre-allocate tokens: after lazy matching, token count is lower
+    let mut tokens: Vec<u16> = Vec::with_capacity(input.len() / 3 + 32);
     let mut i = 0usize;
     let mut dict_used = false;
+    let dict_syms: Vec<u16> = dict
+        .map
+        .iter()
+        .map(|(k, _)| *k)
+        .collect();
 
     while i < input.len() {
-        // Try longest dictionary match
-        let mut best = (0usize, None::<u16>);
-        for sym in 0u16..4096 {
-            if let Some(entry) = dict.lookup(sym) {
-                let end = i + entry.len();
-                if !entry.is_empty() && end <= input.len() && &input[i..end] == entry && entry.len() > best.0 {
-                    best = (entry.len(), Some(sym));
+        // Find all candidates, sorted by entry length descending
+        let mut candidates: Vec<(usize, u16)> = dict_syms
+            .iter()
+            .filter_map(|&sym| {
+                if let Some(entry) = dict.lookup(sym) {
+                    let end = i + entry.len();
+                    if !entry.is_empty() && end <= input.len() && &input[i..end] == entry {
+                        return Some((entry.len(), sym));
+                    }
+                }
+                None
+            })
+            .collect();
+        candidates.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+
+        let (best_len, best_sym) = candidates.first().map(|(len, sym)| (*len, *sym)).unwrap_or((0, 0));
+
+        // LAZY MATCHING: peek at i+1 for longer match
+        let mut use_dict = false;
+        let mut chosen_len = best_len;
+        let mut chosen_sym = best_sym;
+        if best_len >= 2 && i + 1 < input.len() {
+            // Check if next position has a longer match
+            let mut next_candidates: Vec<(usize, u16)> = dict_syms
+                .iter()
+                .filter_map(|&sym| {
+                    if let Some(entry) = dict.lookup(sym) {
+                        let end = i + 1 + entry.len();
+                        if !entry.is_empty() && end <= input.len() && &input[i + 1..end] == entry {
+                            return Some((entry.len(), sym));
+                        }
+                    }
+                    None
+                })
+                .collect();
+            next_candidates.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+            if let Some((next_len, _)) = next_candidates.first() {
+                if *next_len > best_len {
+                    // Emit raw byte at i, use longer match at i+1
+                    tokens.push(input[i] as u16 & 0x0FFF);
+                    i += 1;
+                    continue;
                 }
             }
+            use_dict = true;
+        } else if best_len >= 2 {
+            use_dict = true;
         }
-        if let Some(sym_id) = best.1 {
-            tokens.push(0x8000 | (sym_id & 0x7FFF)); // dict pointer token
-            i += best.0;
+
+        // GREEDY FALLBACK: if best_len == 1, treat as no match
+        if use_dict && chosen_len >= 2 {
+            tokens.push(0x8000 | (chosen_sym & 0x7FFF));
+            i += chosen_len;
             dict_used = true;
         } else {
-            tokens.push(input[i] as u16 & 0x0FFF); // raw byte token
+            tokens.push(input[i] as u16 & 0x0FFF);
             i += 1;
         }
     }
 
-    if dict_used { out[3] = 0x01; }
-    for t in &tokens { out.extend_from_slice(&t.to_be_bytes()); }
+    if dict_used {
+        out[3] = 0x01;
+    }
+
+    // Streaming pack tokens into out
+    use crate::base4096::pack_tokens_into;
+    pack_tokens_into(&tokens, &mut out);
 
     let mut crc = Crc32Hasher::new();
     crc.update(&out);

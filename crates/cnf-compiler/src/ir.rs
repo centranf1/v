@@ -8,6 +8,12 @@ use crate::ast::Program;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
+    /// Set hardware/memory/parallelism profile for execution
+    SetProfile {
+        profile: String,
+        memory_mb: Option<u64>,
+        parallelism: Option<u32>,
+    },
     CompressCsm {
         source: String,
         target: String,
@@ -292,6 +298,9 @@ pub enum Instruction {
 impl std::fmt::Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Instruction::SetProfile { profile, memory_mb, parallelism } => {
+                write!(f, "SET_PROFILE(profile={}, memory_mb={:?}, parallelism={:?})", profile, memory_mb, parallelism)
+            }
             Instruction::Compress { target } => {
                 write!(f, "COMPRESS({})", target)
             }
@@ -709,6 +718,21 @@ fn is_literal(s: &str) -> bool {
 }
 pub fn lower(program: Program) -> Result<Vec<Instruction>, String> {
     let mut instructions = Vec::new();
+    // Lower PROFILE DIVISION (jika ada) ke SetProfile di awal IR
+    if let Some(profile) = &program.profile {
+        let profile_str = match profile.hardware {
+            crate::ast::HardwareProfile::EdgeLow => "EdgeLow",
+            crate::ast::HardwareProfile::EdgeHigh => "EdgeHigh",
+            crate::ast::HardwareProfile::DatacenterLow => "DatacenterLow",
+            crate::ast::HardwareProfile::DatacenterHigh => "DatacenterHigh",
+            crate::ast::HardwareProfile::Balanced => "Balanced",
+        };
+        instructions.push(Instruction::SetProfile {
+            profile: profile_str.to_string(),
+            memory_mb: profile.memory_limit_mb,
+            parallelism: profile.parallelism,
+        });
+    }
     // Collect function signatures for parameter count validation
     let mut signatures: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for stmt in &program.procedure.statements {

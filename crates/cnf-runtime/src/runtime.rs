@@ -184,6 +184,8 @@ impl Default for VariableStore {
 /// Executes IR instructions deterministically with phase-by-phase dispatch
 pub struct Runtime {
     variables: VariableStore,
+    /// Aktif profile dari PROFILE DIVISION (jika ada)
+    pub active_profile: Option<(String, Option<u64>, Option<u32>)>,
     /// CSM dictionary for COMPRESS-CSM / DECOMPRESS-CSM instructions
     pub csm_dict: Option<cobol_protocol_v154::dictionary::CsmDictionary>,
     /// Audit log entries (append-only, never cleared during execution)
@@ -218,6 +220,7 @@ impl Runtime {
             execution_trace: Vec::new(),
             #[cfg(feature = "quantum")]
             quantum_keys: std::collections::HashMap::new(),
+            active_profile: None,
         }
     }
 
@@ -275,6 +278,13 @@ impl Runtime {
 
         for instr in instructions {
             match instr {
+                Instruction::SetProfile { profile, memory_mb, parallelism } => {
+                    self.active_profile = Some((profile.clone(), *memory_mb, *parallelism));
+                    self.execution_trace.push(format!(
+                        "PROFILE SET: profile={}, memory_mb={:?}, parallelism={:?}",
+                        profile, memory_mb, parallelism
+                    ));
+                }
                 // === PHASE 3: ASSIGNMENT & ARITHMETIC ===
                 Instruction::Set { target, value } => {
                     self.dispatch_set(target, value)?;

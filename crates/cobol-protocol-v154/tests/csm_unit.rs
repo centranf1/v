@@ -74,3 +74,39 @@ fn test_dictionary_pointer_compression_ratio() {
     // Ratio: compressed size should be less than input + header
     assert!(compressed.len() < data.len() + 16);
 }
+
+#[test]
+fn batch_pack_8tokens_at_once() {
+    use cobol_protocol_v154::base4096::{pack_tokens, unpack_tokens};
+    let tokens: Vec<u16> = (0..8).map(|i| (i * 123) & 0xFFF).collect();
+    let packed = pack_tokens(&tokens);
+    let unpacked = unpack_tokens(&packed);
+    assert_eq!(tokens, unpacked);
+}
+
+#[test]
+fn pack_tokens_into_appends_correctly() {
+    use cobol_protocol_v154::base4096::{pack_tokens, pack_tokens_into, unpack_tokens};
+    let tokens1: Vec<u16> = (0..4).map(|i| (i * 99) & 0xFFF).collect();
+    let tokens2: Vec<u16> = (4..12).map(|i| (i * 99) & 0xFFF).collect();
+    let mut buf = pack_tokens(&tokens1);
+    let orig_len = buf.len();
+    pack_tokens_into(&tokens2, &mut buf);
+    let unpacked = unpack_tokens(&buf);
+    let mut expected = tokens1;
+    expected.extend(tokens2);
+    assert_eq!(unpacked, expected);
+    assert_eq!(buf.len(), orig_len + pack_tokens(&tokens2).len());
+}
+
+#[test]
+fn validate_packed_rejects_invalid_length() {
+    use cobol_protocol_v154::base4096::{pack_tokens, validate_packed};
+    let tokens: Vec<u16> = (0..5).map(|i| (i * 77) & 0xFFF).collect();
+    let mut packed = pack_tokens(&tokens);
+    // Valid length
+    assert!(validate_packed(&packed));
+    // Add 1 extra byte (invalid)
+    packed.push(0xFF);
+    assert!(!validate_packed(&packed));
+}

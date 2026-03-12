@@ -1691,6 +1691,97 @@ impl Parser {
         Ok(ProcedureDivision { statements })
     }
 
+    /// Parse PROFILE DIVISION
+    fn parse_profile(&mut self, arch: &str) -> Result<ProfileDivision, String> {
+        self.expect(Token::ProfileDiv)?;
+        self.expect(Token::Division)?;
+        self.expect(Token::HardwareKw)?;
+        let hardware = match self.current() {
+            Token::EdgeLow => { self.advance(); HardwareProfile::EdgeLow }
+            Token::EdgeHigh => { self.advance(); HardwareProfile::EdgeHigh }
+            Token::DatacenterLow => {
+                if arch != "x86_64" && arch != "arm64" {
+                    return Err("DATACENTER-* profile only valid for ARCH x86_64 or arm64".to_string());
+                }
+                self.advance(); HardwareProfile::DatacenterLow
+            }
+            Token::DatacenterHigh => {
+                if arch != "x86_64" && arch != "arm64" {
+                    return Err("DATACENTER-* profile only valid for ARCH x86_64 or arm64".to_string());
+                }
+                self.advance(); HardwareProfile::DatacenterHigh
+            }
+            Token::BalancedProfile => { self.advance(); HardwareProfile::Balanced }
+            _ => return Err(format!("Expected hardware profile, got {}", self.current())),
+        };
+        let mut memory_limit_mb = None;
+        let mut parallelism = None;
+        // Optional MEMORY-LIMIT nGB
+        if let Token::MemoryLimit = self.current() {
+            self.advance();
+            if let Token::NumberIntegerLiteral(val) = self.current() {
+                let gb: u64 = val.parse().map_err(|_| "Invalid MEMORY-LIMIT value".to_string())?;
+                memory_limit_mb = Some(gb * 1024);
+                self.advance();
+            } else {
+                return Err("Expected integer after MEMORY-LIMIT".to_string());
+            }
+        }
+        // Optional PARALLELISM n
+        if let Token::Parallelism = self.current() {
+            self.advance();
+            if let Token::NumberIntegerLiteral(val) = self.current() {
+                let n: u32 = val.parse().map_err(|_| "Invalid PARALLELISM value".to_string())?;
+                parallelism = Some(n);
+                self.advance();
+            } else {
+                return Err("Expected integer after PARALLELISM".to_string());
+            }
+        }
+        self.expect(Token::Period)?;
+        Ok(ProfileDivision { hardware, memory_limit_mb, parallelism })
+    }
+
+    /// Parse the full program, enforcing division order including PROFILE
+    pub fn parse_program(&mut self) -> Result<Program, String> {
+        self.expect_division(Token::IdentificationDiv, "IDENTIFICATION DIVISION")?;
+        let identification = self.parse_identification()?;
+        self.expect_division(Token::EnvironmentDiv, "ENVIRONMENT DIVISION")?;
+        let environment = self.parse_environment()?;
+        let arch = environment.config.get("ARCH").map(|s| s.as_str()).unwrap_or("");
+        // Optional NETWORK, VERIFICATION, GOVERNANCE
+        let mut network = None;
+        let mut verification = None;
+        let mut governance = None;
+        let mut profile = None;
+        if let Token::Network = self.current() {
+            network = Some(self.parse_network()?);
+        }
+        if let Token::VerificationDiv = self.current() {
+            verification = Some(self.parse_verification()?);
+        }
+        if let Token::GovernanceDiv = self.current() {
+            governance = Some(self.parse_governance()?);
+        }
+        if let Token::ProfileDiv = self.current() {
+            profile = Some(self.parse_profile(arch)?);
+        }
+        self.expect_division(Token::DataDiv, "DATA DIVISION")?;
+        let data = self.parse_data()?;
+        self.expect_division(Token::ProcedureDiv, "PROCEDURE DIVISION")?;
+        let procedure = self.parse_procedure()?;
+        Ok(Program {
+            identification,
+            environment,
+            network,
+            verification,
+            governance,
+            profile,
+            data,
+            procedure,
+        })
+    }
+
     pub fn parse(mut self) -> Result<Program, String> {
         let identification = self.parse_identification()?;
         let environment = self.parse_environment()?;
@@ -1729,6 +1820,7 @@ impl Parser {
             network,
             verification,
             governance,
+            profile: None,
             data,
             procedure,
         })
