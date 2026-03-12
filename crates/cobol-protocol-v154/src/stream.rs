@@ -23,22 +23,28 @@ pub fn read_metadata(data: &[u8]) -> Option<StreamMetadata> {
     Some(StreamMetadata { magic, version, flags, orig_size, ratio_hint })
 }
 
-pub fn compress_csm_with_options(input: &[u8], dict: &CsmDictionary, _options: ()) -> Result<Vec<u8>, CsmError> {
-    compress_csm_stream(input, dict)
-}
 use crate::dictionary::CsmDictionary;
 use crate::CsmError;
 use crc32fast::Hasher as Crc32Hasher;
 
 const MAGIC: [u8; 2] = [0x43, 0x53]; // "CS"
-const VERSION: u8 = 0x9A;
+const VERSION: u8 = 0x9B; // v154 current
 const HEADER_LEN: usize = 2 + 1 + 1 + 8; // magic + version + flags + layer_map
 
-pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>, CsmError> {
+pub fn compress_csm_with_options(input: &[u8], dict: &CsmDictionary, options: &crate::CsmOptions) -> Result<Vec<u8>, CsmError> {
+    compress_csm_stream(input, dict, options)
+}
+
+pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary, options: &crate::CsmOptions) -> Result<Vec<u8>, CsmError> {
     let mut out = Vec::new();
     out.extend_from_slice(&MAGIC);
     out.push(VERSION);
-    out.push(0u8); // flags: 0x01 = dict used
+    let mut flags = 0u8;
+    if options.hierarchical_dict { flags |= 0x01; }
+    if options.bit_adaptive { flags |= 0x02; }
+    if options.delta_encoding { flags |= 0x04; }
+    if options.templates_enabled { flags |= 0x08; }
+    out.push(flags);
     out.extend_from_slice(&[0u8; 8]); // layer_map reserved
     // Tambahkan orig_size (4 byte LE)
     let orig_size = input.len() as u32;
@@ -112,12 +118,13 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>
     }
 
     if dict_used {
-        out[3] = 0x01;
+        out[3] |= 0x01;
     }
 
-    // Streaming pack tokens into out
-    use crate::base4096::pack_tokens_into;
-    pack_tokens_into(&tokens, &mut out);
+    // Streaming pack tokens into out (16-bit tokens, little-endian)
+    for &token in &tokens {
+        out.extend_from_slice(&token.to_le_bytes());
+    }
 
     let mut crc = Crc32Hasher::new();
     crc.update(&out);
@@ -125,11 +132,24 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>
     Ok(out)
 }
 
+fn unpack_tokens(symbol_bytes: &[u8]) -> Vec<u16> {
+    let count = symbol_bytes.len() / 2;
+    let mut tokens = Vec::with_capacity(count);
+    for i in 0..count {
+        let idx = i * 2;
+        let token = u16::from_le_bytes([symbol_bytes[idx], symbol_bytes[idx + 1]]);
+        tokens.push(token);
+    }
+    tokens
+}
+
 pub fn decompress_csm_stream(data: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>, CsmError> {
     const HEADER_WITH_ORIG: usize = HEADER_LEN + 4; // +4 untuk orig_size
     if data.len() < HEADER_WITH_ORIG + 4 { return Err(CsmError::InvalidStream); }
-    if data[0..2] != MAGIC || data[2] != VERSION { return Err(CsmError::InvalidStream); }
+    if data[0..2] != MAGIC || !(data[2] == VERSION || data[2] == 0x9A) { return Err(CsmError::InvalidStream); }
     let dict_used = data[3] & 0x01 != 0;
+    let _has_delta = data[3] & 0x04 != 0;
+    let _has_templates = data[3] & 0x08 != 0;
 
     let crc_offset = data.len() - 4;
     let (content, crc_bytes) = data.split_at(crc_offset);
@@ -139,7 +159,7 @@ pub fn decompress_csm_stream(data: &[u8], dict: &CsmDictionary) -> Result<Vec<u8
 
     // symbol_bytes dimulai setelah header+orig_size
     let symbol_bytes = &content[HEADER_LEN + 4..];
-    use crate::base4096::unpack_tokens;
+    if symbol_bytes.len() % 2 != 0 { return Err(CsmError::InvalidStream); }
     let tokens = unpack_tokens(symbol_bytes);
     let mut out = Vec::new();
     for (i, token) in tokens.iter().enumerate() {

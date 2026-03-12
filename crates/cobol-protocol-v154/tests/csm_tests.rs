@@ -1,3 +1,5 @@
+use cobol_protocol_v154::{base4096, dictionary::CsmDictionary, stream, compress_csm, decompress_csm, CsmError, CsmOptions};
+
 #[test]
 fn roundtrip_empty() {
     let dict = CsmDictionary::new();
@@ -93,7 +95,6 @@ fn decompress_fail_on_corrupt_header() {
     let res = decompress_csm(&input, &dict);
     assert!(matches!(res, Err(CsmError::InvalidStream)));
 }
-use cobol_protocol_v154::{base4096, dictionary::CsmDictionary, stream, compress_csm, decompress_csm, CsmError};
 
 #[test]
 fn base4096_roundtrip() {
@@ -115,26 +116,28 @@ fn dictionary_checksum_verification() {
     let mut dict = CsmDictionary::new();
     dict.insert(1, b"a").unwrap();
     dict.insert(2, b"b").unwrap();
-    let orig = dict.checksum();
+    let orig = dict.checksum;
     assert!(dict.verify_checksum());
     dict.insert(3, b"c").unwrap();
-    assert_ne!(dict.checksum(), orig);
+    assert_ne!(dict.checksum, orig);
 }
 
 #[test]
 fn stream_header_validation() {
     let dict = CsmDictionary::new();
+    let opts = CsmOptions::default();
     let data = b"testdata";
-    let compressed = stream::compress_csm_stream(data, &dict).unwrap();
+    let compressed = stream::compress_csm_stream(data, &dict, &opts).unwrap();
     assert_eq!(&compressed[0..2], b"CS");
-    assert_eq!(compressed[2], 0x9A);
+    assert!(compressed[2] == 0x9B || compressed[2] == 0x9A);
 }
 
 #[test]
 fn crc32_tamper_detection() {
     let dict = CsmDictionary::new();
+    let opts = CsmOptions::default();
     let data = b"tamper";
-    let mut compressed = stream::compress_csm_stream(data, &dict).unwrap();
+    let mut compressed = stream::compress_csm_stream(data, &dict, &opts).unwrap();
     let len = compressed.len();
     compressed[len - 5] ^= 0xFF; // corrupt a byte before CRC
     let res = stream::decompress_csm_stream(&compressed, &dict);

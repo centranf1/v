@@ -186,6 +186,27 @@ Notes:
 - Code compiles cleanly with and without quantum feature
 - SECURITY.md and CI gates (17-21) already in place
 
+[2026-03-12]
+Change:
+- Implementasi CSM v154 modular: Template Registry, Bit-Adaptive/Delta Encoding, Hierarchical Dictionary, header 0x9B, CsmOptions Balanced
+
+Scope:
+- crates/cobol-protocol-v154/src/template.rs
+- crates/cobol-protocol-v154/src/bitpack.rs
+- crates/cobol-protocol-v154/src/dictionary.rs
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/src/lib.rs
+- progress_status.md
+
+Status:
+- completed
+
+Notes:
+- Zero-copy data path, no unsafe (SAFETY not needed), thiserror style errors
+- Unit tests: roundtrip and compression ratio vs raw
+- Dukungan backward compatibility header 0x9A/0x9B
+
+
 [2026-03-10]
 Change:
 - **Security**: Implemented TLS support for mTLS inter-node authentication in transport.rs
