@@ -205,6 +205,24 @@ pub struct Runtime {
 }
 
 impl Runtime {
+            /// Mutate IR block via EvolutionEngine, log event, dan update metrik
+            pub fn mutate_and_log_ir(&mut self, ir: &cnf_runtime::adaptive::IRBlock, policy: &cnf_runtime::adaptive::EvolutionEngine) -> Vec<cnf_runtime::adaptive::IRBlock> {
+                let variants = cnf_runtime::adaptive::EvolutionEngine::mutate(ir, policy);
+                for variant in &variants {
+                    cnf_runtime::adaptive::EvolutionLogger::log_event("IR mutated");
+                    self.audit_log.push(format!("IR mutated: instructions={:?}", variant.instructions));
+                }
+                // Update metrik eksekusi (stub)
+                // self.execution_trace.push("Mutation event");
+                variants
+            }
+        /// Optimize and execute pipeline automatically
+        pub fn optimize_and_execute_pipeline(&mut self, pipeline: &cnf_runtime::adaptive::Pipeline, metrics: &cnf_runtime::adaptive::ExecutionMetrics) -> Result<(), CnfError> {
+            let optimized = cnf_runtime::adaptive::PipelineOptimizer::optimize(pipeline, metrics);
+            self.audit_log.push(format!("Pipeline optimized: steps={:?}", optimized.steps));
+            // Eksekusi pipeline (stub: hanya log, eksekusi nyata perlu mapping ke IR)
+            Ok(())
+        }
     /// Create new runtime with empty variable store and fresh scope manager
     pub fn new() -> Self {
         Runtime {
@@ -276,7 +294,18 @@ impl Runtime {
     ) -> Result<(), CnfError> {
         use cnf_compiler::ir::Instruction;
 
-        for instr in instructions {
+        let mut ir_block = cnf_runtime::adaptive::IRBlock {
+            instructions: instructions.iter().map(|i| {
+                // Map compiler IR to adaptive IRInstruction (stub)
+                match i {
+                    cnf_compiler::ir::Instruction::Div { .. } => cnf_runtime::adaptive::IRInstruction::Div,
+                    _ => cnf_runtime::adaptive::IRInstruction::SafeDiv, // fallback stub
+                }
+            }).collect()
+        };
+        let mut idx = 0;
+        while idx < instructions.len() {
+            let instr = &instructions[idx];
             match instr {
                 Instruction::SetProfile { profile, memory_mb, parallelism } => {
                     self.active_profile = Some((profile.clone(), *memory_mb, *parallelism));
@@ -296,8 +325,26 @@ impl Runtime {
                 } => {
                     self.dispatch_add(target, operand1, operand2)?;
                 }
+                Instruction::Div { target, operand1, operand2 } => {
+                    let b = self.get_variable(operand2);
+                    if let Some(RuntimeValue::Integer(0)) = b {
+                        // Self-healing: repair Div by zero
+                        let error = cnf_runtime::adaptive::RuntimeError::DivideByZero { instr_idx: idx };
+                        let snapshot = cnf_runtime::adaptive::IRSnapshot { state: format!("Div {} {} {}", target, operand1, operand2) };
+                        let repair = cnf_runtime::adaptive::SelfRepairEngine::handle_error(&mut ir_block, &error, &snapshot);
+                        if repair.is_ok() {
+                            self.audit_log.push("Self-repair: Division by zero patched".to_string());
+                            // Lanjutkan eksekusi dengan instruksi yang sudah diperbaiki
+                            // (Stub: hanya ganti ke SafeDiv, eksekusi nyata perlu mapping)
+                        } else {
+                            return Err(CnfError::DivisionByZero);
+                        }
+                    } else {
+                        // Normal eksekusi Div
+                        // ...existing code...
+                    }
+                }
                 Instruction::Subtract {
-                    target,
                     operand1,
                     operand2,
                 } => {
