@@ -5,7 +5,9 @@ impl Default for CsmDictionary {
 }
 
 use std::sync::Arc;
+use itertools::Itertools;
 use sha2::{Digest, Sha256};
+use crate::error::{CsmError, MAX_ENTRY_LEN, MAX_DICT_SYMBOLS};
 
 const PHF_SIZE: usize = 4096;
 
@@ -42,8 +44,15 @@ impl CsmDictionary {
     }
 
 
-    pub fn insert(&mut self, symbol: u16, value: &[u8]) {
-        let arc = Arc::from(value);
+    pub fn insert(&mut self, symbol: u16, value: &[u8]) -> Result<(), CsmError> {
+        eprintln!("[dict] insert symbol={} len={} value[..8]={:?}", symbol, value.len(), &value[..value.len().min(8)]);
+        if value.len() > MAX_ENTRY_LEN {
+            return Err(CsmError::EntryTooLong(MAX_ENTRY_LEN));
+        }
+        if self.count >= MAX_DICT_SYMBOLS {
+            return Err(CsmError::MaxSymbols);
+        }
+        let arc: Arc<[u8]> = Arc::from(value);
         let mut slot = (symbol as usize) % PHF_SIZE;
         let mut first_deleted: Option<usize> = None;
         for _ in 0..PHF_SIZE {
@@ -59,7 +68,7 @@ impl CsmDictionary {
                         bucket.insert(pos, (symbol, arc.clone()));
                     }
                     self.update_checksum();
-                    return;
+                    return Ok(());
                 }
                 PhfSlot::Deleted => {
                     if first_deleted.is_none() {
@@ -78,13 +87,13 @@ impl CsmDictionary {
                     }
                     self.slots[slot] = PhfSlot::Occupied { symbol, value: arc.clone() };
                     self.update_checksum();
-                    return;
+                    return Ok(());
                 }
                 _ => {}
             }
             slot = (slot + 1) % PHF_SIZE;
         }
-        panic!("CsmDictionary full");
+        Err(CsmError::MaxSymbols)
     }
 
 
@@ -92,13 +101,20 @@ impl CsmDictionary {
         let mut slot = (symbol as usize) % PHF_SIZE;
         for _ in 0..PHF_SIZE {
             match &self.slots[slot] {
-                PhfSlot::Empty => return None,
+                PhfSlot::Empty => {
+                    eprintln!("[dict] lookup symbol={} -> not found (empty)", symbol);
+                    return None;
+                },
                 PhfSlot::Deleted => {},
-                PhfSlot::Occupied { symbol: s, value } if *s == symbol => return Some(&**value),
+                PhfSlot::Occupied { symbol: s, value } if *s == symbol => {
+                    eprintln!("[dict] lookup symbol={} -> found len={} value[..8]={:?}", symbol, value.len(), &value[..value.len().min(8)]);
+                    return Some(&**value)
+                },
                 _ => {}
             }
             slot = (slot + 1) % PHF_SIZE;
         }
+        eprintln!("[dict] lookup symbol={} -> not found (full scan)", symbol);
         None
     }
 

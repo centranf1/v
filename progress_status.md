@@ -1,3 +1,59 @@
+[2026-03-12]
+Change:
+- Tambah modul adaptif: SelfRepairEngine, PipelineOptimizer, EvolutionEngine, dan monitoring di runtime
+
+Scope:
+- crates/cnf-runtime/src/adaptive.rs
+- crates/cnf-runtime/tests/adaptive.rs
+
+Status:
+- in-progress
+
+Notes:
+- Fondasi sistem self-healing & self-evolving, hanya kerangka, tanpa mutasi nyata/unsafe
+[2026-03-12]
+Change:
+- Tambah error L6.013 RateLimitExceeded(NodeId) dan L6.014 BufferFull ke CnfNetworkError
+- Tambah pub mod + pub use untuk connection_pool, message_buffer, rate_limiter di cnf-network
+- Port kembali 19 test yang hilang dari v10 ke cobol-protocol-v154/tests/csm_tests.rs
+- Dokumentasikan format stream CSM v2 di docs/CONTRACT.md
+
+Scope:
+- crates/cnf-network/src/error.rs
+- crates/cnf-network/src/lib.rs
+- crates/cobol-protocol-v154/tests/csm_tests.rs
+- docs/CONTRACT.md
+
+Status:
+- planned
+
+Notes:
+- Menjamin error coverage dan boundary layer cnf-network, serta dokumentasi format CSM v2 untuk compliance dan audit.
+[2026-03-12]
+Change:
+- Perbaikan kritis dan ekspansi fitur pada cobol-protocol-v154 (unpack_tokens, guard insert, test roundtrip, doc CSM v2)
+- Penambahan error baru di cnf-network, ekspor modul, dan re-ekspor CsmDictionary
+- Port ulang 19 test CSM v10
+- Dokumentasi format CSM v2
+
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/src/dictionary.rs
+- crates/cobol-protocol-v154/src/lib.rs
+- crates/cobol-protocol-v154/tests/csm_tests.rs
+- crates/cnf-network/src/error.rs
+- crates/cnf-network/src/lib.rs
+- docs/CONTRACT.md
+
+Status:
+- planned
+
+Notes:
+- Memastikan roundtrip CSM v2 benar-benar lossless
+- Insert dictionary kini fail-fast pada entry oversize/overflow
+- Error jaringan lebih eksplisit untuk rate limit & buffer
+- Test coverage CSM v10 dipulihkan penuh
+- Spesifikasi format CSM v2 terdokumentasi formal
 [2026-03-11]
 Change:
 - **Property-Based Testing**: Added proptest coverage to both cnf-runtime and cnf-compiler

@@ -123,5 +123,12 @@ pub fn unpack_tokens(bytes: &[u8]) -> Vec<u16> {
 
 /// Returns true if byte count is consistent with valid pack_tokens output
 pub fn validate_packed(bytes: &[u8]) -> bool {
-    (bytes.len() * 8) % 12 <= 11
+    let bits = bytes.len() * 8;
+    let rem = bits % 12;
+    match rem {
+        0 => true,
+        4 => bytes.len() >= 2 && (bytes.len() - 2) % 3 == 0,
+        8 => bytes.len() >= 3 && (bytes.len() - 3) % 3 == 0,
+        _ => false,
+    }
 }

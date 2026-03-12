@@ -1,3 +1,4 @@
+pub mod adaptive;
 //! cnf-runtime — Execution engine: DAG, scheduler, dispatch
 //!
 //! Responsibility: Execute intermediate representation against buffers.

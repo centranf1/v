@@ -1481,6 +1481,7 @@ mod tests {
             governance: Some(GovernanceDivision { statements: vec![
                 GovernanceStatement::AuditLedger { entry: "log1".to_string() },
             ]}),
+            profile: None,
             data: DataDivision { variables: vec![] },
             procedure: ProcedureDivision { statements: vec![] },
         };

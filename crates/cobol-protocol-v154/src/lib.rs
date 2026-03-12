@@ -4,6 +4,8 @@
 pub mod base4096;    // Encoder/decoder 12-bit packing
 pub mod dictionary;  // HashMap<u16, Arc<[u8]>> untuk template lookup
 pub mod stream;      // Format: [MAGIC][VER][FLAGS][LAYER_MAP][SYMBOLS][CRC32]
+pub mod error;
+pub use error::{CsmError, MAX_ENTRY_LEN, MAX_DICT_SYMBOLS};
 
 
 pub use stream::StreamMetadata;
@@ -13,21 +15,6 @@ use dictionary::CsmDictionary;
 use thiserror::Error;
 
 
-#[derive(Debug, Error, PartialEq, Eq)]
-pub enum CsmError {
-    #[error("Invalid stream format")]
-    InvalidStream,
-    #[error("Dictionary mismatch")]
-    DictionaryMismatch,
-    #[error("CRC32 mismatch: stream may be truncated or corrupted")]
-    ChecksumFailed,
-    #[error("Base4096 encoding error")]
-    EncodingError,
-    #[error("Dictionary entry too large: {0} bytes (max {1})")]
-    EntryTooLarge(usize, usize),
-    #[error("Dictionary is full: {0} symbols (max {1})")]
-    DictionaryFull(usize, usize),
-}
 
 
 
@@ -58,7 +45,7 @@ pub struct CsmStats {
 
 pub fn compress_csm_stats(input: &[u8], dict: &CsmDictionary) -> Result<(Vec<u8>, CsmStats), CsmError> {
     let compressed = stream::compress_csm_stream(input, dict)?;
-    let meta = stream::read_metadata(&compressed).ok();
+    let meta = stream::read_metadata(&compressed);
     let ratio = meta.map(|m| m.ratio_hint).unwrap_or_else(|| compressed.len() as f64 / input.len().max(1) as f64);
     let stats = CsmStats {
         input_bytes: input.len(),

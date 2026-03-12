@@ -1,3 +1,31 @@
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StreamMetadata {
+    pub magic: [u8; 2],
+    pub version: u8,
+    pub flags: u8,
+    pub orig_size: u32,
+    pub ratio_hint: f64,
+}
+
+pub fn read_metadata(data: &[u8]) -> Option<StreamMetadata> {
+    if data.len() < HEADER_LEN + 4 { return None; }
+    let magic = [data[0], data[1]];
+    let version = data[2];
+    let flags = data[3];
+    // orig_size: baca dari header (LE)
+    let orig_size = u32::from_le_bytes([
+        data[HEADER_LEN],
+        data[HEADER_LEN + 1],
+        data[HEADER_LEN + 2],
+        data[HEADER_LEN + 3],
+    ]);
+    let ratio_hint = data.len() as f64 / orig_size.max(1) as f64;
+    Some(StreamMetadata { magic, version, flags, orig_size, ratio_hint })
+}
+
+pub fn compress_csm_with_options(input: &[u8], dict: &CsmDictionary, _options: ()) -> Result<Vec<u8>, CsmError> {
+    compress_csm_stream(input, dict)
+}
 use crate::dictionary::CsmDictionary;
 use crate::CsmError;
 use crc32fast::Hasher as Crc32Hasher;
@@ -12,15 +40,17 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>
     out.push(VERSION);
     out.push(0u8); // flags: 0x01 = dict used
     out.extend_from_slice(&[0u8; 8]); // layer_map reserved
+    // Tambahkan orig_size (4 byte LE)
+    let orig_size = input.len() as u32;
+    out.extend_from_slice(&orig_size.to_le_bytes());
 
     // Pre-allocate tokens: after lazy matching, token count is lower
     let mut tokens: Vec<u16> = Vec::with_capacity(input.len() / 3 + 32);
     let mut i = 0usize;
     let mut dict_used = false;
     let dict_syms: Vec<u16> = dict
-        .map
         .iter()
-        .map(|(k, _)| *k)
+        .map(|(k, _)| k)
         .collect();
 
     while i < input.len() {
@@ -39,14 +69,14 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>
             .collect();
         candidates.sort_unstable_by(|a, b| b.0.cmp(&a.0));
 
+        if !candidates.is_empty() {
+            eprintln!("[compress] i={} candidates: {:?}", i, candidates);
+        }
+
         let (best_len, best_sym) = candidates.first().map(|(len, sym)| (*len, *sym)).unwrap_or((0, 0));
 
-        // LAZY MATCHING: peek at i+1 for longer match
-        let mut use_dict = false;
-        let mut chosen_len = best_len;
-        let mut chosen_sym = best_sym;
+        // LAZY MATCHING: only skip match if next position has strictly longer match
         if best_len >= 2 && i + 1 < input.len() {
-            // Check if next position has a longer match
             let mut next_candidates: Vec<(usize, u16)> = dict_syms
                 .iter()
                 .filter_map(|&sym| {
@@ -68,15 +98,12 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>
                     continue;
                 }
             }
-            use_dict = true;
-        } else if best_len >= 2 {
-            use_dict = true;
         }
-
-        // GREEDY FALLBACK: if best_len == 1, treat as no match
-        if use_dict && chosen_len >= 2 {
-            tokens.push(0x8000 | (chosen_sym & 0x7FFF));
-            i += chosen_len;
+        // If best_len >= 2, always use dictionary match
+        if best_len >= 2 {
+            eprintln!("[compress] i={} use dict sym={} len={}", i, best_sym, best_len);
+            tokens.push(0x8000 | (best_sym & 0x7FFF));
+            i += best_len;
             dict_used = true;
         } else {
             tokens.push(input[i] as u16 & 0x0FFF);
@@ -99,7 +126,8 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>
 }
 
 pub fn decompress_csm_stream(data: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>, CsmError> {
-    if data.len() < HEADER_LEN + 4 { return Err(CsmError::InvalidStream); }
+    const HEADER_WITH_ORIG: usize = HEADER_LEN + 4; // +4 untuk orig_size
+    if data.len() < HEADER_WITH_ORIG + 4 { return Err(CsmError::InvalidStream); }
     if data[0..2] != MAGIC || data[2] != VERSION { return Err(CsmError::InvalidStream); }
     let dict_used = data[3] & 0x01 != 0;
 
@@ -109,16 +137,27 @@ pub fn decompress_csm_stream(data: &[u8], dict: &CsmDictionary) -> Result<Vec<u8
     crc.update(content);
     if crc_bytes != crc.finalize().to_be_bytes() { return Err(CsmError::ChecksumFailed); }
 
-    let symbol_bytes = &content[HEADER_LEN..];
-    if symbol_bytes.len() % 2 != 0 { return Err(CsmError::InvalidStream); }
-
+    // symbol_bytes dimulai setelah header+orig_size
+    let symbol_bytes = &content[HEADER_LEN + 4..];
+    use crate::base4096::unpack_tokens;
+    let tokens = unpack_tokens(symbol_bytes);
     let mut out = Vec::new();
-    for chunk in symbol_bytes.chunks(2) {
-        let token = u16::from_be_bytes([chunk[0], chunk[1]]);
+    for (i, token) in tokens.iter().enumerate() {
         if dict_used && token & 0x8000 != 0 {
-            let entry = dict.lookup(token & 0x7FFF).ok_or(CsmError::DictionaryMismatch)?;
-            out.extend_from_slice(entry);
+            let sym = token & 0x7FFF;
+            eprintln!("[decompress] token[{}]=0x{:04X} (dict sym={})", i, token, sym);
+            match dict.lookup(sym) {
+                Some(entry) => {
+                    eprintln!("[decompress]  -> entry.len={} entry[..8]={:?}", entry.len(), &entry[..entry.len().min(8)]);
+                    out.extend_from_slice(entry);
+                },
+                None => {
+                    eprintln!("[decompress]  -> symbol {} NOT FOUND in dictionary!", sym);
+                    return Err(CsmError::DictionaryMismatch);
+                }
+            }
         } else {
+            eprintln!("[decompress] token[{}]=0x{:04X} (raw byte={})", i, token, token & 0x00FF);
             out.push((token & 0x00FF) as u8);
         }
     }

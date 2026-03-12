@@ -19,18 +19,18 @@ fn test_base4096_determinism() {
 #[test]
 fn test_dictionary_insert_lookup() {
     let mut dict = CsmDictionary::new();
-    dict.insert(42, b"foobar");
+    dict.insert(42, b"foobar").unwrap();
     assert_eq!(dict.lookup(42), Some(&b"foobar"[..]));
 }
 
 #[test]
 fn test_dictionary_checksum_verification() {
     let mut dict = CsmDictionary::new();
-    dict.insert(1, b"a");
-    dict.insert(2, b"b");
+    dict.insert(1, b"a").unwrap();
+    dict.insert(2, b"b").unwrap();
     let orig = dict.checksum();
     assert!(dict.verify_checksum());
-    dict.insert(3, b"c");
+    dict.insert(3, b"c").unwrap();
     assert_ne!(dict.checksum(), orig);
 }
 
@@ -67,7 +67,7 @@ fn test_compress_decompress_roundtrip() {
 fn test_dictionary_pointer_compression_ratio() {
     let mut dict = CsmDictionary::new();
     for i in 0..32u16 {
-        dict.insert(i, &[i as u8; 4]);
+        dict.insert(i, &[i as u8; 4]).unwrap();
     }
     let data = [0u8; 128];
     let compressed = compress_csm(&data, &dict).unwrap();
@@ -94,7 +94,7 @@ fn pack_tokens_into_appends_correctly() {
     pack_tokens_into(&tokens2, &mut buf);
     let unpacked = unpack_tokens(&buf);
     let mut expected = tokens1;
-    expected.extend(tokens2);
+    expected.extend(tokens2.clone());
     assert_eq!(unpacked, expected);
     assert_eq!(buf.len(), orig_len + pack_tokens(&tokens2).len());
 }

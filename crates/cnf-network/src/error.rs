@@ -54,4 +54,11 @@ pub enum CnfNetworkError {
     /// L6.012: TLS configuration or handshake failed
     #[error("L6.012 TlsError: {0}")]
     TlsError(String),
+    /// L6.013: Rate limit exceeded for node
+    #[error("L6.013 RateLimitExceeded: node {0}")]
+    RateLimitExceeded(String),
+
+    /// L6.014: Message buffer full
+    #[error("L6.014 BufferFull: message buffer is full")]
+    BufferFull,
 }

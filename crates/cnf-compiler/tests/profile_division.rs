@@ -38,7 +38,7 @@ mod profile_tests {
         assert_eq!(profile.1, Some(4096));
         assert_eq!(profile.2, Some(8));
         // Trace harus mencatat profile
-        let trace = &runtime.execution_trace;
-        assert!(trace.iter().any(|s| s.contains("PROFILE SET: profile=EdgeHigh")));
+        let trace = runtime.execution_trace();
+        assert!(trace.iter().any(|s: &str| s.contains("PROFILE SET: profile=EdgeHigh")));
     }
 }

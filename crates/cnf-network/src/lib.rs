@@ -19,6 +19,12 @@ pub mod error;
 pub mod node;
 pub mod transport;
 pub mod vector_clock;
+pub mod connection_pool;
+pub mod message_buffer;
+pub mod rate_limiter;
+pub use connection_pool::ConnectionPool;
+pub use message_buffer::{MessageBuffer, BufferedMessage, Priority};
+pub use rate_limiter::RateLimiter;
 
 pub use circuit_breaker::{CircuitBreaker, CircuitState};
 pub use distributed_dag::{DistributedDag, NodeInfo, NodeStatus};
