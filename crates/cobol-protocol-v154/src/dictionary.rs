@@ -19,6 +19,7 @@ enum PhfSlot {
 }
 
 
+#[derive(Clone)]
 pub struct CsmDictionary {
     slots: Vec<PhfSlot>,
     by_first_byte: Vec<Vec<(u16, Arc<[u8]>)>>, // [256] bucket, each sorted by entry.len desc

@@ -62,7 +62,7 @@ fn aes256_gcm_decrypt_with_key(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, C
 }
 
 /// Kyber768 Key Pair with zeroize on drop for security
-#[derive(Zeroize, zeroize::ZeroizeOnDrop)]
+#[derive(Serialize, Deserialize, Zeroize, zeroize::ZeroizeOnDrop)]
 pub struct KyberKeyPair {
     pub encapsulation_key: Vec<u8>, // 1184 bytes for Kyber768
     pub decapsulation_key: Vec<u8>, // 2400 bytes for Kyber768

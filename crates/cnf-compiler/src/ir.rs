@@ -8,6 +8,8 @@ use crate::ast::Program;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
+        /// Safe division (runtime-patched)
+        SafeDiv(Box<Instruction>),
     /// Set hardware/memory/parallelism profile for execution
     SetProfile {
         profile: String,
@@ -389,6 +391,9 @@ impl std::fmt::Display for Instruction {
                 operand2,
             } => {
                 write!(f, "DIVIDE({} = {} / {})", target, operand1, operand2)
+            }
+            Instruction::SafeDiv(inner) => {
+                write!(f, "SAFE_DIV({})", inner)
             }
             Instruction::Concatenate { target, operands } => {
                 write!(f, "CONCATENATE({} = {})", target, operands.join(" + "))

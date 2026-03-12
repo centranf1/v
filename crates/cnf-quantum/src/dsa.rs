@@ -15,7 +15,7 @@ use zeroize::Zeroize;
 use pqcrypto_sphincsplus::sphincsshake256fsimple;
 
 /// ML-DSA-65 (Dilithium3) key pair with automatic secure cleanup
-#[derive(Zeroize, zeroize::ZeroizeOnDrop)]
+#[derive(Serialize, Deserialize, Zeroize, zeroize::ZeroizeOnDrop)]
 pub struct DilithiumKeyPair {
     pub verification_key: Vec<u8>,
     pub signing_key: Vec<u8>,
@@ -30,7 +30,7 @@ pub struct DilithiumSignature {
 }
 
 /// SLH-DSA-SHAKE-256f (SPHINCS+) key pair with automatic secure cleanup
-#[derive(Zeroize, zeroize::ZeroizeOnDrop)]
+#[derive(Serialize, Deserialize, Zeroize, zeroize::ZeroizeOnDrop)]
 pub struct SphincsKeyPair {
     pub verification_key: Vec<u8>,
     pub signing_key: Vec<u8>,

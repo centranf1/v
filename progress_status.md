@@ -1,5 +1,24 @@
 [2026-03-12]
 Change:
+- Implementasi modul SelfRepairEngine untuk self-healing runtime (deteksi & perbaikan error IR secara deterministik)
+- Penambahan instruksi IR SafeDiv untuk patching runtime
+- Penambahan unit test & mutation test untuk SelfRepairEngine
+
+Scope:
+- crates/cnf-runtime/src/self_repair.rs
+- crates/cnf-runtime/src/ir.rs
+- crates/cnf-runtime/tests/self_repair.rs
+- progress_status.md
+
+Status:
+- planned
+
+Notes:
+- Memastikan semua patch diverifikasi sebelum diterapkan
+- Tidak ada mutasi pada source code, hanya IR
+- Tidak boleh ada unwrap() di path produksi
+- Mutasi pada instruksi kriptografi/protokol dilarang keras
+Change:
 - Tambah modul adaptif: SelfRepairEngine, PipelineOptimizer, EvolutionEngine, dan monitoring di runtime
 
 Scope:

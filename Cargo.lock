@@ -490,6 +490,7 @@ dependencies = [
  "cobol-protocol-v154",
  "criterion",
  "hex",
+ "log",
  "proptest",
  "serde",
  "serde_json",
