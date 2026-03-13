@@ -13,6 +13,8 @@ parking_lot = "0.12"
 thiserror = "1.0"
 itertools = "0.14.0"
 fxhash = "0.2"
+log = "0.4"
 
 [dev-dependencies]
 rand = "0.8"
+criterion = "0.4"

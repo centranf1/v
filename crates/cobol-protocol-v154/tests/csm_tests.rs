@@ -133,6 +133,23 @@ fn stream_header_validation() {
 }
 
 #[test]
+fn roundtrip_delta_encoded_i64_le() {
+    let dict = CsmDictionary::new();
+    let opts = CsmOptions::default();
+    let mut input = Vec::new();
+    for i in 0..16i64 {
+        input.extend_from_slice(&i.to_le_bytes());
+    }
+
+    let compressed = stream::compress_csm_stream(&input, &dict, &opts).unwrap();
+    let metadata = stream::read_metadata(&compressed).unwrap();
+    assert_eq!(metadata.flags & 0x04, 0x04);
+
+    let decompressed = stream::decompress_csm_stream(&compressed, &dict).unwrap();
+    assert_eq!(input, decompressed);
+}
+
+#[test]
 fn crc32_tamper_detection() {
     let dict = CsmDictionary::new();
     let opts = CsmOptions::default();
@@ -200,7 +217,7 @@ fn test_metadata_roundtrip() {
     let compressed = compress_csm(&input, &dict).unwrap();
     let meta = stream::read_metadata(&compressed).unwrap();
     assert_eq!(meta.magic, [0x43, 0x53]);
-    assert_eq!(meta.version, 0x9A);
+    assert!(meta.version == 0x9A || meta.version == 0x9B);
     assert_eq!(meta.flags & 0x01, 0x00); // dict unused
     assert_eq!(meta.orig_size, input.len() as u32);
 }

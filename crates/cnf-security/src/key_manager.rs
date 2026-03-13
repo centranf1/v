@@ -31,10 +31,14 @@ pub struct KeyManager {
 
 impl KeyManager {
     pub fn from_env() -> Result<Self, CnfCryptoError> {
-        let val = std::env::var("CENTRA_NF_AES_KEY")
+        let key_hex = std::env::var("CENTRA_NF_AES_KEY")
             .map_err(|_| CnfCryptoError::KeyMissing)?;
+        if key_hex.len() != 64 {
+            return Err(CnfCryptoError::KeyInvalid);
+        }
+        let key_bytes = hex::decode(&key_hex).map_err(|_| CnfCryptoError::KeyInvalid)?;
         Ok(Self {
-            active: KeyMaterial::from_bytes(val.as_bytes(), 1)?,
+            active: KeyMaterial::from_bytes(&key_bytes, 1)?,
             retired: HashMap::new(),
         })
     }
@@ -60,15 +64,19 @@ impl KeyManager {
 
     /// Rotate: reads new key from CENTRA_NF_AES_KEY_NEW, retires current active.
     pub fn rotate_from_env(&mut self) -> Result<u32, CnfCryptoError> {
-        let val = std::env::var("CENTRA_NF_AES_KEY_NEW")
+        let key_hex = std::env::var("CENTRA_NF_AES_KEY_NEW")
             .map_err(|_| CnfCryptoError::KeyMissing)?;
+        if key_hex.len() != 64 {
+            return Err(CnfCryptoError::KeyInvalid);
+        }
+        let key_bytes = hex::decode(&key_hex).map_err(|_| CnfCryptoError::KeyInvalid)?;
         let new_ver = self.active.version + 1;
         let old_bytes = *self.active.as_bytes();
         self.retired.insert(
             self.active.version,
             KeyMaterial::from_bytes(&old_bytes, self.active.version)?,
         );
-        self.active = KeyMaterial::from_bytes(val.as_bytes(), new_ver)?;
+        self.active = KeyMaterial::from_bytes(&key_bytes, new_ver)?;
         Ok(new_ver)
     }
 
@@ -92,7 +100,7 @@ mod tests {
     fn test_from_bytes_and_rotate() {
         let _g = ENV_MUTEX.lock().unwrap();
         unsafe {
-            std::env::set_var("CENTRA_NF_AES_KEY_NEW", "NewKey32BytesForRotationTest1234");
+            std::env::set_var("CENTRA_NF_AES_KEY_NEW", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         }
         let mut mgr = KeyManager::from_bytes(&[0x01u8; 32]).unwrap();
         let v = mgr.rotate_from_env().unwrap();

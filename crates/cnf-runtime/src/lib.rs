@@ -1,8 +1,7 @@
-pub mod self_repair;
 pub mod ir;
-pub use self_repair::SelfRepairEngine;
-pub use ir::{IRBlock, IRInstruction};
 pub mod adaptive;
+pub use adaptive::SelfRepairEngine;
+pub use ir::{IRBlock, IRInstruction};
 // cnf-runtime — Execution engine: DAG, scheduler, dispatch
 //
 // Responsibility: Execute intermediate representation against buffers.

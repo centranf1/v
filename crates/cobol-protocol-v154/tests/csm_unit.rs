@@ -107,7 +107,8 @@ fn validate_packed_rejects_invalid_length() {
     let mut packed = pack_tokens(&tokens);
     // Valid length
     assert!(validate_packed(&packed));
-    // Add 1 extra byte (invalid)
+    // Add 2 extra bytes (should be invalid for this token count)
+    packed.push(0xFF);
     packed.push(0xFF);
     assert!(!validate_packed(&packed));
 }

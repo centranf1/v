@@ -48,9 +48,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use rustls::{ServerConfig, ClientConfig, RootCertStore};
+use rustls::{ClientConfig, ClientConnection, RootCertStore, ServerConfig, ServerConnection, StreamOwned};
+use rustls::server::WebPkiClientVerifier;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use std::sync::{Arc, Mutex};
+
+trait ReadWriteSend: Read + Write + Send {}
+impl<T: Read + Write + Send> ReadWriteSend for T {}
+
 
 use hmac::{Hmac, Mac};
 use rand::{rngs::OsRng, RngCore};
@@ -211,40 +216,63 @@ impl NetworkFrame {
 /// TLS configuration for mTLS node authentication.
 /// Military requirement: all inter-node traffic must be encrypted and mutually authenticated.
 pub struct TlsConfig {
-        /// DER-encoded server certificate chain
-            pub cert_der: Vec<CertificateDer<'static>>,
-                /// DER-encoded private key
-                    pub key_der: PrivateKeyDer<'static>,
-                        /// DER-encoded CA certificate for client verification (mTLS)
-                            pub ca_cert_der: Option<CertificateDer<'static>>,
+    /// DER-encoded server certificate chain
+    pub cert_der: Vec<CertificateDer<'static>>,
+    /// DER-encoded private key
+    pub key_der: PrivateKeyDer<'static>,
+    /// DER-encoded CA certificate for trusting the peer (client verifies server)
+    pub ca_cert_der: Option<CertificateDer<'static>>,
+    /// DER-encoded CA certificate for client certificate verification on server (mTLS)
+    pub client_ca_cert_der: Option<CertificateDer<'static>>,
+    /// Server name for SNI and hostname validation
+    pub server_name: String,
 }
 
 impl TlsConfig {
-        /// Build rustls ServerConfig from this TlsConfig.
-            pub fn server_config(&self) -> Result<Arc<ServerConfig>, CnfNetworkError> {
-                        let config = ServerConfig::builder()
-                                    .with_no_client_auth()
-                                                .with_single_cert(self.cert_der.clone(), self.key_der.clone_key())
-                                                            .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
-                                                                    Ok(Arc::new(config))
-            }
+    /// Build rustls ServerConfig from this TlsConfig.
+    pub fn server_config(&self) -> Result<Arc<ServerConfig>, CnfNetworkError> {
+        let server_builder = if let Some(ref client_ca_cert) = self.client_ca_cert_der {
+            let mut client_roots = RootCertStore::empty();
+            client_roots
+                .add(client_ca_cert.clone())
+                .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
+            let client_verifier = WebPkiClientVerifier::builder(client_roots.into())
+                .build()
+                .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
+            ServerConfig::builder().with_client_cert_verifier(client_verifier)
+        } else {
+            ServerConfig::builder().with_no_client_auth()
+        };
 
-            /// Build rustls ClientConfig from this TlsConfig for mTLS client connections.
-            pub fn client_config(&self) -> Result<Arc<ClientConfig>, CnfNetworkError> {
-                        let mut root_store = RootCertStore::empty();
-                                    // For development: use webpki_roots
-                                                // root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-                                                            // If CA cert provided, add it to trust store
-                                                                        if let Some(ref ca_cert) = self.ca_cert_der {
-                                                                                    root_store.add(ca_cert.clone())
-                                                                                                .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
-                                                                        }
-                                                                        
-                                                                        let config = ClientConfig::builder()
-                                                                                    .with_root_certificates(root_store)
-                                                                                                .with_no_client_auth();
-                                                                        Ok(Arc::new(config))
-            }
+        let server_config = server_builder
+            .with_single_cert(self.cert_der.clone(), self.key_der.clone_key())
+            .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
+
+        Ok(Arc::new(server_config))
+    }
+
+    /// Build rustls ClientConfig from this TlsConfig for mTLS client connections.
+    pub fn client_config(&self) -> Result<Arc<ClientConfig>, CnfNetworkError> {
+        let mut root_store = RootCertStore::empty();
+
+        if let Some(ref ca_cert) = self.ca_cert_der {
+            root_store
+                .add(ca_cert.clone())
+                .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
+        }
+
+        let client_builder = ClientConfig::builder().with_root_certificates(root_store);
+
+        let client_config = if !self.cert_der.is_empty() {
+            client_builder
+                .with_client_auth_cert(self.cert_der.clone(), self.key_der.clone_key())
+                .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?
+        } else {
+            client_builder.with_no_client_auth()
+        };
+
+        Ok(Arc::new(client_config))
+    }
 }
 
 
@@ -253,8 +281,8 @@ pub struct TcpTransport {
     #[allow(dead_code)]
     node_id: NodeId,
     listener: Option<TcpListener>,
-    // Koneksi TCP ke remote nodes
-    connections: Arc<Mutex<HashMap<NodeId, TcpStream>>>,
+    // Koneksi TCP ke remote nodes (plain + TLS stream support)
+    connections: Arc<Mutex<HashMap<NodeId, Box<dyn ReadWriteSend>>>>,
     // Konfigurasi autentikasi
     config: Option<TransportConfig>,
     // TLS configuration for mTLS
@@ -306,18 +334,20 @@ impl TcpTransport {
 
     /// Connect to remote node
     pub fn connect(&self, node_id: NodeId, addr: &str) -> Result<(), CnfNetworkError> {
-        let stream = TcpStream::connect(addr).map_err(|e| {
+        let tcp = TcpStream::connect(addr).map_err(|e| {
             CnfNetworkError::ConnectionFailed(format!("Failed to connect to {}: {}", node_id, e))
         })?;
 
-        // TODO: Enable TLS handshake in v1.2.0
-        // Check if TLS config is available for secure mTLS connection
-        if let Some(ref _tls) = self.tls_config {
-            // TLS configuration present - ready for mTLS handshake
-            // In v1.2.0: negotiate TLS using self.tls_config.client_config()
-            // For now: store the intent that this connection should use TLS
-            // Future: TcpStream -> TlsStream once v1.2.0 ships
-        }
+        let stream: Box<dyn ReadWriteSend> = if let Some(ref tls_config) = self.tls_config {
+            let client_config = tls_config.client_config()?;
+            let server_name = ServerName::try_from(tls_config.server_name.clone())
+                .map_err(|_| CnfNetworkError::TlsError("invalid server name".into()))?;
+            let connection = ClientConnection::new(client_config, server_name)
+                .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
+            Box::new(StreamOwned::new(connection, tcp))
+        } else {
+            Box::new(tcp)
+        };
 
         let mut conns = self.connections.lock().map_err(|_| CnfNetworkError::LockPoisoned)?;
         conns.insert(node_id, stream);
@@ -354,15 +384,24 @@ impl TcpTransport {
             .map_err(|e| CnfNetworkError::SendFailed(e.to_string()))?;
 
         match listener.accept() {
-            Ok((mut stream, _addr)) => {
+            Ok((mut tcp_stream, _addr)) => {
+                let mut channel: Box<dyn ReadWriteSend> = if let Some(ref tls_config) = self.tls_config {
+                    let server_config = tls_config.server_config()?;
+                    let conn = ServerConnection::new(server_config)
+                        .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
+                    Box::new(StreamOwned::new(conn, tcp_stream))
+                } else {
+                    Box::new(tcp_stream)
+                };
+
                 if let Some(ref cfg) = self.config {
-                    Self::server_handshake(&mut stream, cfg)
-                        .map_err(|_| CnfNetworkError::AuthenticationFailed)?
+                    Self::server_handshake(&mut channel, cfg)
+                        .map_err(|_| CnfNetworkError::AuthenticationFailed)?;
                 }
 
                 // Read frame
                 let mut size_buf = [0u8; 4];
-                stream
+                channel
                     .read_exact(&mut size_buf)
                     .map_err(|e| CnfNetworkError::ReceiveTimeout(e.to_string()))?;
 
@@ -370,7 +409,7 @@ impl TcpTransport {
                 let mut frame_buf = vec![0u8; 4 + len + 4];
                 frame_buf[0..4].copy_from_slice(&size_buf);
 
-                stream
+                channel
                     .read_exact(&mut frame_buf[4..])
                     .map_err(|e| CnfNetworkError::ReceiveTimeout(e.to_string()))?;
 
@@ -435,14 +474,25 @@ impl TcpTransport {
         // Perform client-side handshake
         Self::client_handshake(&mut stream, config)?;
 
+        let boxed_stream: Box<dyn ReadWriteSend> = if let Some(ref tls_config) = self.tls_config {
+            let client_config = tls_config.client_config()?;
+            let server_name = ServerName::try_from(tls_config.server_name.clone())
+                .map_err(|_| CnfNetworkError::TlsError("invalid server name".into()))?;
+            let conn = ClientConnection::new(client_config, server_name)
+                .map_err(|e| CnfNetworkError::TlsError(e.to_string()))?;
+            Box::new(StreamOwned::new(conn, stream))
+        } else {
+            Box::new(stream)
+        };
+
         let mut conns = self.connections.lock().map_err(|_| CnfNetworkError::LockPoisoned)?;
-        conns.insert(node_id, stream);
+        conns.insert(node_id, boxed_stream);
         Ok(())
     }
 
     /// Client-side HMAC handshake
-    fn client_handshake(
-        stream: &mut TcpStream,
+    fn client_handshake<S: Read + Write>(
+        stream: &mut S,
         config: &TransportConfig,
     ) -> Result<(), CnfNetworkError> {
         // Generate random client nonce
@@ -507,8 +557,8 @@ impl TcpTransport {
     }
 
     /// Server-side HMAC handshake
-    fn server_handshake(
-        stream: &mut TcpStream,
+    fn server_handshake<S: Read + Write>(
+        stream: &mut S,
         config: &TransportConfig,
     ) -> Result<(), CnfNetworkError> {
         // Receive client nonce and HMAC
@@ -736,5 +786,73 @@ mod tests {
         let transport = TcpTransport::new("node_a".to_string());
         let result = transport.disconnect(&"unknown_node".to_string());
         assert!(matches!(result, Err(CnfNetworkError::NodeNotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn test_tls_handshake_loopback() {
+        let ca_params = rcgen::CertificateParams::new(vec!["localhost".into()]);
+        let mut ca_params = ca_params;
+        ca_params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        let ca_cert = rcgen::Certificate::from_params(ca_params).unwrap();
+
+        let server_params = rcgen::CertificateParams::new(vec!["localhost".into()]);
+        let server_cert = rcgen::Certificate::from_params(server_params).unwrap();
+        let server_der = server_cert.serialize_der_with_signer(&ca_cert).unwrap();
+        let server_key = server_cert.serialize_private_key_der();
+
+        let client_params = rcgen::CertificateParams::new(vec!["localhost".into()]);
+        let client_cert = rcgen::Certificate::from_params(client_params).unwrap();
+        let client_der = client_cert.serialize_der_with_signer(&ca_cert).unwrap();
+        let client_key = client_cert.serialize_private_key_der();
+
+        let ca_der = ca_cert.serialize_der().unwrap();
+
+        let server_tls = TlsConfig {
+            cert_der: vec![CertificateDer::from(server_der.as_slice()).into_owned()],
+            key_der: PrivateKeyDer::from(rustls::pki_types::PrivatePkcs8KeyDer::from(server_key)),
+            ca_cert_der: None,
+            client_ca_cert_der: Some(CertificateDer::from(ca_der.as_slice()).into_owned()),
+            server_name: "localhost".to_string(),
+        };
+
+        let client_tls = TlsConfig {
+            cert_der: vec![CertificateDer::from(client_der.as_slice()).into_owned()],
+            key_der: PrivateKeyDer::from(rustls::pki_types::PrivatePkcs8KeyDer::from(client_key)),
+            ca_cert_der: Some(CertificateDer::from(ca_der.as_slice()).into_owned()),
+            client_ca_cert_der: None,
+            server_name: "localhost".to_string(),
+        };
+
+        let addr = "127.0.0.1:54321";
+
+        let server_task = tokio::spawn(async move {
+            let mut server = TcpTransport::new("server".to_string()).with_tls(server_tls);
+            server.bind(addr).unwrap();
+
+            loop {
+                match server.receive() {
+                    Ok((_node_id, msg)) => return msg,
+                    Err(CnfNetworkError::ReceiveTimeout(_)) => {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
+                        continue;
+                    }
+                    Err(e) => panic!("server receive error: {e:?}"),
+                }
+            }
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let client = TcpTransport::new("client".to_string()).with_tls(client_tls);
+        client.connect("server".to_string(), addr).unwrap();
+
+        let msg = CnfMessage::Heartbeat {
+            node_id: "client".to_string(),
+            vector_clock: VectorClock::new(),
+        };
+        client.send(&"server".to_string(), &msg).unwrap();
+
+        let received = server_task.await.unwrap();
+        assert_eq!(received, msg);
     }
 }

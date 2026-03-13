@@ -7,6 +7,19 @@
 - Cluster auth tokens (`CENTRA_NF_CLUSTER_TOKEN`)
 - Governance audit logs (append-only)
 
+## AES Key Setup (cnf-security)
+- `CENTRA_NF_AES_KEY` must be a 64-character hex string (32 bytes key).
+- Do NOT use raw ASCII passwords or human-readable secrets (low entropy).
+
+### Generate key (example)
+```bash
+openssl rand -hex 32 | tr -d '\n' > .env.key
+export CENTRA_NF_AES_KEY=$(cat .env.key)
+```
+
+- If key is absent, `KeyError::KeyMissing` is returned.
+- If key length is not 64 or format invalid, `KeyError::KeyInvalid` is returned.
+
 ## Threat Mitigations
 | Threat | Mitigation |
 |--------|-----------|

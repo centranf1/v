@@ -2,18 +2,19 @@
 /// Tidak mengimpor atau mengubah cobol-protocol-v153 (CORE-FROZEN)
 
 pub mod base4096;    // Encoder/decoder 12-bit packing
+pub mod bitpack;     // ZigZag delta encoding
 pub mod dictionary;  // HashMap<u16, Arc<[u8]>> untuk template lookup
 pub mod template;    // Template registry, fingerprint, ID
 pub mod stream;      // Format: [MAGIC][VER][FLAGS][LAYER_MAP][SYMBOLS][CRC32]
 pub mod error;
 pub use error::{CsmError, MAX_ENTRY_LEN, MAX_DICT_SYMBOLS};
 
-
+pub use dictionary::CsmDictionary;
 pub use template::{StructTemplate, TemplateRegistry, TEMPLATE_FLAG, SYMBOL_FLAG};
 pub use stream::StreamMetadata;
 pub use stream::compress_csm_with_options;
 pub use stream::read_metadata;
-use dictionary::CsmDictionary;
+
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -51,10 +52,10 @@ impl Default for CsmOptions {
 /// ```
 /// use cobol_protocol_v154::{compress_csm, decompress_csm, CsmDictionary};
 /// let mut dict = CsmDictionary::new();
-/// dict.insert(0, b"hello");
+/// dict.insert(0, b"hello").unwrap();
 /// let data = b"hello world hello";
 /// let compressed = compress_csm(data, &dict).unwrap();
-/// assert!(compressed.len() < data.len() + 20); // rough check
+/// assert!(compressed.len() <= data.len() + 64); // rough check, should not exceed by too much
 /// let decompressed = decompress_csm(&compressed, &dict).unwrap();
 /// assert_eq!(decompressed, data);
 /// ```

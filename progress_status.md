@@ -202,10 +202,97 @@ Status:
 - completed
 
 Notes:
+- Added `preprocess_input` and `tokenize_and_pack` helpers in `stream.rs` to support dynamic delta compression path.
+- Delta option now sets flag bit 0x04 only when encoding is applied with size benefit.
+- Decompression handles delta streams by decoding with `bitpack::decode_delta_i64`.
+- Added `roundtrip_delta_encoded_i64_le` regression test in `tests/csm_tests.rs`.
+- Ensured all existing stream and dictionary tests pass after refactor.
+
+
+Status:
+- completed
+
+Notes:
 - Zero-copy data path, no unsafe (SAFETY not needed), thiserror style errors
 - Unit tests: roundtrip and compression ratio vs raw
 - Dukungan backward compatibility header 0x9A/0x9B
 
+[2026-03-13]
+Change:
+- Fix regression in `crates/cobol-protocol-v154/src/stream.rs`: restore 12-bit CSM token packing for `compress_csm_stream` and `decompress_csm_stream`
+- Use `crate::base4096::pack_tokens_into` and `crate::base4096::unpack_tokens` with `validate_packed` validation
+- Adjust header flag semantics (keep bit0 as dict-used marker and use bit 0x10 for hierarchical flag)
+- Update csm tests to accept both versions 0x9A/0x9B and validate_packed invalid sizes in 12-bit mode
+
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/tests/csm_tests.rs
+- crates/cobol-protocol-v154/tests/csm_unit.rs
+- progress_status.md
+
+Status:
+- completed
+
+Notes:
+- Full crate test run `cargo test -p cobol-protocol-v154` passed: 33 tests in csm_tests.rs and 11 tests in csm_unit.rs.
+
+[2026-03-13]
+Change:
+- Security hardening: replace debug `eprintln!` in stream module with structured `log::trace!` to prevent production stderr leakage
+- `cobol-protocol-v154` now depends on `log = "0.4"`
+
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/Cargo.toml
+
+Status:
+- completed
+
+Notes:
+- Post-change grep for `eprintln!` returns only cli/lsp modules (intended non-engine fatal/log behavior), stream no longer logs to stderr in production.
+
+[2026-03-13]
+Change:
+- Performance optimization in `compress_csm_stream` (O(n*m) -> bucketed scanning):
+  - `dict_syms` removal, `candidates_for_byte()` usage
+  - `next_candidates` also uses `candidates_for_byte` on `input[i+1]`
+  - dynamic token allocation estimate based on `dict.iter().count()` size
+- Added benchmark `bench_compress_random_large_dict` in benches/csm_bench.rs
+
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/src/dictionary.rs
+- crates/cobol-protocol-v154/benches/csm_bench.rs
+- crates/cobol-protocol-v154/Cargo.toml
+
+Status:
+- completed
+
+Notes:
+- `cargo test -p cobol-protocol-v154` passes all tests
+- Bench added and can be run with `cargo bench -p cobol-protocol-v154 -- --nocapture`
+
+[2026-03-13]
+Change:
+- Corrected `cnf-security` AES-GCM semantics in docs & implementation:
+  - Docstring updated to cryptographically random nonce.
+  - Removed incorrect deterministic nonce claims.
+  - KeyManager now reads `CENTRA_NF_AES_KEY` as 64-character hex, decodes to 32 bytes.
+  - `rotate_from_env` also uses 64-character hex.
+  - Added security docs key generation snippet to SECURITY.md.
+
+Scope:
+- crates/cnf-security/src/lib.rs
+- crates/cnf-security/src/key_manager.rs
+- crates/cnf-security/Cargo.toml
+- SECURITY.md
+- progress_status.md
+
+Status:
+- completed
+
+Notes:
+- `cargo test -p cnf-security` passes all 13 tests.
 
 [2026-03-10]
 Change:

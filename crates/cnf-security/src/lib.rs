@@ -12,7 +12,7 @@ pub use key_manager::KeyManager;
 
 // cnf-security — Cryptographic operations.
 //
-// Responsibility: SHA-256 integrity verification and deterministic encryption.
+// Responsibility: SHA-256 integrity verification and AES-256-GCM encryption.
 // This is the ONLY crate that performs cryptographic operations.
 //
 // This crate MUST NOT:
@@ -20,7 +20,7 @@ pub use key_manager::KeyManager;
 // - Execute runtime instructions
 // - Manage buffers beyond immediate computation
 // - Provide deterministic SHA-256 hex digests
-// - Provide deterministic encryption/decryption
+// - Provide deterministic/encrypted persistent state (nonce randomization per call)
 impl std::fmt::Display for CnfCryptoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -52,11 +52,15 @@ pub fn sha256_hex(data: &[u8]) -> String {
     hex::encode(digest)
 }
 
-/// Encrypt buffer using AES-256-GCM with deterministic nonce.
+/// Encrypt buffer using AES-256-GCM with a cryptographically random nonce.
 ///
-/// Deterministic: same input always produces same output.
-/// Nonce is derived deterministically from SHA-256 hash of input data.
-/// Returns: nonce (12 bytes) + ciphertext (includes authentication tag).
+/// A fresh 12-byte nonce is generated via OsRng for each encryption call.
+/// The nonce is prepended to the ciphertext and read back during decryption.
+/// This is the correct approach: deterministic nonces in AES-GCM are a
+/// critical vulnerability (nonce reuse breaks confidentiality).
+///
+/// # Errors
+/// Returns error if encryption fails or key is missing/invalid.
 pub fn encrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
     let km = KeyManager::from_env()?;
     encrypt_aes256_with_key(data, km.active_key())
@@ -72,8 +76,8 @@ pub fn decrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
 
 /// Encrypt buffer using AES-256-GCM with provided key.
 ///
-/// Deterministic: same input always produces same output.
-/// Nonce is derived deterministically from SHA-256 hash of input data.
+/// A fresh 12-byte nonce is generated via OsRng for each encryption call.
+/// Nonce is prepended to ciphertext to be used during decryption.
 /// Returns: nonce (12 bytes) + ciphertext (includes authentication tag).
 pub fn encrypt_aes256_with_key(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CnfCryptoError> {
     let key = Key::<Aes256Gcm>::from_slice(key);
@@ -161,7 +165,7 @@ mod tests {
     fn test_encrypt_decrypt_roundtrip() {
         let _guard = ENV_MUTEX.lock().unwrap();
         unsafe {
-            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+            std::env::set_var("CENTRA_NF_AES_KEY", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         }
         let plaintext = b"secret data";
         let encrypted = encrypt_aes256(plaintext).unwrap();
@@ -173,7 +177,7 @@ mod tests {
     fn test_encrypt_random_nonce() {
         let _guard = ENV_MUTEX.lock().unwrap();
         unsafe {
-            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+            std::env::set_var("CENTRA_NF_AES_KEY", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         }
         let data = b"random nonce test";
         let enc1 = encrypt_aes256(data).unwrap();
@@ -188,7 +192,7 @@ mod tests {
     fn test_encrypt_decrypt_aes_gcm_roundtrip() {
         let _guard = ENV_MUTEX.lock().unwrap();
         unsafe {
-            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+            std::env::set_var("CENTRA_NF_AES_KEY", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         }
         let plaintext = b"This is a test message for AES-GCM encryption";
         let encrypted = encrypt_aes256(plaintext).unwrap();
@@ -200,7 +204,7 @@ mod tests {
     fn test_decrypt_error_too_short() {
         let _guard = ENV_MUTEX.lock().unwrap();
         unsafe {
-            std::env::set_var("CENTRA_NF_AES_KEY", "12345678901234567890123456789012");
+            std::env::set_var("CENTRA_NF_AES_KEY", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         }
         let short = vec![1, 2, 3];
         let res = decrypt_aes256(&short);

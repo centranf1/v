@@ -299,7 +299,12 @@ impl Runtime {
             instructions: instructions.iter().map(|i| {
                 match i {
                     cnf_compiler::ir::Instruction::Divide { .. } => crate::adaptive::IRInstruction::Div,
-                    _ => crate::adaptive::IRInstruction::SafeDiv, // fallback stub
+                    cnf_compiler::ir::Instruction::Add { .. }
+                    | cnf_compiler::ir::Instruction::Subtract { .. }
+                    | cnf_compiler::ir::Instruction::Multiply { .. } => {
+                        crate::adaptive::IRInstruction::SafeDiv
+                    }
+                    _ => crate::adaptive::IRInstruction::SafeDiv,
                 }
             }).collect()
         };
@@ -341,7 +346,7 @@ impl Runtime {
                         }
                     } else {
                         // Normal eksekusi Div
-                        // ...existing code...
+                        self.dispatch_divide(target, operand1, operand2)?;
                     }
                 }
                 Instruction::Subtract {
@@ -357,13 +362,6 @@ impl Runtime {
                     operand2,
                 } => {
                     self.dispatch_multiply(target, operand1, operand2)?;
-                }
-                Instruction::Divide {
-                    target,
-                    operand1,
-                    operand2,
-                } => {
-                    self.dispatch_divide(target, operand1, operand2)?;
                 }
 
                 // === PHASE 4+: OTHER INSTRUCTIONS ===

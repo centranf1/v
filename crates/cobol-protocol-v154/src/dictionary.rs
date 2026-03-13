@@ -203,6 +203,23 @@ impl CsmDictionary {
         combined.into_iter().sorted_by_key(|(sym, _)| *sym)
     }
 
+    /// Return dictionary entries starting with given first byte, using bucket index.
+    pub fn candidates_for_byte(&self, first_byte: u8) -> Vec<(u16, &[u8])> {
+        let mut cands = Vec::new();
+        let bucket = first_byte as usize;
+        // Local entries first (higher precedence)
+        for (sym, entry) in &self.local.by_first_byte[bucket] {
+            cands.push((*sym, &**entry));
+        }
+        // Global entries only if not shadowed by local
+        for (sym, entry) in &self.global.by_first_byte[bucket] {
+            if self.local.lookup(*sym).is_none() {
+                cands.push((*sym, &**entry));
+            }
+        }
+        cands
+    }
+
     pub fn verify_checksum(&self) -> bool {
         self.checksum == Self::compute_checksum(self)
     }

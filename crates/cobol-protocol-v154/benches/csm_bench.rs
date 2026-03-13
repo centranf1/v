@@ -67,11 +67,30 @@ fn bench_read_metadata(c: &mut Criterion) {
     });
 }
 
+fn bench_compress_random_large_dict(c: &mut Criterion) {
+    let mut input = vec![0u8; 1024 * 1024];
+    for i in 0..input.len() {
+        input[i] = (i % 256) as u8;
+    }
+    let mut dict = CsmDictionary::new();
+    for i in 1..=1000u16 {
+        let entry = vec![(i % 256) as u8; 8];
+        dict.insert(i, &entry).unwrap();
+    }
+    c.bench_function("compress_random_large_dict", |b| {
+        b.iter(|| {
+            let out = compress_csm(black_box(&input), black_box(&dict));
+            black_box(out).unwrap();
+        })
+    });
+}
+
 criterion_group!(benches,
     bench_base4096_encode,
     bench_dictionary_lookup,
     bench_compress_repetitive,
     bench_compress_random,
+    bench_compress_random_large_dict,
     bench_decompress_roundtrip,
     bench_read_metadata,
 );
