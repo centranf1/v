@@ -67,7 +67,6 @@ impl TemplateRegistry {
 }
 
 pub const TEMPLATE_FLAG: u16 = 0x4000;
-pub const SYMBOL_FLAG: u16 = 0x8000;
 
 /// Encode template token: ID + template flag.
 pub fn template_token(id: u16) -> u16 {

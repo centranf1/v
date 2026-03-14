@@ -1,3 +1,21 @@
+impl CsmOptions {
+    /// Constructor untuk basic CSM (semua fitur advanced dimatikan)
+    pub fn basic() -> Self {
+        Self {
+            hierarchical_dict: false,
+            bit_adaptive: false,
+            delta_encoding: false,
+            templates_enabled: false,
+            entropy_enabled: false,
+            symbol_graph_enabled: false,
+            profile: CsmProfile::Balanced,
+        }
+    }
+}
+/// Entry point kompresi basic CSM
+pub fn compress_csm_basic(input: &[u8], dict: &CsmDictionary) -> Result<Vec<u8>, CsmError> {
+    crate::stream::compress_csm_stream(input, dict, &CsmOptions::basic())
+}
 /// Compact Symbol Mapping (CSM) compression engine v154
 /// Tidak mengimpor atau mengubah cobol-protocol-v153 (CORE-FROZEN)
 
@@ -10,7 +28,8 @@ pub mod error;
 pub use error::{CsmError, MAX_ENTRY_LEN, MAX_DICT_SYMBOLS};
 
 pub use dictionary::CsmDictionary;
-pub use template::{StructTemplate, TemplateRegistry, TEMPLATE_FLAG, SYMBOL_FLAG};
+pub const SYMBOL_FLAG: u16 = 0x8000;
+pub use template::{StructTemplate, TemplateRegistry, TEMPLATE_FLAG};
 pub use stream::StreamMetadata;
 pub use stream::compress_csm_with_options;
 pub use stream::read_metadata;
@@ -30,6 +49,8 @@ pub struct CsmOptions {
     pub bit_adaptive: bool,
     pub delta_encoding: bool,
     pub templates_enabled: bool,
+    pub entropy_enabled: bool,
+    pub symbol_graph_enabled: bool,
     pub profile: CsmProfile,
 }
 
@@ -40,6 +61,8 @@ impl Default for CsmOptions {
             bit_adaptive: true,
             delta_encoding: true,
             templates_enabled: true,
+            entropy_enabled: false,
+            symbol_graph_enabled: false,
             profile: CsmProfile::Balanced,
         }
     }

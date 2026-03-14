@@ -7,6 +7,7 @@ description = "Compact Symbol Mapping (CSM) compression engine for CENTRA-NF. De
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+cnf-security = { path = "../cnf-security" }
 sha2 = "0.10"
 crc32fast = "1.3"
 parking_lot = "0.12"
@@ -14,6 +15,7 @@ thiserror = "1.0"
 itertools = "0.14.0"
 fxhash = "0.2"
 log = "0.4"
+cnf-quantum = { path = "../cnf-quantum" }
 
 [dev-dependencies]
 rand = "0.8"

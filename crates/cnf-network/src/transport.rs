@@ -471,10 +471,7 @@ impl TcpTransport {
             CnfNetworkError::ConnectionFailed(format!("Failed to connect to {}: {}", node_id, e))
         })?;
 
-        // Perform client-side handshake
-        Self::client_handshake(&mut stream, config)?;
-
-        let boxed_stream: Box<dyn ReadWriteSend> = if let Some(ref tls_config) = self.tls_config {
+        let mut boxed_stream: Box<dyn ReadWriteSend> = if let Some(ref tls_config) = self.tls_config {
             let client_config = tls_config.client_config()?;
             let server_name = ServerName::try_from(tls_config.server_name.clone())
                 .map_err(|_| CnfNetworkError::TlsError("invalid server name".into()))?;
@@ -484,6 +481,9 @@ impl TcpTransport {
         } else {
             Box::new(stream)
         };
+
+        // Perform client-side handshake AFTER TLS established
+        Self::client_handshake(&mut boxed_stream, config)?;
 
         let mut conns = self.connections.lock().map_err(|_| CnfNetworkError::LockPoisoned)?;
         conns.insert(node_id, boxed_stream);

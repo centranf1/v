@@ -21,7 +21,11 @@ impl Parser {
     }
 
     fn current(&self) -> &Token {
-        self.tokens.get(self.position).unwrap_or(&Token::Eof)
+        if self.position < self.tokens.len() {
+            &self.tokens[self.position]
+        } else {
+            &Token::Eof
+        }
     }
 
     fn advance(&mut self) {

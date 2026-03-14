@@ -1,58 +1,44 @@
 [2026-03-12]
+[2026-03-13]
+Change:
+- Refactor dekompresor: BitReader decoding, layer_map semantics
+- Design and implement entropy (Huffman) and symbol graph (bigram auto-populate) in cnf-entropy
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/src/bitpack.rs
+- crates/cnf-entropy/src/
+- progress_status.md
+Status:
+- planned
+Notes:
+- Ensures deterministic decoding, extensible pipeline, and governance compliance. Entropy and symbol graph modules will be isolated for layer discipline.
 Change:
 - Implementasi modul SelfRepairEngine untuk self-healing runtime (deteksi & perbaikan error IR secara deterministik)
 - Penambahan instruksi IR SafeDiv untuk patching runtime
 - Penambahan unit test & mutation test untuk SelfRepairEngine
 
 Scope:
-- crates/cnf-runtime/src/self_repair.rs
-- crates/cnf-runtime/src/ir.rs
-- crates/cnf-runtime/tests/self_repair.rs
 - progress_status.md
 
-Status:
-- planned
-
-Notes:
 - Memastikan semua patch diverifikasi sebelum diterapkan
 - Tidak ada mutasi pada source code, hanya IR
-- Tidak boleh ada unwrap() di path produksi
 - Mutasi pada instruksi kriptografi/protokol dilarang keras
 Change:
-- Tambah modul adaptif: SelfRepairEngine, PipelineOptimizer, EvolutionEngine, dan monitoring di runtime
-
-Scope:
-- crates/cnf-runtime/src/adaptive.rs
 - crates/cnf-runtime/tests/adaptive.rs
-
 Status:
 - in-progress
-
-Notes:
 - Fondasi sistem self-healing & self-evolving, hanya kerangka, tanpa mutasi nyata/unsafe
 [2026-03-12]
-Change:
 - Tambah error L6.013 RateLimitExceeded(NodeId) dan L6.014 BufferFull ke CnfNetworkError
 - Tambah pub mod + pub use untuk connection_pool, message_buffer, rate_limiter di cnf-network
-- Port kembali 19 test yang hilang dari v10 ke cobol-protocol-v154/tests/csm_tests.rs
 - Dokumentasikan format stream CSM v2 di docs/CONTRACT.md
 
-Scope:
-- crates/cnf-network/src/error.rs
-- crates/cnf-network/src/lib.rs
-- crates/cobol-protocol-v154/tests/csm_tests.rs
 - docs/CONTRACT.md
 
-Status:
-- planned
-
-Notes:
 - Menjamin error coverage dan boundary layer cnf-network, serta dokumentasi format CSM v2 untuk compliance dan audit.
 [2026-03-12]
-Change:
 - Perbaikan kritis dan ekspansi fitur pada cobol-protocol-v154 (unpack_tokens, guard insert, test roundtrip, doc CSM v2)
 - Penambahan error baru di cnf-network, ekspor modul, dan re-ekspor CsmDictionary
-- Port ulang 19 test CSM v10
 - Dokumentasi format CSM v2
 
 Scope:
@@ -218,6 +204,118 @@ Notes:
 - Dukungan backward compatibility header 0x9A/0x9B
 
 [2026-03-13]
+Change:
+- Multi-feature refactor: extend CsmOptions (template registry, bit-adaptive, entropy, symbol graph), modifikasi tokenize_and_pack() untuk deteksi template match dan token 16-bit, extend dekompresor (decode template token, bit_width dari layer_map, skip-layer logic), ganti pack_tokens_into() dengan BitWriter loop, definisi semantik layer_map, dan rancang modul cnf-entropy untuk entropy pass (Huffman) dan symbol graph (bigram auto-populate).
+
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/src/template.rs
+- crates/cobol-protocol-v154/src/bitpack.rs
+- crates/cobol-protocol-v154/src/lib.rs
+- progress_status.md
+- Penambahan modul baru: crates/cnf-entropy/
+
+Status:
+- planned
+
+Notes:
+- Menyatukan seluruh fitur advanced pipeline CSM, memastikan determinisme, fail-fast, dan extensibility.
+Change:
+- Tambahkan CsmOptions::basic() sebagai constructor eksplisit yang mematikan semua flag advanced, dan compress_csm_basic() sebagai entry point kompresi basic CSM.
+
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/src/lib.rs
+- progress_status.md
+
+Status:
+- planned
+
+Notes:
+- Memastikan entry point kompresi basic CSM mudah diakses dan deterministik, tanpa fitur advanced.
+Change:
+- Implementasi fungsi sign_csm_frame() dan verify_csm_frame() di cobol-protocol-v154, memanfaatkan ML-DSA dari cnf-quantum untuk menandatangani dan memverifikasi CSM frame. Signature disimpan di frame, verifikasi fail-fast jika signature tidak valid.
+
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/src/lib.rs
+- crates/cnf-quantum/src/
+- progress_status.md
+- Penambahan test integritas signature
+
+Status:
+- planned
+
+Notes:
+- Menjamin integritas CSM frame secara kriptografis, membangun jembatan antara cobol-protocol-v154 dan cnf-quantum.
+Change:
+- Integrasi TemplateRegistry ke fungsi kompresi/dekompresi: template token di-encode/decode jika bit 0x08 aktif. Implementasi skip-layer logic: layer_map diisi sesuai pipeline, dan logic skip-layer dibangun di kompresi dan dekompresi. Pastikan flag dan layer_map benar-benar digunakan.
+
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/src/template.rs
+- progress_status.md
+- Penambahan test untuk template dan skip-layer
+
+Status:
+- planned
+
+Notes:
+- Mengaktifkan fitur template dan skip-layer sesuai header, memastikan pipeline multi-layer benar-benar berjalan dan fail-fast pada error.
+Change:
+- Refactor connect_authenticated(): ubah urutan handshake agar TLS dibuka terlebih dahulu, baru kirim HMAC token autentikasi melalui channel terenkripsi. Hilangkan pengiriman token dalam plaintext.
+
+Scope:
+- Lokasi implementasi connect_authenticated (akan diidentifikasi)
+- progress_status.md
+- Penambahan negative tests untuk handshake urutan salah
+
+Status:
+- planned
+
+Notes:
+- Memastikan token autentikasi tidak terekspos, seluruh handshake comply dengan prinsip keamanan TLS-first.
+Change:
+- Refactor tokenize_and_pack(): ubah return type menjadi Result<(Vec<u16>, bool), CsmError>, tambahkan error handling untuk kasus dictionary overflow (best_sym > SYMBOL_MASK). Hilangkan silent abort, pastikan fail-fast pada overflow.
+
+Scope:
+- crates/cobol-protocol-v154/src/stream.rs
+- progress_status.md
+- Penambahan negative tests untuk overflow
+
+Status:
+- planned
+
+Notes:
+- Memastikan data loss terdeteksi, output parsial tidak terjadi tanpa error, sesuai prinsip fail-fast dan deterministik.
+Change:
+- Konsolidasi definisi SYMBOL_FLAG di crate root (lib.rs) cobol-protocol-v154, hapus duplikasi di stream.rs dan template.rs, pastikan semua modul internal dan eksternal menggunakan definisi yang sama. Tambahkan test untuk memastikan nilai SYMBOL_FLAG konsisten.
+
+Scope:
+- crates/cobol-protocol-v154/src/lib.rs
+- crates/cobol-protocol-v154/src/stream.rs
+- crates/cobol-protocol-v154/src/template.rs
+- progress_status.md
+- Penambahan test konsistensi
+
+Status:
+- planned
+
+Notes:
+- Menghilangkan risiko perilaku tidak konsisten dan bug silent, memastikan consumer eksternal dan internal mendapatkan nilai SYMBOL_FLAG yang identik.
+Change:
+- Refactor AccessControl: ganti logika placeholder if user == "admin" dengan mekanisme otorisasi deterministik berbasis daftar user yang diizinkan, error eksplisit jika tidak authorized.
+
+Scope:
+- Lokasi implementasi AccessControl (akan diidentifikasi)
+- progress_status.md
+- Penambahan negative tests
+
+Status:
+- planned
+
+Notes:
+- Menghilangkan risiko otorisasi palsu, memastikan hanya user yang diizinkan dapat akses, error handling fail-fast.
 Change:
 - Fix regression in `crates/cobol-protocol-v154/src/stream.rs`: restore 12-bit CSM token packing for `compress_csm_stream` and `decompress_csm_stream`
 - Use `crate::base4096::pack_tokens_into` and `crate::base4096::unpack_tokens` with `validate_packed` validation

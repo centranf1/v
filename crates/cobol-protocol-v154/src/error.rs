@@ -1,6 +1,8 @@
 // Error type for CsmDictionary
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum CsmError {
+        #[error("Dictionary overflow (max capacity exceeded)")]
+        DictionaryOverflow,
     // Protocol errors
     #[error("Invalid stream format")]
     InvalidStream,
@@ -8,6 +10,8 @@ pub enum CsmError {
     DictionaryMismatch,
     #[error("CRC32 mismatch: stream may be truncated or corrupted")]
     ChecksumFailed,
+    #[error("Signature verification failed")]
+    SignatureFailed,
     // Dictionary errors
     #[error("Dictionary full (max symbols reached)")]
     MaxSymbols,

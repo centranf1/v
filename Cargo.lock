@@ -604,6 +604,8 @@ dependencies = [
 name = "cobol-protocol-v154"
 version = "0.1.0"
 dependencies = [
+ "cnf-quantum",
+ "cnf-security",
  "crc32fast",
  "criterion 0.4.0",
  "fxhash",
