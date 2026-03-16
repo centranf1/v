@@ -1,3 +1,19 @@
+//! Cryptographic operations for CENTRA-NF.
+//!
+//! This crate provides deterministic SHA-256 hashing and AES-256-GCM encryption.
+//! All operations are sealed within this layer and do NOT:
+//! - Parse source code
+//! - Execute runtime instructions  
+//! - Manage buffers beyond immediate computation
+
+/// Cryptographic operation errors.
+///
+/// # Variants
+/// - `KeyMissing`: AES key not found in `CENTRA_NF_AES_KEY` environment variable
+/// - `KeyInvalid`: AES key is not exactly 32 bytes
+/// - `EncryptFailed`: AES-256-GCM encryption operation failed
+/// - `DataTooShort`: Encrypted data too short to contain valid nonce
+/// - `DecryptFailed`: AES-256-GCM decryption failed (invalid ciphertext or authentication tag)
 #[derive(Debug, PartialEq)]
 pub enum CnfCryptoError {
     KeyMissing,
@@ -42,9 +58,24 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 
-/// Compute SHA-256 digest of buffer and return hex-encoded string.
-/// Input → UTF-8 hex string (64 characters for 256-bit hash)
-/// Deterministic: same input always produces same output.
+/// Compute SHA-256 digest of data and return as hex-encoded string.
+///
+/// # Arguments
+/// * `data` - Bytes to hash
+///
+/// # Returns
+/// 64-character lowercase hex string (e.g., "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
+///
+/// # Determinism
+/// SHA-256 is deterministic: same input always produces same 256-bit hash.
+/// This is the cryptographic integrity function for CENTRA-NF.
+///
+/// # Example
+/// ```ignore
+/// use centra_nf::security::sha256_hex;
+/// let hash = sha256_hex(b"hello");
+/// assert_eq!(hash, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+/// ```
 pub fn sha256_hex(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
@@ -52,15 +83,35 @@ pub fn sha256_hex(data: &[u8]) -> String {
     hex::encode(digest)
 }
 
-/// Encrypt buffer using AES-256-GCM with a cryptographically random nonce.
+/// Encrypt buffer using AES-256-GCM with environment-stored key.
 ///
-/// A fresh 12-byte nonce is generated via OsRng for each encryption call.
-/// The nonce is prepended to the ciphertext and read back during decryption.
-/// This is the correct approach: deterministic nonces in AES-GCM are a
-/// critical vulnerability (nonce reuse breaks confidentiality).
+/// Reads the AES-256 key from `CENTRA_NF_AES_KEY` environment variable (hex-encoded 32 bytes).
+/// Generates a fresh 12-byte nonce via `OsRng` for each call and prepends it to ciphertext.
+///
+/// # Important: Nonce Handling
+/// Each encryption generates a cryptographically random nonce.
+/// Nonce reuse in AES-GCM is a critical vulnerability (breaks all confidentiality).
+/// Your code MUST NOT reuse nonces — this function handles that correctly.
+///
+/// # Arguments
+/// * `data` - Plaintext bytes to encrypt
+///
+/// # Returns
+/// Vec containing: [nonce (12 bytes)] + [ciphertext + authentication tag]
 ///
 /// # Errors
-/// Returns error if encryption fails or key is missing/invalid.
+/// - `KeyMissing`: No `CENTRA_NF_AES_KEY` in environment
+/// - `KeyInvalid`: Key is not 32 bytes (after hex decoding)
+/// - `EncryptFailed`: AES-256-GCM operation failed (rare)
+///
+/// # Example
+/// ```ignore
+/// use centra_nf::security::encrypt_aes256;
+/// std::env::set_var("CENTRA_NF_AES_KEY", "0000...0000"); // 64 hex chars = 32 bytes
+/// let ciphertext = encrypt_aes256(b"secret data")?;
+/// // ciphertext[0..12] = nonce
+/// // ciphertext[12..] = actual encrypted data + tag
+/// ```
 pub fn encrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
     let km = KeyManager::from_env()?;
     encrypt_aes256_with_key(data, km.active_key())
@@ -68,17 +119,47 @@ pub fn encrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
 
 /// Decrypt buffer that was produced by `encrypt_aes256`.
 ///
-/// Extracts nonce from the beginning of the encrypted data.
+/// Reads the AES-256 key from `CENTRA_NF_AES_KEY` environment variable.
+/// Extracts 12-byte nonce from the beginning of `data`, then decrypts remainder.
+///
+/// # Arguments
+/// * `data` - Ciphertext from `encrypt_aes256()` (must be >= 12 bytes)
+///
+/// # Returns
+/// Original plaintext bytes
+///
+/// # Errors
+/// - `KeyMissing`: No `CENTRA_NF_AES_KEY` in environment
+/// - `KeyInvalid`: Key is not 32 bytes
+/// - `DataTooShort`: Input is less than 12 bytes (no room for nonce)
+/// - `DecryptFailed`: Authentication tag verification failed (ciphertext corrupted or tampered)
 pub fn decrypt_aes256(data: &[u8]) -> Result<Vec<u8>, CnfCryptoError> {
     let km = KeyManager::from_env()?;
     decrypt_aes256_with_key(data, km.active_key())
 }
 
-/// Encrypt buffer using AES-256-GCM with provided key.
+/// Encrypt buffer using AES-256-GCM with explicit key (not from environment).
 ///
-/// A fresh 12-byte nonce is generated via OsRng for each encryption call.
-/// Nonce is prepended to ciphertext to be used during decryption.
-/// Returns: nonce (12 bytes) + ciphertext (includes authentication tag).
+/// Generates a fresh 12-byte nonce via `OsRng` for each encryption call.
+/// Nonce is prepended to ciphertext for use during decryption.
+///
+/// # Arguments
+/// * `data` - Plaintext bytes to encrypt
+/// * `key` - AES-256 key (exactly 32 bytes)
+///
+/// # Returns
+/// Vec containing: [nonce (12 bytes)] + [ciphertext + authentication tag]
+///
+/// # Errors
+/// - `EncryptFailed`: AES-256-GCM operation failed (rare)
+///
+/// # Example
+/// ```ignore
+/// use centra_nf::security::encrypt_aes256_with_key;
+/// let key = [0u8; 32];
+/// let ciphertext = encrypt_aes256_with_key(b"data", &key)?;
+/// assert!(ciphertext.len() >= 12);
+/// ```
 pub fn encrypt_aes256_with_key(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CnfCryptoError> {
     let key = Key::<Aes256Gcm>::from_slice(key);
     let cipher = Aes256Gcm::new(key);
@@ -97,7 +178,18 @@ pub fn encrypt_aes256_with_key(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, C
 
 /// Decrypt buffer that was produced by `encrypt_aes256_with_key`.
 ///
-/// Extracts nonce from the beginning of the encrypted data.
+/// Extracts 12-byte nonce from beginning of ciphertext, then decrypts remainder.
+///
+/// # Arguments
+/// * `data` - Ciphertext from `encrypt_aes256_with_key()` (must be >= 12 bytes)
+/// * `key` - AES-256 key used for encryption (exactly 32 bytes)
+///
+/// # Returns
+/// Original plaintext bytes
+///
+/// # Errors
+/// - `DataTooShort`: Input is less than 12 bytes (no room for nonce)
+/// - `DecryptFailed`: Authentication tag verification failed (ciphertext corrupted/tampered)
 pub fn decrypt_aes256_with_key(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CnfCryptoError> {
     if data.len() < 12 {
         return Err(CnfCryptoError::DataTooShort);

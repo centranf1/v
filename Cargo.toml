@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/centra-nf",
     "crates/cnf-compiler",
     "crates/cnf-runtime",
     "crates/cnf-security",

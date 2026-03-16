@@ -1,0 +1,37 @@
+[package]
+name = "centra-nf"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+description = "CENTRA-NF: Unified library facade for deterministic, protocol-bound language system"
+repository = "https://github.com/centranf1/v"
+keywords = ["centra-nf", "language", "compiler", "runtime", "protocol"]
+categories = ["language-implementation", "development-tools-compiler"]
+
+[dependencies]
+# Compiler layer
+cnf-compiler = { path = "../cnf-compiler" }
+
+# Runtime layer
+cnf-runtime = { path = "../cnf-runtime" }
+cnf-stdlib = { path = "../cnf-stdlib" }
+
+# Security & Cryptography
+cnf-security = { path = "../cnf-security" }
+cnf-quantum = { path = "../cnf-quantum" }
+
+# Protocol layer
+cobol-protocol-v153 = { path = "../cobol-protocol-v153" }
+cobol-protocol-v154 = { path = "../cobol-protocol-v154" }
+
+# Infrastructure
+cnf-network = { path = "../cnf-network" }
+cnf-storage = { path = "../cnf-storage" }
+cnf-governance = { path = "../cnf-governance" }
+cnf-verifier = { path = "../cnf-verifier" }
+
+[features]
+default = ["full"]
+full = []

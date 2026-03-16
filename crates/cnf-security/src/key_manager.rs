@@ -1,8 +1,12 @@
 //! Managed AES-256 key lifecycle with rotation and secure cleanup.
-use std::collections::HashMap;
-use zeroize::{Zeroize, ZeroizeOnDrop};
-use crate::CnfCryptoError;
+//!
+//! Provides [`KeyManager`] for managing active and retired AES-256 keys.
+//! All key material is automatically wiped from memory on drop via [`Zeroize`].
 
+/// AES-256 key material with secure cleanup.
+///
+/// Automatically zeros all bytes on drop via [`ZeroizeOnDrop`].
+/// This prevents sensitive key material from lingering in memory.
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct KeyMaterial {
     bytes: [u8; 32],
@@ -10,6 +14,20 @@ pub struct KeyMaterial {
 }
 
 impl KeyMaterial {
+    /// Construct KeyMaterial from raw bytes.
+    ///
+    /// # Arguments
+    /// * `raw` - Exactly 32 bytes (AES-256 key length)
+    /// * `version` - Key version number (for rotation tracking)
+    ///
+    /// # Errors
+    /// - `KeyInvalid` if `raw.len() != 32`
+    ///
+    /// # Example
+    /// ```ignore
+    /// use centra_nf::security::key_manager::KeyMaterial;
+    /// let key = KeyMaterial::from_bytes(&[0u8; 32], 1)?;
+    /// ```
     pub fn from_bytes(raw: &[u8], version: u32) -> Result<Self, CnfCryptoError> {
         if raw.len() != 32 {
             return Err(CnfCryptoError::KeyInvalid);
@@ -19,17 +37,38 @@ impl KeyMaterial {
         Ok(Self { bytes, version })
     }
 
+    /// Get reference to the 32-byte key material.
+    ///
+    /// # Returns
+    /// Immutable reference to the key bytes
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.bytes
     }
 }
 
+/// Manager for active and retired AES-256 keys.
+///
+/// Supports key rotation: new keys can be activated while retired keys
+/// are kept for decrypting old ciphertexts. All key material is automatically
+/// wiped on drop.
 pub struct KeyManager {
     active: KeyMaterial,
     retired: HashMap<u32, KeyMaterial>,
 }
 
 impl KeyManager {
+    /// Load KeyManager from environment variable `CENTRA_NF_AES_KEY`.
+    ///
+    /// Environment variable must contain hexadecimal-encoded 32 bytes (64 hex characters).
+    ///
+    /// # Errors
+    /// - `KeyMissing` if environment variable not set
+    /// - `KeyInvalid` if hex decoding fails or decoded length != 32 bytes
+    ///
+    /// # Example
+    /// ```sh
+    /// export CENTRA_NF_AES_KEY="0000000000000000000000000000000000000000000000000000000000000000"
+    /// ```
     pub fn from_env() -> Result<Self, CnfCryptoError> {
         let key_hex = std::env::var("CENTRA_NF_AES_KEY")
             .map_err(|_| CnfCryptoError::KeyMissing)?;
@@ -43,6 +82,19 @@ impl KeyManager {
         })
     }
 
+    /// Create KeyManager from raw key bytes.
+    ///
+    /// # Arguments
+    /// * `raw` - Exactly 32 bytes
+    ///
+    /// # Errors
+    /// - `KeyInvalid` if raw.len() != 32
+    ///
+    /// # Example
+    /// ```ignore
+    /// use centra_nf::security::key_manager::KeyManager;
+    /// let km = KeyManager::from_bytes(&[0u8; 32])?;
+    /// ```
     pub fn from_bytes(raw: &[u8]) -> Result<Self, CnfCryptoError> {
         Ok(Self {
             active: KeyMaterial::from_bytes(raw, 1)?,

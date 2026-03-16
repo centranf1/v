@@ -176,6 +176,18 @@ pub fn compress_csm_with_options(input: &[u8], dict: &CsmDictionary, options: &c
 pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary, options: &crate::CsmOptions) -> Result<Vec<u8>, CsmError> {
     let (source, preprocessing_flag) = preprocess_input(input, options);
 
+    // Tokenize and pack FIRST to determine actual dict usage
+    let (mut tokens, dict_used) = tokenize_and_pack(&source, dict, options)?;
+
+    // Integrasi TemplateRegistry: encode template token jika templates_enabled
+    if options.templates_enabled {
+        let template = StructTemplate::new(vec![TemplateFieldType::IntegerSigned, TemplateFieldType::Utf8String]);
+        let mut registry = TemplateRegistry::new();
+        let template_id = registry.register(&template).map_err(|_e| CsmError::InvalidStream)?;
+        tokens.insert(0, crate::template::template_token(template_id));
+    }
+
+    // Now build header with actual metadata
     let mut out = Vec::new();
     out.extend_from_slice(&MAGIC);
     out.push(VERSION);
@@ -185,39 +197,27 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary, options: &crate::
     if options.templates_enabled { flags |= 0x08; }
     if preprocessing_flag != 0 { flags |= preprocessing_flag; }
     out.push(flags);
-    // Isi layer_map otomatis: [template, dict, delta, bit_adaptive, hierarchical, reserved]
+
+    // Build layer_map with actual results: [bit_width, dict, delta, bit_adaptive, hierarchical, reserved, reserved, reserved]
     let mut layer_map = [0u8; 8];
-    if options.templates_enabled { layer_map[0] = 1; }
-    if dict_used { layer_map[1] = 1; }
-    if options.delta_encoding { layer_map[2] = 1; }
-    if options.bit_adaptive { layer_map[3] = 1; }
-    if options.hierarchical_dict { layer_map[4] = 1; }
-    out.extend_from_slice(&layer_map);
-    // Tambahkan orig_size (4 byte LE)
-    let orig_size = input.len() as u32;
-    out.extend_from_slice(&orig_size.to_le_bytes());
-
-    // Tokenize and pack from preprocessed input
-    let (mut tokens, dict_used) = tokenize_and_pack(&source, dict, options)?;
-
-    // Integrasi TemplateRegistry: encode template token jika templates_enabled
-    if options.templates_enabled {
-        // Contoh: template default, bisa diubah sesuai kebutuhan
-        let template = StructTemplate::new(vec![TemplateFieldType::IntegerSigned, TemplateFieldType::Utf8String]);
-        let mut registry = TemplateRegistry::new();
-        let template_id = registry.register(&template).map_err(|_e| CsmError::InvalidStream)?;
-        tokens.insert(0, crate::template::template_token(template_id));
-    }
-
-    // Set layer_map[1] jika dict_used
-    if dict_used {
-        layer_map[1] = 1;
-    }
-
+    
     // Bit-adaptive encoding: scan distribusi token, hitung bit_width
     let max_token = tokens.iter().copied().max().unwrap_or(0) as u64;
     let bit_width = crate::bitpack::calculate_min_bits(max_token);
     layer_map[0] = bit_width;
+    
+    // Set layer flags based on actual compression results
+    if dict_used { layer_map[1] = 1; }
+    if preprocessing_flag == 0x04 { layer_map[2] = 1; } // delta was used
+    if options.bit_adaptive { layer_map[3] = 1; }
+    if options.hierarchical_dict { layer_map[4] = 1; }
+    if options.templates_enabled { layer_map[5] = 1; }
+    
+    out.extend_from_slice(&layer_map);
+    
+    // Tambahkan orig_size (4 byte LE)
+    let orig_size = input.len() as u32;
+    out.extend_from_slice(&orig_size.to_le_bytes());
 
     // Encode tokens dengan BitWriter
     let mut bit_writer = crate::bitpack::BitWriter::new();
@@ -237,13 +237,17 @@ pub fn decompress_csm_stream(data: &[u8], dict: &CsmDictionary) -> Result<Vec<u8
     const HEADER_WITH_ORIG: usize = HEADER_LEN + 4; // +4 untuk orig_size
     if data.len() < HEADER_WITH_ORIG + 4 { return Err(CsmError::InvalidStream); }
     if data[0..2] != MAGIC || !(data[2] == VERSION || data[2] == 0x9A) { return Err(CsmError::InvalidStream); }
-    let dict_used = data[3] & 0x01 != 0;
-    let _has_delta = data[3] & 0x04 != 0;
-    let _has_templates = data[3] & 0x08 != 0;
+    
+    let flags = data[3];  // Flags byte indicates what was enabled, but layer_map tells us what was actually used
+    let _has_templates = flags & 0x08 != 0;
+    let _has_delta_flag = flags & 0x04 != 0;
 
-    // Baca layer_map dari header
+    // Baca layer_map dari header - THIS is source of truth for what was actually encoded
     let layer_map = &data[4..12];
     let bit_width = layer_map[0];
+    let dict_used = layer_map[1] == 1;
+    let delta_was_used = layer_map[2] == 1;
+    let templates_were_used = layer_map[5] == 1;
 
     let crc_offset = data.len() - 4;
     let (content, crc_bytes) = data.split_at(crc_offset);
@@ -253,31 +257,32 @@ pub fn decompress_csm_stream(data: &[u8], dict: &CsmDictionary) -> Result<Vec<u8
 
     // symbol_bytes dimulai setelah header+orig_size
     let symbol_bytes = &content[HEADER_LEN + 4..];
-    // Validasi symbol_bytes jika perlu
+    
     let mut reader = crate::bitpack::BitReader::new(symbol_bytes);
     let mut tokens = Vec::new();
     // Estimasi jumlah token: (symbol_bytes.len() * 8) / bit_width
     let estimated_tokens = (symbol_bytes.len() * 8) / (bit_width.max(1) as usize);
     tokens.reserve_exact(estimated_tokens);
+    
     // Baca token dari BitReader
     while let Ok(token) = reader.read_bits(bit_width) {
         tokens.push(token as u16);
     }
     let mut out = Vec::new();
 
-    // Implementasi skip-layer logic
+    // Skip template token if templates were used
     let mut i = 0;
-    if layer_map[0] == 1 && _has_templates {
-        // Decode template token
-        if let Some(template_id) = crate::template::decode_template_token(tokens[0]) {
-            log::trace!("[csm::decompress] template token found: id={}", template_id);
-            // TemplateRegistry bisa digunakan di sini jika ingin lookup
-            i += 1; // skip template token
+    if templates_were_used && !tokens.is_empty() {
+        if let Some(_template_id) = crate::template::decode_template_token(tokens[0]) {
+            log::trace!("[csm::decompress] template token found, skipping");
+            i = 1; // skip template token
         }
     }
 
+    // Decode tokens
     for (idx, token) in tokens.iter().enumerate().skip(i) {
-        if layer_map[1] == 1 && dict_used && token & SYMBOL_FLAG != 0 {
+        if dict_used && token & SYMBOL_FLAG != 0 {
+            // Dictionary entry
             let sym = token & SYMBOL_MASK;
             log::trace!("[csm::decompress] token[{}]=0x{:04X} (dict sym={})", idx, token, sym);
             match dict.lookup(sym) {
@@ -291,12 +296,14 @@ pub fn decompress_csm_stream(data: &[u8], dict: &CsmDictionary) -> Result<Vec<u8
                 }
             }
         } else {
+            // Raw byte token
             log::trace!("[csm::decompress] token[{}]=0x{:04X} (raw byte={})", idx, token, token & 0x00FF);
             out.push((token & 0x00FF) as u8);
         }
     }
 
-    if layer_map[2] == 1 && _has_delta {
+    // Apply delta decoding if it was used
+    if delta_was_used && _has_delta_flag {
         let decoded = decode_delta_i64(&out)
             .map_err(|_| CsmError::InvalidStream)?;
         let mut expanded = Vec::with_capacity(decoded.len() * 8);

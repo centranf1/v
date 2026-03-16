@@ -1,7 +1,16 @@
-// crates/cnf-quantum/src/lib.rs
-// CENTRA-NF Quantum Cryptography Layer (L8)
-//
-// Provides quantum-resistant cryptography and hybrid encryption utilities.
+//! Quantum-resistant cryptography for CENTRA-NF (Layer L8).
+//!
+//! Provides post-quantum key encapsulation (ML-KEM-768),
+//! digital signatures (ML-DSA-65, SLH-DSA-SHAKE-256f),
+//! and hybrid encryption combining classical and quantum-resistant algorithms.
+//!
+//! All operations are deterministic and fail-fast on invalid input.
+//!
+//! ## Feature Summary
+//! - **ML-KEM-768**: Key encapsulation mechanism for hybrid encryption
+//! - **ML-DSA-65**: Deterministic digital signatures (Dilithium)
+//! - **SLH-DSA-SHAKE-256f**: Stateless hash-based signatures (SPHINCS+)
+//! - **Hybrid Encryption**: Combines RSA or ECC with ML-KEM for post-quantum protection
 
 pub mod dsa;
 pub mod error;

@@ -1,3 +1,137 @@
+[2026-03-16]
+Change:
+- **CONTRACT.md Updated**: Synced with v154 implementation (VERSION 0x9B, new layer_map semantics)
+- Documented all FLAGS bits and their meanings (hierarchical, templates, delta, bit_adaptive)
+- Fully specified LAYER_MAP structure: [bit_width, dict_used, delta_encoded, bit_adaptive, hierarchical, templates, reserved, reserved]
+- Updated token encoding rules: variable bit-width (1-16), dictionary tokens with 0x8000 flag
+- Added decompression algorithm pseudocode
+- Documented backward compatibility with v0x9A (legacy format)
+- Documented breaking changes from v0x9A → v0x9B
+- Added updated example code using centra_nf public API
+
+Scope:
+- docs/CONTRACT.md
+- progress_status.md
+
+Status:
+- completed
+
+Notes:
+- CONTRACT.md is now canonical specification document for CSM v154 protocol
+- All details match actual implementation in cobol-protocol-v154/src/stream.rs
+- Decompression algorithm documented step-by-step for clarity
+- Backward compatibility clearly marked for implementers
+- Layer discipline reference added (protocol layer 5 binding)
+
+[2026-03-16]
+Change:
+- **Publication Roadmap Complete**: Created PUBLICATION_CHECKLIST.md documenting full path to crates.io release
+- Identified license decision as critical blocker (currently "Proprietary")
+- Documented metadata updates needed for all 12 crates (repository, homepage, documentation, license, authors)
+- Defined safe publishing order by dependency (cobol-protocol-v153 first, centra-nf facade last)
+- Created 10-point multi-phase publication checklist
+- Included testing requirements, versioning strategy, changelog requirements
+- Documented post-publication verification steps
+- Estimated 5-7 days to public release (post-license approval)
+
+Scope:
+- PUBLICATION_CHECKLIST.md (new file, comprehensive guide)
+- progress_status.md
+
+Status:
+- completed
+
+Next Actions for External Users:
+1. Decide on open-source license (MIT, Apache-2.0, or other)
+2. Update all Cargo.toml files with proper metadata
+3. Expand documentation (Phase 2: additional functions)
+4. Run cargo publish --dry-run --allow-dirty for final verification
+5. Execute publication in dependency-safe order
+6. Create GitHub Release tag v1.0.0
+7. Announce public availability
+
+Notes:
+- License change is governance decision requiring stakeholder approval
+- Publication order ensures no failed dependency resolution during upload
+- All crates currently pass quality gates (tests, clippy, fmt)
+- Facade crate (centra-nf) is recommended entry point for external users
+- Python bindings (PyO3) planned for v1.1.0 (not required for v1.0.0)
+
+[2026-03-16]
+Change:
+- **Documentation Pass (Phase 1)**: Added comprehensive doc comments to key crate public APIs
+- cnf-security: Full docs for sha256_hex(), encrypt_aes256(), decrypt_aes256(), KeyManager, KeyMaterial
+- cnf-quantum: Module-level overview with feature summary
+- cnf-compiler: Enhanced module docs, comprehensive docs for compile() entry point with example
+- All docs include: purpose, arguments, returns, errors, determinism guarantees where applicable
+- Strategic focus: most-used public API functions prioritized
+- Enables cargo doc to generate useful documentation
+
+Scope:
+- crates/cnf-security/src/lib.rs (function docs)
+- crates/cnf-security/src/key_manager.rs (type and method docs)
+- crates/cnf-quantum/src/lib.rs (module-level docs)
+- crates/cnf-compiler/src/lib.rs (compile() function, module overview)
+- progress_status.md
+
+Status:
+- completed
+
+Notes:
+- Phase 1 targets the critical entry points and most-used functions
+- Users can now run cargo doc and get useful reference material
+- Determinism, error handling, and layer discipline documented inline
+- Phase 2 (future): expand to remaining public functions in cobol-protocol-v154 and other crates
+- All doc comments follow Rust conventions with examples where practical
+
+[2026-03-16]
+Change:
+- **CONTRACT.md Updated**: Synced with v154 implementation (VERSION 0x9B, new layer_map semantics)
+- Documented all FLAGS bits and their meanings (hierarchical, templates, delta, bit_adaptive)
+- Fully specified LAYER_MAP structure: [bit_width, dict_used, delta_encoded, bit_adaptive, hierarchical, templates_enabled, reserved, reserved]
+- Updated token encoding rules: variable bit-width (1-16), dictionary tokens with 0x8000 flag
+- Added decompression algorithm pseudocode
+- Documented backward compatibility with v0x9A (legacy format)
+- Documented breaking changes from v0x9A → v0x9B
+- Added updated example code using centra_nf public API
+
+Scope:
+- docs/CONTRACT.md
+- progress_status.md
+
+Status:
+- completed
+
+Notes:
+- CONTRACT.md is now canonical specification document for CSM v154 protocol
+- All details match actual implementation in cobol-protocol-v154/src/stream.rs
+- Decompression algorithm documented step-by-step for clarity
+- Backward compatibility clearly marked for implementers
+- Layer discipline reference added (protocol layer 5 binding)
+
+[2026-03-16]
+Change:
+- **Unified Library Facade**: Created `crates/centra-nf/` as single-import unified entry point
+- Re-export all key APIs from 13 crates: compiler, runtime, stdlib, security, quantum, protocol, network, storage, governance, verifier
+- Added `centra-nf` as workspace member in root Cargo.toml
+- Enables external users to import single crate: `use centra_nf::*;`
+
+Scope:
+- crates/centra-nf/ (new crate with lib.rs, Cargo.toml)
+- Cargo.toml (root workspace members list)
+- progress_status.md
+
+Status:
+- completed
+
+Notes:
+- Zero breaking changes to existing crates
+- All 12 operational crates re-exported via modules (compiler, runtime, stdlib, security, quantum, protocol, network, storage, governance, verifier)
+- Also re-exports cobol-protocol-v153 for backward compatibility (CORE-FROZEN)
+- Common types re-exported at root level for convenience: compile(), Runtime, CnfError, CnfCryptoError, etc.
+- Includes version_info() helper for debugging
+- Foundation task complete for library publication roadmap
+
 [2026-03-12]
 [2026-03-13]
 Change:
