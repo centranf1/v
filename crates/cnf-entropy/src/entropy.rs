@@ -11,7 +11,7 @@ pub fn build_huffman_tree(freqs: &HashMap<u16, usize>) -> HashMap<u16, Vec<bool>
     let mut codes = HashMap::new();
     let mut code = 0u16;
     let mut length = 1;
-    for (i, (sym, _)) in symbols.iter().enumerate() {
+    for (_i, (sym, _)) in symbols.iter().enumerate() {
         // Generate binary representation of code with bit_length bits
         let mut bits = Vec::new();
         for j in (0..length).rev() {
