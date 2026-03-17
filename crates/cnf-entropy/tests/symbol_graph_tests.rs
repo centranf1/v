@@ -1,7 +1,6 @@
-//! Negative test: symbol graph must not auto-populate below threshold
+use cnf_entropy::symbol_graph::{build_symbol_graph, most_frequent_bigram, auto_populate_dictionary};
 
-use crate::symbol_graph::{build_symbol_graph, most_frequent_bigram, auto_populate_dictionary};
-
+/// Negative test: symbol graph must not auto-populate below threshold
 #[test]
 fn test_symbol_graph_no_populate_below_threshold() {
     let tokens = vec![1, 2, 3, 1, 2, 3];
@@ -10,7 +9,7 @@ fn test_symbol_graph_no_populate_below_threshold() {
     assert!(populated.is_empty());
 }
 
-//! Positive test: most frequent bigram
+/// Positive test: most frequent bigram
 #[test]
 fn test_symbol_graph_most_frequent_bigram() {
     let tokens = vec![1, 2, 2, 3, 1, 2, 2, 3];

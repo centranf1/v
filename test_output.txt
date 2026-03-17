@@ -1,0 +1,267 @@
+warning: unnecessary parentheses around method argument
+  --> crates/cobol-protocol-v154/src/base4096.rs:99:18
+   |
+99 |         out.push((((b[1] as u16 & 0xF) << 8) | b[2] as u16));
+   |                  ^                                        ^
+   |
+   = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+   |
+99 -         out.push((((b[1] as u16 & 0xF) << 8) | b[2] as u16));
+99 +         out.push(((b[1] as u16 & 0xF) << 8) | b[2] as u16);
+   |
+
+warning: unnecessary parentheses around method argument
+   --> crates/cobol-protocol-v154/src/base4096.rs:101:18
+    |
+101 |         out.push((((b[4] as u16 & 0xF) << 8) | b[5] as u16));
+    |                  ^                                        ^
+    |
+help: remove these parentheses
+    |
+101 -         out.push((((b[4] as u16 & 0xF) << 8) | b[5] as u16));
+101 +         out.push(((b[4] as u16 & 0xF) << 8) | b[5] as u16);
+    |
+
+warning: unnecessary parentheses around method argument
+   --> crates/cobol-protocol-v154/src/base4096.rs:103:18
+    |
+103 |         out.push((((b[7] as u16 & 0xF) << 8) | b[8] as u16));
+    |                  ^                                        ^
+    |
+help: remove these parentheses
+    |
+103 -         out.push((((b[7] as u16 & 0xF) << 8) | b[8] as u16));
+103 +         out.push(((b[7] as u16 & 0xF) << 8) | b[8] as u16);
+    |
+
+warning: unnecessary parentheses around method argument
+   --> crates/cobol-protocol-v154/src/base4096.rs:105:18
+    |
+105 |         out.push((((b[10] as u16 & 0xF) << 8) | b[11] as u16));
+    |                  ^                                          ^
+    |
+help: remove these parentheses
+    |
+105 -         out.push((((b[10] as u16 & 0xF) << 8) | b[11] as u16));
+105 +         out.push(((b[10] as u16 & 0xF) << 8) | b[11] as u16);
+    |
+
+warning: unnecessary parentheses around assigned value
+   --> crates/cobol-protocol-v154/src/base4096.rs:111:18
+    |
+111 |         let t1 = (((bytes[i+1] as u16 & 0xF) << 8) | bytes[i+2] as u16);
+    |                  ^                                                    ^
+    |
+help: remove these parentheses
+    |
+111 -         let t1 = (((bytes[i+1] as u16 & 0xF) << 8) | bytes[i+2] as u16);
+111 +         let t1 = ((bytes[i+1] as u16 & 0xF) << 8) | bytes[i+2] as u16;
+    |
+
+warning: unused import: `Read`
+ --> crates/cobol-protocol-v154/src/bitpack.rs:1:21
+  |
+1 | use std::io::{self, Read};
+  |                     ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `cnf_security::sha256_hex`
+ --> crates/cobol-protocol-v154/src/stream.rs:3:5
+  |
+3 | use cnf_security::sha256_hex;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `thiserror::Error`
+  --> crates/cobol-protocol-v154/src/lib.rs:37:5
+   |
+37 | use thiserror::Error;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+  --> crates/cobol-protocol-v154/src/bitpack.rs:34:34
+   |
+34 |     pub fn write_bits(&mut self, mut value: u64, mut width: u8) -> io::R...
+   |                                  ----^^^^^
+   |                                  |
+   |                                  help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> crates/cobol-protocol-v154/src/bitpack.rs:34:50
+   |
+34 | ...lf, mut value: u64, mut width: u8) -> io::Result<()> {
+   |                        ----^^^^^
+   |                        |
+   |                        help: remove this `mut`
+
+warning: `cobol-protocol-v154` (lib) generated 10 warnings (run `cargo fix --lib -p cobol-protocol-v154` to apply 10 suggestions)
+warning: unused import: `std::fmt`
+ --> crates/cnf-runtime/src/adaptive.rs:4:5
+  |
+4 | use std::fmt;
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `pipeline`
+  --> crates/cnf-runtime/src/adaptive.rs:98:25
+   |
+98 |     fn evaluate_fitness(pipeline: &Pipeline, metrics: &ExecutionMetrics)...
+   |                         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pipeline`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/cnf-runtime/src/runtime.rs:311:13
+    |
+311 |         let mut idx = 0;
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `cnf-runtime` (lib) generated 3 warnings (run `cargo fix --lib -p cnf-runtime` to apply 3 suggestions)
+warning: unused import: `Duration`
+ --> crates/cnf-network/src/connection_pool.rs:4:17
+  |
+4 | use std::time::{Duration, Instant};
+  |                 ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `cnf-network` (lib) generated 1 warning (run `cargo fix --lib -p cnf-network` to apply 1 suggestion)
+   Compiling cnf-entropy v1.0.0 (/workspaces/v/crates/cnf-entropy)
+warning: `cnf-network` (lib test) generated 1 warning (1 duplicate)
+warning: `cobol-protocol-v154` (lib test) generated 10 warnings (10 duplicates)
+warning: unused variable: `i`
+   --> crates/cobol-protocol-v154/tests/csm_tests.rs:195:9
+    |
+195 |     for i in 0..512 {
+    |         ^ help: if this is intentional, prefix it with an underscore: `_i`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `cobol-protocol-v154` (test "csm_tests") generated 1 warning (run `cargo fix --test "csm_tests" -p cobol-protocol-v154` to apply 1 suggestion)
+warning: `cnf-runtime` (lib test) generated 3 warnings (3 duplicates)
+warning: unused `Result` that must be used
+  --> crates/cnf-runtime/tests/csm_integration.rs:13:5
+   |
+13 |     dict.insert(1, b"foo");
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+   = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+   |
+13 |     let _ = dict.insert(1, b"foo");
+   |     +++++++
+
+warning: unused `Result` that must be used
+  --> crates/cnf-runtime/tests/csm_integration.rs:14:5
+   |
+14 |     dict.insert(2, b"bar");
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+14 |     let _ = dict.insert(2, b"bar");
+   |     +++++++
+
+warning: unused `Result` that must be used
+  --> crates/cnf-runtime/tests/csm_integration.rs:38:5
+   |
+38 |     dict.insert(1, &template);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+38 |     let _ = dict.insert(1, &template);
+   |     +++++++
+
+warning: unused `Result` that must be used
+  --> crates/cnf-runtime/tests/csm_integration.rs:53:5
+   |
+53 |     dict.insert(1, &[0xCD; 8]);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+53 |     let _ = dict.insert(1, &[0xCD; 8]);
+   |     +++++++
+
+warning: unused `Result` that must be used
+  --> crates/cnf-runtime/tests/csm_integration.rs:77:5
+   |
+77 |     dict.insert(1, b"foo");
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+77 |     let _ = dict.insert(1, b"foo");
+   |     +++++++
+
+warning: unused `Result` that must be used
+  --> crates/cnf-runtime/tests/csm_integration.rs:78:5
+   |
+78 |     dict.insert(2, b"bar");
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+78 |     let _ = dict.insert(2, b"bar");
+   |     +++++++
+
+warning: `cnf-runtime` (test "csm_integration") generated 6 warnings
+warning: variable `code` is assigned to, but never used
+  --> crates/cnf-entropy/src/entropy.rs:12:9
+   |
+12 |     let mut code = 0u16;
+   |         ^^^^^^^^
+   |
+   = note: consider using `_code` instead
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `code` is never read
+  --> crates/cnf-entropy/src/entropy.rs:16:9
+   |
+16 |         code += 1;
+   |         ^^^^^^^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: `cnf-entropy` (lib test) generated 2 warnings (2 duplicates)
+warning: `cnf-entropy` (lib) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.39s
+     Running unittests src/lib.rs (target/debug/deps/centra_nf-684d46b20c0158cb)
+
+running 3 tests
+test ffi::tests::test_cnf_version ... ok
+test ffi::tests::test_error_code_conversion ... ok
+test tests::test_version_info ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/centra_nf-47742ad21979ce05)
+
+running 3 tests
+test tools::tests::test_format_simple_program ... ok
+test tools::tests::test_lint_detects_long_lines ... ok
+test tools::tests::test_lint_detects_trailing_whitespace ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/cli_integration.rs (target/debug/deps/cli_integration-26f224477f543cf5)
+
+running 6 tests
+test test_cli_run_accepts_valid_filename has been running for over 60 seconds
+test test_cli_run_loads_ir_correctly has been running for over 60 seconds

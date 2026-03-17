@@ -23,6 +23,7 @@ mod ffi {
             .map_err(|e| format!("Invalid source string: {}", e))?;
 
         let mut out_handle: *mut crate::ffi::CnfProgramHandle = std::ptr::null_mut();
+        // SAFETY: c_source is valid CString, out_handle is valid mutable pointer
         let err = unsafe { crate::ffi::cnf_compile(c_source.as_ptr(), &mut out_handle) };
 
         if err.code != 0 {
@@ -84,6 +85,7 @@ pub struct PyProgram {
 impl Drop for PyProgram {
     fn drop(&mut self) {
         if !self.handle.is_null() {
+            // SAFETY: handle is valid pointer from cnf_compile, safe to free once
             unsafe {
                 crate::ffi::cnf_free_program(self.handle);
             }
@@ -117,6 +119,7 @@ pub struct PyRuntime {
 impl Drop for PyRuntime {
     fn drop(&mut self) {
         if !self.handle.is_null() {
+            // SAFETY: handle is valid pointer from cnf_create_runtime, safe to free once
             unsafe {
                 crate::ffi::cnf_free_runtime(self.handle);
             }
@@ -138,6 +141,7 @@ impl PyRuntime {
 
     /// Execute compiled program
     fn execute(&self, program: &PyProgram) -> PyResult<()> {
+        // SAFETY: Both self.handle and program.handle are valid pointers from respective create functions
         let err = unsafe { crate::ffi::cnf_execute(self.handle, program.handle) };
 
         if err.code != 0 {
@@ -176,6 +180,7 @@ fn compile(source: String) -> PyResult<Py<PyProgram>> {
 fn sha256(data: Vec<u8>) -> PyResult<String> {
     let mut hash_buf = [0u8; 65];  // 64 hex + null terminator
 
+    // SAFETY: data.as_ptr() is valid buffer, hash_buf.as_mut_ptr() is valid writable buffer
     let err = unsafe {
         crate::ffi::cnf_sha256(
             data.as_ptr(),
@@ -196,6 +201,7 @@ fn sha256(data: Vec<u8>) -> PyResult<String> {
     }
 
     // Extract string up to null terminator
+    // SAFETY: hash_buf contains valid null-terminated string from FFI call
     let hash_str = unsafe {
         CStr::from_ptr(hash_buf.as_ptr() as *const i8)
             .to_string_lossy()
@@ -210,6 +216,7 @@ fn aes256_encrypt(plaintext: Vec<u8>) -> PyResult<Vec<u8>> {
     let mut ciphertext = vec![0u8; plaintext.len() + 28];  // nonce + encrypted + tag
     let mut ciphertext_len = 0usize;
 
+    // SAFETY: plaintext.as_ptr() is valid buffer, ciphertext.as_mut_ptr() is valid writable buffer
     let err = unsafe {
         crate::ffi::cnf_aes256_encrypt(
             plaintext.as_ptr(),
@@ -246,6 +253,7 @@ fn aes256_decrypt(ciphertext: Vec<u8>) -> PyResult<Vec<u8>> {
     let mut plaintext = vec![0u8; ciphertext.len() - 28];
     let mut plaintext_len = 0usize;
 
+    // SAFETY: ciphertext.as_ptr() is valid buffer, plaintext.as_mut_ptr() is valid writable buffer
     let err = unsafe {
         crate::ffi::cnf_aes256_decrypt(
             ciphertext.as_ptr(),
@@ -273,6 +281,7 @@ fn aes256_decrypt(ciphertext: Vec<u8>) -> PyResult<Vec<u8>> {
 /// Get version string
 #[pyfunction]
 fn version() -> String {
+    // SAFETY: cnf_version returns pointer to static string literal "CENTRA-NF 1.0.0\0"
     let v = unsafe { crate::ffi::cnf_version() };
     unsafe { CStr::from_ptr(v).to_string_lossy().to_string() }
 }

@@ -1,0 +1,374 @@
+warning: unnecessary parentheses around method argument
+  --> crates/cobol-protocol-v154/src/base4096.rs:99:18
+   |
+99 |         out.push((((b[1] as u16 & 0xF) << 8) | b[2] as u16));
+   |                  ^                                        ^
+   |
+   = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+   |
+99 -         out.push((((b[1] as u16 & 0xF) << 8) | b[2] as u16));
+99 +         out.push(((b[1] as u16 & 0xF) << 8) | b[2] as u16);
+   |
+
+warning: unnecessary parentheses around method argument
+   --> crates/cobol-protocol-v154/src/base4096.rs:101:18
+    |
+101 |         out.push((((b[4] as u16 & 0xF) << 8) | b[5] as u16));
+    |                  ^                                        ^
+    |
+help: remove these parentheses
+    |
+101 -         out.push((((b[4] as u16 & 0xF) << 8) | b[5] as u16));
+101 +         out.push(((b[4] as u16 & 0xF) << 8) | b[5] as u16);
+    |
+
+warning: unnecessary parentheses around method argument
+   --> crates/cobol-protocol-v154/src/base4096.rs:103:18
+    |
+103 |         out.push((((b[7] as u16 & 0xF) << 8) | b[8] as u16));
+    |                  ^                                        ^
+    |
+help: remove these parentheses
+    |
+103 -         out.push((((b[7] as u16 & 0xF) << 8) | b[8] as u16));
+103 +         out.push(((b[7] as u16 & 0xF) << 8) | b[8] as u16);
+    |
+
+warning: unnecessary parentheses around method argument
+   --> crates/cobol-protocol-v154/src/base4096.rs:105:18
+    |
+105 |         out.push((((b[10] as u16 & 0xF) << 8) | b[11] as u16));
+    |                  ^                                          ^
+    |
+help: remove these parentheses
+    |
+105 -         out.push((((b[10] as u16 & 0xF) << 8) | b[11] as u16));
+105 +         out.push(((b[10] as u16 & 0xF) << 8) | b[11] as u16);
+    |
+
+warning: unnecessary parentheses around assigned value
+   --> crates/cobol-protocol-v154/src/base4096.rs:111:18
+    |
+111 |         let t1 = (((bytes[i+1] as u16 & 0xF) << 8) | bytes[i+2] as u16);
+    |                  ^                                                    ^
+    |
+help: remove these parentheses
+    |
+111 -         let t1 = (((bytes[i+1] as u16 & 0xF) << 8) | bytes[i+2] as u16);
+111 +         let t1 = ((bytes[i+1] as u16 & 0xF) << 8) | bytes[i+2] as u16;
+    |
+
+warning: unused import: `Read`
+ --> crates/cobol-protocol-v154/src/bitpack.rs:1:21
+  |
+1 | use std::io::{self, Read};
+  |                     ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `cnf_security::sha256_hex`
+ --> crates/cobol-protocol-v154/src/stream.rs:3:5
+  |
+3 | use cnf_security::sha256_hex;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `thiserror::Error`
+  --> crates/cobol-protocol-v154/src/lib.rs:37:5
+   |
+37 | use thiserror::Error;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+  --> crates/cobol-protocol-v154/src/bitpack.rs:34:34
+   |
+34 |     pub fn write_bits(&mut self, mut value: u64, mut width: u8) -> io::R...
+   |                                  ----^^^^^
+   |                                  |
+   |                                  help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> crates/cobol-protocol-v154/src/bitpack.rs:34:50
+   |
+34 | ...lf, mut value: u64, mut width: u8) -> io::Result<()> {
+   |                        ----^^^^^
+   |                        |
+   |                        help: remove this `mut`
+
+warning: `cobol-protocol-v154` (lib) generated 10 warnings (run `cargo fix --lib -p cobol-protocol-v154` to apply 10 suggestions)
+warning: unused import: `std::fmt`
+ --> crates/cnf-runtime/src/adaptive.rs:4:5
+  |
+4 | use std::fmt;
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `pipeline`
+  --> crates/cnf-runtime/src/adaptive.rs:98:25
+   |
+98 |     fn evaluate_fitness(pipeline: &Pipeline, metrics: &ExecutionMetrics)...
+   |                         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pipeline`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/cnf-runtime/src/runtime.rs:311:13
+    |
+311 |         let mut idx = 0;
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `cnf-runtime` (lib) generated 3 warnings (run `cargo fix --lib -p cnf-runtime` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.61s
+     Running unittests src/lib.rs (target/debug/deps/cnf_compiler-bf1abb18e94e5c32)
+
+running 48 tests
+test ast::tests::test_generate_keypair_statement ... ok
+test ast::tests::test_governance_statement_enum ... ok
+test ast::tests::test_long_term_sign_statement ... ok
+test ast::tests::test_quantum_decrypt_statement ... ok
+test ast::tests::test_quantum_encrypt_statement ... ok
+test ast::tests::test_quantum_sign_encrypt_statement ... ok
+test ast::tests::test_quantum_sign_statement ... ok
+test ast::tests::test_quantum_verify_decrypt_statement ... ok
+test ast::tests::test_quantum_verify_sig_statement ... ok
+test ir::tests::test_file_operation_instructions ... ok
+test ir::tests::test_generate_keypair_instruction ... ok
+test ir::tests::test_governance_instructions_display ... ok
+test ir::tests::test_ir_deterministic ... ok
+test ir::tests::test_lower_governance_division ... ok
+test ir::tests::test_long_term_sign_instruction ... ok
+test ir::tests::test_quantum_decrypt_instruction ... ok
+test ir::tests::test_quantum_encrypt_instruction ... ok
+test ir::tests::test_quantum_sign_encrypt_instruction ... ok
+test ir::tests::test_quantum_sign_instruction ... ok
+test ir::tests::test_quantum_verify_decrypt_instruction ... ok
+test ir::tests::test_quantum_verify_sig_instruction ... ok
+test lexer::tests::prop_mixed_tokens ... ok
+test lexer::tests::prop_identifier_roundtrip ... ok
+test lexer::tests::test_lexer_handles_identifiers ... ok
+test lexer::tests::test_lexer_recognizes_encrypt_decrypt ... ok
+test lexer::tests::test_lexer_recognizes_generate_keypair ... ok
+test lexer::tests::test_lexer_recognizes_long_term_sign ... ok
+test lexer::tests::test_lexer_recognizes_numbers ... ok
+test lexer::tests::test_lexer_recognizes_quantum_decrypt ... ok
+test lexer::tests::test_lexer_recognizes_quantum_encrypt ... ok
+test lexer::tests::test_lexer_recognizes_quantum_sign ... ok
+test lexer::tests::test_lexer_recognizes_quantum_sign_encrypt ... ok
+test lexer::tests::test_lexer_recognizes_quantum_supporting_tokens ... ok
+test lexer::tests::test_lexer_recognizes_quantum_verify_decrypt ... ok
+test lexer::tests::test_lexer_recognizes_quantum_verify_sig ... ok
+test lexer::tests::test_lexer_rejects_unknown_character ... ok
+test parser::tests::test_parser_accepts_empty_governance ... ok
+test parser::tests::test_parser_error_explains_division_order ... ok
+test parser::tests::test_parser_error_message_mentions_expected_division ... ok
+test parser::tests::test_parser_handles_encrypt_decrypt ... ok
+test parser::tests::test_parser_numeric_literals_as_operands ... ok
+test parser::tests::test_parser_numeric_literals_in_condition ... ok
+test parser::tests::test_parser_parses_simple_governance ... ok
+test parser::tests::test_parser_quantum_operations ... ok
+test parser::tests::test_parser_rejects_misspelled_environment_division ... ok
+test parser::tests::test_parser_rejects_unquoted_env_value ... ok
+test parser::tests::test_parser_rejects_wrong_division_order ... ok
+test lexer::tests::prop_string_literal_roundtrip ... ok
+
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+warning: unnecessary parentheses around method argument
+  --> crates/cobol-protocol-v154/src/base4096.rs:99:18
+   |
+99 |         out.push((((b[1] as u16 & 0xF) << 8) | b[2] as u16));
+   |                  ^                                        ^
+   |
+   = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+   |
+99 -         out.push((((b[1] as u16 & 0xF) << 8) | b[2] as u16));
+99 +         out.push(((b[1] as u16 & 0xF) << 8) | b[2] as u16);
+   |
+
+warning: unnecessary parentheses around method argument
+   --> crates/cobol-protocol-v154/src/base4096.rs:101:18
+    |
+101 |         out.push((((b[4] as u16 & 0xF) << 8) | b[5] as u16));
+    |                  ^                                        ^
+    |
+help: remove these parentheses
+    |
+101 -         out.push((((b[4] as u16 & 0xF) << 8) | b[5] as u16));
+101 +         out.push(((b[4] as u16 & 0xF) << 8) | b[5] as u16);
+    |
+
+warning: unnecessary parentheses around method argument
+   --> crates/cobol-protocol-v154/src/base4096.rs:103:18
+    |
+103 |         out.push((((b[7] as u16 & 0xF) << 8) | b[8] as u16));
+    |                  ^                                        ^
+    |
+help: remove these parentheses
+    |
+103 -         out.push((((b[7] as u16 & 0xF) << 8) | b[8] as u16));
+103 +         out.push(((b[7] as u16 & 0xF) << 8) | b[8] as u16);
+    |
+
+warning: unnecessary parentheses around method argument
+   --> crates/cobol-protocol-v154/src/base4096.rs:105:18
+    |
+105 |         out.push((((b[10] as u16 & 0xF) << 8) | b[11] as u16));
+    |                  ^                                          ^
+    |
+help: remove these parentheses
+    |
+105 -         out.push((((b[10] as u16 & 0xF) << 8) | b[11] as u16));
+105 +         out.push(((b[10] as u16 & 0xF) << 8) | b[11] as u16);
+    |
+
+warning: unnecessary parentheses around assigned value
+   --> crates/cobol-protocol-v154/src/base4096.rs:111:18
+    |
+111 |         let t1 = (((bytes[i+1] as u16 & 0xF) << 8) | bytes[i+2] as u16);
+    |                  ^                                                    ^
+    |
+help: remove these parentheses
+    |
+111 -         let t1 = (((bytes[i+1] as u16 & 0xF) << 8) | bytes[i+2] as u16);
+111 +         let t1 = ((bytes[i+1] as u16 & 0xF) << 8) | bytes[i+2] as u16;
+    |
+
+warning: unused import: `Read`
+ --> crates/cobol-protocol-v154/src/bitpack.rs:1:21
+  |
+1 | use std::io::{self, Read};
+  |                     ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `cnf_security::sha256_hex`
+ --> crates/cobol-protocol-v154/src/stream.rs:3:5
+  |
+3 | use cnf_security::sha256_hex;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `thiserror::Error`
+  --> crates/cobol-protocol-v154/src/lib.rs:37:5
+   |
+37 | use thiserror::Error;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+  --> crates/cobol-protocol-v154/src/bitpack.rs:34:34
+   |
+34 |     pub fn write_bits(&mut self, mut value: u64, mut width: u8) -> io::R...
+   |                                  ----^^^^^
+   |                                  |
+   |                                  help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> crates/cobol-protocol-v154/src/bitpack.rs:34:50
+   |
+34 | ...lf, mut value: u64, mut width: u8) -> io::Result<()> {
+   |                        ----^^^^^
+   |                        |
+   |                        help: remove this `mut`
+
+warning: `cobol-protocol-v154` (lib) generated 10 warnings (run `cargo fix --lib -p cobol-protocol-v154` to apply 10 suggestions)
+warning: unused import: `std::fmt`
+ --> crates/cnf-runtime/src/adaptive.rs:4:5
+  |
+4 | use std::fmt;
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `pipeline`
+  --> crates/cnf-runtime/src/adaptive.rs:98:25
+   |
+98 |     fn evaluate_fitness(pipeline: &Pipeline, metrics: &ExecutionMetrics)...
+   |                         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pipeline`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/cnf-runtime/src/runtime.rs:311:13
+    |
+311 |         let mut idx = 0;
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `cnf-runtime` (lib test) generated 3 warnings (run `cargo fix --lib -p cnf-runtime --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running unittests src/lib.rs (target/debug/deps/cnf_runtime-dade5475dc605166)
+
+running 61 tests
+test control_flow::tests::test_call_stack_operations ... ok
+test control_flow::tests::test_condition_evaluation_arbitrary_values ... ok
+test control_flow::tests::test_equality_evaluation ... ok
+test control_flow::tests::test_frame_creation_with_parameters ... ok
+test control_flow::tests::test_frame_local_variables ... ok
+test control_flow::tests::test_frame_return_value ... ok
+test control_flow::tests::test_loop_context ... ok
+test control_flow::tests::test_loop_context_arbitrary_iterations ... ok
+test control_flow::tests::test_call_stack_depth_arbitrary_operations ... ok
+test control_flow::tests::test_nested_function_calls ... ok
+test control_flow::tests::test_numeric_comparison ... ok
+test control_flow::tests::test_scope_management ... ok
+test control_flow::tests::test_numeric_condition_evaluation ... ok
+test dag::tests::test_dag_assigns_instruction_to_layer ... ok
+test dag::tests::test_dag_initializes_8_layers ... ok
+test formatter::tests::test_complex_format_chain ... ok
+test formatter::tests::test_escape_sequences ... ok
+test formatter::tests::test_escape_sequences_preserve_other_text ... ok
+test control_flow::tests::test_scope_management_arbitrary_variables ... ok
+test formatter::tests::test_format_display_arbitrary_text ... ok
+test formatter::tests::test_hex_format ... ok
+test formatter::tests::test_hex_format_arbitrary_bytes ... ok
+test formatter::tests::test_left_align ... ok
+test formatter::tests::test_length_format ... ok
+test formatter::tests::test_format_specifier_chains ... ok
+test formatter::tests::test_lowercase_format ... ok
+test formatter::tests::test_multiple_variables ... ok
+test formatter::tests::test_padding_format ... ok
+test formatter::tests::test_right_align ... ok
+test formatter::tests::test_simple_variable_substitution ... ok
+test formatter::tests::test_undefined_variable_error ... ok
+test formatter::tests::test_uppercase_format ... ok
+test runtime::tests::test_add_buffer ... ok
+test runtime::tests::test_dispatch_add_decimals ... ok
+test runtime::tests::test_dispatch_add_integer_literals ... ok
+test runtime::tests::test_dispatch_add_integers ... ok
+test runtime::tests::test_dispatch_aggregate_sum_and_count ... ok
+test runtime::tests::test_dispatch_case_trim ... ok
+test runtime::tests::test_dispatch_concatenate_text ... ok
+test runtime::tests::test_dispatch_divide_by_zero_fails ... ok
+test runtime::tests::test_dispatch_divide_integers ... ok
+test runtime::tests::test_dispatch_filter_basic ... ok
+test formatter::tests::test_length_format_consistency ... ok
+test runtime::tests::test_dispatch_length_integer ... ok
+test runtime::tests::test_dispatch_multiply_integers ... ok
+test runtime::tests::test_dispatch_set_decimal_literal ... ok
+test runtime::tests::test_dispatch_set_integer_literal ... ok
+test runtime::tests::test_dispatch_set_text_literal ... ok
+test runtime::tests::test_dispatch_set_variable_reference ... ok
+test runtime::tests::test_dispatch_substring_basic ... ok
+test runtime::tests::test_dispatch_subtract_integers ... ok
+test runtime::tests::test_list_buffers ... ok
+test runtime::tests::test_resolve_operand_integer_literal ... ok
+test runtime::tests::test_resolve_operand_missing_variable_fails ... ok
+test runtime::tests::test_resolve_operand_variable_reference ... ok
+test runtime::tests::test_runtime_value_as_decimal ... ok
+test runtime::tests::test_runtime_value_as_integer ... ok
+test runtime::tests::test_variable_store_get_or_default ... ok
+test runtime::tests::test_variable_store_set_and_get ... ok
+test scheduler::tests::test_scheduler_executes_layers_in_order ... ok
+test runtime::tests::test_dispatch_if_for_while has been running for over 60 seconds

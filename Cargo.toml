@@ -9,10 +9,11 @@ members = [
     "crates/cnf-network",
     "crates/cnf-verifier",
     "crates/cnf-quantum",
+    "crates/cnf-entropy",
+    "crates/cnf-governance",
     "crates/cobol-protocol-v153",
     "crates/centra-nf-cli",
     "crates/centra-nf-lsp",
-    "crates/cnf-governance",
     "crates/cobol-protocol-v154",
 ]
 resolver = "2"

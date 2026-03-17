@@ -141,9 +141,15 @@ pub fn decode_delta_i64(encoded: &[u8]) -> io::Result<Vec<i64>> {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "encoded delta too short"));
     }
 
-    let base = i64::from_le_bytes(encoded[0..8].try_into().unwrap());
+    let base = i64::from_le_bytes(
+        encoded[0..8].try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid base bytes"))?
+    );
     let width = encoded[8];
-    let len = u32::from_le_bytes(encoded[9..13].try_into().unwrap()) as usize;
+    let len = u32::from_le_bytes(
+        encoded[9..13].try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid length bytes"))?
+    ) as usize;
     if len == 0 {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "length must be at least 1"));
     }

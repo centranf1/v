@@ -74,6 +74,15 @@ CSM (Compact Symbol Mapping) v154 is the current protocol for deterministic loss
 - **LAYER_MAP reserved**: Legacy v0x9A has zeroed layer_map; v0x9B fills it
 - **CRC32 format**: Identical in both versions (big-endian u32)
 - **Decompression**: v154 decompressor handles both versions transparently
+- **Compression**: Always produces v0x9B (new streams align with current version)
+
+## Legacy Support Deprecation
+
+This library currently accepts both 0x9A and 0x9B streams:
+- **Read**: Both 0x9A and 0x9B streams decompress correctly
+- **Write**: All new compression produces 0x9B format
+- **Migration**: Users with legacy 0x9A streams should re-compress to 0x9B for better efficiency
+- **Sunset**: v0x9A support may be removed in a future major version
 
 ## Breaking Changes (v0x9A → v0x9B)
 
@@ -100,6 +109,16 @@ let compressed = compress_csm(input, &dict).unwrap();
 let decompressed = decompress_csm(&compressed, &dict).unwrap();
 assert_eq!(decompressed, input);
 ```
+
+## Recommended Usage
+
+For application developers integrating CSM compression:
+
+1. **Always use `compress_csm()`**: Never manually construct streams
+2. **Accept both v0x9A and v0x9B**: Use `decompress_csm()`, which handles both
+3. **Re-compress legacy data**: If you have v0x9A streams, decompress and re-compress to improve efficiency
+4. **Trust the VERSION byte**: Use HEADER[2] to determine stream version, don't guess
+5. **Validate CRC32**: Treat CRC32 mismatch as data corruption (not a recoverable error)
 
 ## Notes
 

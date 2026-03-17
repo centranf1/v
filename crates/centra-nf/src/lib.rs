@@ -139,9 +139,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Get comprehensive version info for debugging/diagnostics
 pub fn version_info() -> String {
     format!(
-        "CENTRA-NF {} | Rust {} | Layer-Discipline Architecture",
-        VERSION,
-        env!("CARGO_PKG_RUST_VERSION")
+        "CENTRA-NF {} | Rust 1.94.0 | Layer-Discipline Architecture",
+        VERSION
     )
 }
 

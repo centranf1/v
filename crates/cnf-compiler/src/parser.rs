@@ -663,7 +663,9 @@ impl Parser {
                         Token::Os => "OS".to_string(),
                         Token::Arch => "ARCH".to_string(),
                         Token::RuntimeVersion => "RUNTIME-VERSION".to_string(),
-                        _ => unreachable!(),
+                        _ => {
+                            return Err(format!("Expected environment key, got {:?}", self.current()));
+                        }
                     };
                     self.advance();
 

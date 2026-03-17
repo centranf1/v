@@ -101,15 +101,6 @@ fn tokenize_and_pack(input: &[u8], dict: &CsmDictionary, options: &crate::CsmOpt
     let mut i = 0usize;
     let mut dict_used = false;
 
-    // Template match (deterministik): jika templates_enabled, deteksi template
-    if options.templates_enabled {
-        // Contoh: template default, bisa diubah sesuai kebutuhan
-        let template = crate::template::StructTemplate::new(vec![crate::template::TemplateFieldType::IntegerSigned, crate::template::TemplateFieldType::Utf8String]);
-        let mut registry = crate::template::TemplateRegistry::new();
-        let template_id = registry.register(&template).map_err(|e| CsmError::InvalidStream)?;
-        tokens.push(crate::template::template_token(template_id));
-    }
-
     while i < input.len() {
         let mut candidates: Vec<(usize, u16)> = dict
             .candidates_for_byte(input[i])

@@ -91,7 +91,11 @@ impl CnfError {
 
     /// Create error response with message.
     pub fn new(code: CnfErrorCode, msg: &str) -> Self {
-        let message = CString::new(msg).unwrap_or_else(|_| CString::new("UTF-8 error").unwrap());
+        // Sanitize message by removing any null bytes
+        let sanitized = msg.replace('\0', "");
+        // Create CString from sanitized message (safe, no null bytes)
+        let message = CString::new(sanitized)
+            .unwrap_or_else(|_| CString::new("Error (message encoding failed)").expect("Static string has no nulls"));
         CnfError {
             code: code as i32,
             message: message.into_raw(),
@@ -151,6 +155,7 @@ pub extern "C" fn cnf_compile(
     }
 
     // Convert C string to Rust
+    // SAFETY: Caller guarantees `source` is a valid, null-terminated C string from C caller
     let source_str = match unsafe { CStr::from_ptr(source) }.to_str() {
         Ok(s) => s,
         Err(_) => {
@@ -165,6 +170,7 @@ pub extern "C" fn cnf_compile(
     match cnf_compiler::compile(source_str) {
         Ok(instructions) => {
             let handle = Box::new(CnfProgramHandle { instructions });
+            // SAFETY: out_handle is guaranteed to be a valid non-null pointer by caller
             unsafe {
                 *out_handle = Box::into_raw(handle);
             }
@@ -185,6 +191,8 @@ pub extern "C" fn cnf_compile(
 #[no_mangle]
 pub extern "C" fn cnf_free_program(handle: *mut CnfProgramHandle) {
     if !handle.is_null() {
+        // SAFETY: handle was previously returned by cnf_compile (Box::into_raw),
+        // and this is the only place it's freed, ensuring no double-free
         unsafe {
             let _ = Box::from_raw(handle);
         }
@@ -221,6 +229,8 @@ pub extern "C" fn cnf_create_runtime() -> *mut CnfRuntimeHandle {
 #[no_mangle]
 pub extern "C" fn cnf_free_runtime(handle: *mut CnfRuntimeHandle) {
     if !handle.is_null() {
+        // SAFETY: handle was previously returned by cnf_create_runtime (Box::into_raw),
+        // and this is the only place it's freed, ensuring no double-free
         unsafe {
             let _ = Box::from_raw(handle);
         }
@@ -269,6 +279,8 @@ pub extern "C" fn cnf_execute(
     }
 
     // Execute
+    // SAFETY: Both handles are validated non-null above, and dereferencing them is safe
+    // because the caller guarantees they come from corresponding create functions
     unsafe {
         match (*runtime_handle).runtime.execute_instructions(&(*program_handle).instructions) {
             Ok(_) => CnfError::ok(),
@@ -340,6 +352,7 @@ pub extern "C" fn cnf_sha256(
     }
 
     // Compute SHA-256
+    // SAFETY: Caller guarantees `data` points to valid buffer of at least `data_len` bytes
     let input_slice = unsafe { slice::from_raw_parts(data, data_len) };
     let hash_hex = cnf_security::sha256_hex(input_slice);
 
@@ -363,6 +376,8 @@ pub extern "C" fn cnf_sha256(
     }
 
     unsafe {
+        // SAFETY: hash_bytes.len() is guaranteed to fit in out_hash_capacity (checked above)
+        // and out_hash is guaranteed to be valid writable pointer by caller
         ptr::copy_nonoverlapping(
             hash_bytes.as_ptr() as *const c_char,
             out_hash,
@@ -434,6 +449,7 @@ pub extern "C" fn cnf_aes256_encrypt(
     }
 
     // Perform encryption
+    // SAFETY: Caller guarantees `plaintext` points to valid buffer of at least `plaintext_len` bytes
     let input = unsafe { slice::from_raw_parts(plaintext, plaintext_len) };
     match cnf_security::encrypt_aes256(input) {
         Ok(encrypted) => {
@@ -444,6 +460,8 @@ pub extern "C" fn cnf_aes256_encrypt(
                 );
             }
             unsafe {
+                // SAFETY: encrypted.len() is validated to fit in out_ciphertext_capacity (checked above)
+                // and out_ciphertext is guaranteed to be valid writable pointer by caller
                 ptr::copy_nonoverlapping(
                     encrypted.as_ptr(),
                     out_ciphertext,
@@ -528,6 +546,7 @@ pub extern "C" fn cnf_aes256_decrypt(
     }
 
     // Perform decryption
+    // SAFETY: Caller guarantees `ciphertext` points to valid buffer of at least `ciphertext_len` bytes
     let input = unsafe { slice::from_raw_parts(ciphertext, ciphertext_len) };
     match cnf_security::decrypt_aes256(input) {
         Ok(plaintext) => {
@@ -538,6 +557,8 @@ pub extern "C" fn cnf_aes256_decrypt(
                 );
             }
             unsafe {
+                // SAFETY: plaintext.len() is validated to fit in out_plaintext_capacity (checked above)
+                // and out_plaintext is guaranteed to be valid writable pointer by caller
                 ptr::copy_nonoverlapping(
                     plaintext.as_ptr(),
                     out_plaintext,
@@ -575,6 +596,8 @@ pub extern "C" fn cnf_aes256_decrypt(
 #[no_mangle]
 pub extern "C" fn cnf_free_error(err: *mut CnfError) {
     if !err.is_null() {
+        // SAFETY: err is guaranteed to be valid pointer from FFI return,
+        // and message is either null or valid CString obtained from CString::into_raw
         unsafe {
             if !(*err).message.is_null() {
                 let _ = CString::from_raw((*err).message);

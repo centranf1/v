@@ -864,8 +864,19 @@ impl Runtime {
         };
         let compressed = cobol_protocol_v154::compress_csm(&data, dict)
             .map_err(|e| CnfError::CsmError(format!("CSM compression failed: {}", e)))?;
+        
+        // Roundtrip validation: decompress and verify equals original
+        let decompressed = cobol_protocol_v154::decompress_csm(&compressed, dict)
+            .map_err(|e| CnfError::CsmError(format!("CSM roundtrip decompression failed: {}", e)))?;
+        if decompressed != data {
+            return Err(CnfError::CsmError(
+                format!("CSM roundtrip validation FAILED: decompressed ({} bytes) != original ({} bytes)",
+                    decompressed.len(), data.len())
+            ));
+        }
+        
         self.variables.set(target.to_string(), RuntimeValue::Binary(compressed));
-        self.audit_log.push(format!("COMPRESS-CSM: {} -> {} ({} bytes -> compressed)", source, target, data.len()));
+        self.audit_log.push(format!("COMPRESS-CSM: {} -> {} ({} bytes -> compressed, roundtrip verified)", source, target, data.len()));
         Ok(())
     }
 

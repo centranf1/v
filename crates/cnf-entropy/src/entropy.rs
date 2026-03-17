@@ -12,9 +12,15 @@ pub fn build_huffman_tree(freqs: &HashMap<u16, usize>) -> HashMap<u16, Vec<bool>
     let mut code = 0u16;
     let mut length = 1;
     for (i, (sym, _)) in symbols.iter().enumerate() {
-        codes.insert(*sym, vec![false; length]);
+        // Generate binary representation of code with bit_length bits
+        let mut bits = Vec::new();
+        for j in (0..length).rev() {
+            bits.push((code >> j) & 1 == 1);
+        }
+        codes.insert(*sym, bits);
         code += 1;
-        if i % 2 == 1 { length += 1; }
+        // When code overflows for current length, move to next length
+        if code >= (1u16 << length) { code = 0; length += 1; }
     }
     codes
 }
@@ -61,16 +67,17 @@ pub fn decompress_entropy(bytes: &[u8], codes: &HashMap<u16, Vec<bool>>) -> Vec<
     }
     let mut i = 0;
     while i < bits.len() {
-        for len in 1..=16 {
-            if i + len > bits.len() { break; }
+        let mut found = false;
+        for len in 1..=16.min(bits.len() - i) {
             let candidate = bits[i..i+len].to_vec();
             if let Some(&sym) = rev.get(&candidate) {
                 tokens.push(sym);
                 i += len;
+                found = true;
                 break;
             }
         }
-        i += 1;
+        if !found { i += 1; }
     }
     tokens
 }
