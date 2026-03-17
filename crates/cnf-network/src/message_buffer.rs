@@ -1,3 +1,8 @@
+//! # Priority-based message buffering for distributed nodes
+//!
+//! Implements a VecDeque-based message buffer with priority queue semantics.
+//! Supports Low, Normal, High, and Critical priority levels.
+
 use std::collections::VecDeque;
 use crate::transport::CnfMessage;
 use crate::vector_clock::NodeId;

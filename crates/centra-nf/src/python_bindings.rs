@@ -1,3 +1,8 @@
+//! # PyO3 Python bindings for CENTRA-NF
+//!
+//! Exposes CENTRA-NF compiler and runtime to Python via PyO3.
+//! Provides: compile(), runtime execution, encryption/decryption, hashing.
+
 // PyO3 Python Bindings for CENTRA-NF
 //
 // This module provides Python access to CENTRA-NF functionality via PyO3.

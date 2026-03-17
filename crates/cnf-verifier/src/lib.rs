@@ -1,3 +1,9 @@
+//! # Formal verification layer for CENTRA-NF
+//!
+//! Provides Hoare logic reasoning, assertion tracking, and SMT-based verification.
+//! Integrates Z3 solver for automated proof generation.
+//! Implements security properties verification via audit chains.
+
 pub mod assertion;
 pub mod audit_chain;
 pub mod error;

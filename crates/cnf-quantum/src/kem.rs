@@ -1,3 +1,8 @@
+//! # Key Encapsulation Mechanism (KEM) with hybrid encryption
+//!
+//! Implements ML-KEM-768 (Kyber768) key exchange combined with AES-256-GCM
+//! for quantum-resistant post-harvest encryption.
+
 // crates/cnf-quantum/src/kem.rs
 // Key Encapsulation Mechanism (KEM) and Hybrid Encryption
 // ML-KEM-768 (Kyber768) + AES-256-GCM for quantum-resistant encryption

@@ -1,3 +1,8 @@
+//! # Token bucket rate limiter per remote node
+//!
+//! Implements per-node rate limiting with configurable token generation rate.
+//! Prevents denial-of-service attacks through controlled message acceptance.
+
 use std::collections::HashMap;
 use std::time::Instant;
 use crate::error::CnfNetworkError;

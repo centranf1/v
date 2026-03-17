@@ -20,6 +20,7 @@ pub fn calculate_min_bits(max_value: u64) -> u8 {
 }
 
 /// Writer bit-level untuk lebar dinamis 1..16 bit.
+/// Bit-level writer for efficient packing (PERF: hot path for compression)
 pub struct BitWriter {
     buffer: Vec<u8>,
     bit_accumulator: u32,
@@ -31,6 +32,8 @@ impl BitWriter {
         Self { buffer: Vec::new(), bit_accumulator: 0, bits_in_accumulator: 0 }
     }
 
+    /// Write value to bit stream (PERF: critical hot path, inlined)
+    #[inline]
     pub fn write_bits(&mut self, mut value: u64, mut width: u8) -> io::Result<()> {
         if width == 0 || width > 16 {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "width must be 1..16"));
@@ -176,6 +179,7 @@ pub fn decode_delta_i64(encoded: &[u8]) -> io::Result<Vec<i64>> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

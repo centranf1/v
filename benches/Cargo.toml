@@ -1,0 +1,13 @@
+[package]
+name = "centra-nf-benches"
+version = "1.0.0"
+publish = false
+edition = "2021"
+
+[[bench]]
+name = "csm_datasets"
+harness = false
+
+[dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+cobol-protocol-v154 = { path = "./crates/cobol-protocol-v154" }

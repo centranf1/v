@@ -1,3 +1,8 @@
+//! # Connection pool manager with idle timeout
+//!
+//! Manages a pool of TCP connections to remote nodes.
+//! Automatically closes idle connections after 30 seconds to prevent resource leaks.
+
 use std::collections::HashMap;
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};

@@ -1,3 +1,8 @@
+//! # Quantum cryptography utility functions
+//!
+//! Provides hex encoding/decoding and cryptographic hashing operations
+//! for post-quantum cryptographic components.
+
 // crates/cnf-quantum/src/utils.rs
 // Utility functions for quantum/cryptographic operations
 

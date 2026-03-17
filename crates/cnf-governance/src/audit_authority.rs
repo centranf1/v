@@ -1,3 +1,8 @@
+//! # Cryptographic audit ledger with SHA-256 chaining
+//!
+//! Implements immutable audit trail using SHA-256 hash chaining.
+//! Each entry is chained to previous hash, preventing undetected tampering.
+
 use sha2::{Sha256, Digest};
 
 #[derive(Default)]

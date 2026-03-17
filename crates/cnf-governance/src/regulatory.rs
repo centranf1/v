@@ -1,3 +1,8 @@
+//! # Regulatory standards and compliance framework
+//!
+//! Defines major regulatory standards: SOC2, PCI-DSS, HIPAA, GDPR, ISO27001.
+//! Manages compliance clauses and requirements per standard.
+
 use serde::{Serialize, Deserialize};
 
 /// Supported standards

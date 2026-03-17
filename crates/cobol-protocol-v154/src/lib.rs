@@ -1,3 +1,9 @@
+//! # COBOL CSM v154 protocol implementation
+//!
+//! Compression streaming module for CSM v154 with advanced features:
+//! hierarchical dictionaries, bit-adaptive encoding, delta encoding,
+//! template substitution, entropy analysis, and symbol graphs.
+
 impl CsmOptions {
     /// Constructor untuk basic CSM (semua fitur advanced dimatikan)
     pub fn basic() -> Self {
@@ -99,7 +105,10 @@ pub fn compress_csm_stats(input: &[u8], dict: &CsmDictionary) -> Result<(Vec<u8>
     let options = CsmOptions::default();
     let compressed = stream::compress_csm_stream(input, dict, &options)?;
     let meta = stream::read_metadata(&compressed);
-    let ratio = meta.map(|m| m.ratio_hint).unwrap_or_else(|| compressed.len() as f64 / input.len().max(1) as f64);
+    let ratio = match meta {
+        Some(m) => m.ratio_hint,
+        None => compressed.len() as f64 / input.len().max(1) as f64,
+    };
     let stats = CsmStats {
         input_bytes: input.len(),
         output_bytes: compressed.len(),

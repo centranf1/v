@@ -1,3 +1,8 @@
+//! # Data sovereignty and jurisdiction enforcement
+//!
+//! Manages geographic data residency requirements and jurisdiction rules.
+//! Ensures data remains within specified regions per regulatory requirements.
+
 use crate::error::CnfGovernanceError;
 
 #[derive(Debug, PartialEq)]

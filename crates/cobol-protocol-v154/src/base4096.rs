@@ -36,6 +36,7 @@ pub fn decode(symbols: &[u16]) -> Vec<u8> {
 }
 
 /// Packs tokens (u16, 0..4095) into bytes (12 bits per token)
+#[inline]
 pub fn pack_tokens(tokens: &[u16]) -> Vec<u8> {
     let byte_count = (tokens.len() * 12 + 7) / 8;
     let mut out = Vec::with_capacity(byte_count);
@@ -45,6 +46,7 @@ pub fn pack_tokens(tokens: &[u16]) -> Vec<u8> {
 }
 
 /// Streaming variant: appends packed bytes into existing Vec<u8>
+#[inline]
 pub fn pack_tokens_into(tokens: &[u16], out: &mut Vec<u8>) {
     let byte_count = (tokens.len() * 12 + 7) / 8;
     out.reserve_exact(byte_count);

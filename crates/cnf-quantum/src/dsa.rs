@@ -1,3 +1,8 @@
+//! # Quantum-resistant digital signature algorithms
+//!
+//! Implements ML-DSA-65 (Dilithium3) and SLH-DSA-SHAKE-256f (SPHINCS+)
+//! for post-quantum cryptographic signatures.
+
 // crates/cnf-quantum/src/dsa.rs
 // Digital Signature Algorithm implementations
 // ML-DSA-65 (Dilithium3) + SLH-DSA-SHAKE-256f (SPHINCS+) for quantum-resistant signatures

@@ -1,3 +1,8 @@
+//! # LTL temporal logic policy engine
+//!
+//! Implements Linear Temporal Logic (LTL) formula evaluation for policy enforcement.
+//! Supports: Always, Eventually, And,  Or, Not operators for complex policy definitions.
+
 use crate::error::CnfGovernanceError;
 
 /// Simple LTL formula tree for governance policies

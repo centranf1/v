@@ -214,6 +214,7 @@ pub fn decrypt_aes256_with_key(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, C
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::sync::Mutex;

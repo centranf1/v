@@ -1,3 +1,8 @@
+//! # Z3 SMT solver integration for formal verification
+//!
+//! Bridges to Z3 theorem prover for automated proof generation.
+//! Encodes verification goals as SMT formulas and solves via Z3.
+
 use crate::assertion::{CmpOp, Predicate};
 use crate::error::CnfVerifierError;
 use crate::hoare::{HoareContext, HoareTriple};

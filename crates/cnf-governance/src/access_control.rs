@@ -1,3 +1,8 @@
+//! # Access control policy enforcement
+//!
+//! Manages user-based access control to resources.
+//! Provides simple whitelist-based permission checking.
+
 use crate::error::CnfGovernanceError;
 use std::collections::HashSet;
 

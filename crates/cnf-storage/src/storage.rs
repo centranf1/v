@@ -1,3 +1,8 @@
+//! # Atomic file I/O with write-ahead logging support
+//!
+//! Provides atomic writes with temporary file swapping and crash-safe operations.
+//! Integrates with WAL and checkpointing for durability guarantees.
+
 use crate::checkpoint::CheckpointManager;
 use crate::wal::Wal;
 use std::collections::HashMap;
@@ -130,6 +135,7 @@ impl Default for Storage {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::fs::File;

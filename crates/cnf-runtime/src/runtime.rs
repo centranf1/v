@@ -1,9 +1,10 @@
+//! # CENTRA-NF runtime execution engine
+//!
+//! Executes intermediate representation (IR) instructions against owned buffers.
+//! Implements fail-fast error handling with no global mutable state.
+//! Provides buffer management, instruction dispatch, and encryption operations.
+
 use crate::adaptive;
-// Runtime — CENTRA-NF execution engine.
-//
-// Execute IR instructions against owned buffers.
-// Fail fast on invalid operations.
-// No global mutable state.
 
 use std::fmt;
 

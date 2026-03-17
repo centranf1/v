@@ -1,3 +1,8 @@
+//! # Hoare triple representation for formal verification
+//!
+//! Implements Hoare triples {P} C {Q} with precondition, body description, and postcondition.
+//! Tracks buffer state and supports reasoning about program correctness.
+
 use crate::assertion::{HoareAnnotation, Predicate, SecurityLevel};
 use std::collections::HashMap;
 

@@ -1,3 +1,8 @@
+//! # Assertion kinds and security level annotations
+//!
+//! Defines assertion types: preconditions, postconditions, invariants.
+//! Supports security level tagging for multi-level security reasoning.
+
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]

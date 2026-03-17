@@ -67,6 +67,7 @@ impl DictLayer {
         Err(CsmError::MaxSymbols)
     }
 
+    #[inline(always)]
     fn lookup(&self, symbol:u16) -> Option<&[u8]> {
         let mut slot = symbol as usize % self.slots.len();
         for _ in 0..self.slots.len() {
@@ -163,6 +164,7 @@ impl CsmDictionary {
         self.insert_local(symbol, value)
     }
 
+    #[inline(always)]
     pub fn lookup(&self, symbol:u16) -> Option<&[u8]> {
         self.local.lookup(symbol).or_else(|| self.global.lookup(symbol))
     }
@@ -243,6 +245,7 @@ impl CsmDictionary {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
