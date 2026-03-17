@@ -3,6 +3,10 @@
 //! Provides [`KeyManager`] for managing active and retired AES-256 keys.
 //! All key material is automatically wiped from memory on drop via [`Zeroize`].
 
+use std::collections::HashMap;
+use zeroize::{Zeroize, ZeroizeOnDrop};
+use crate::CnfCryptoError;
+
 /// AES-256 key material with secure cleanup.
 ///
 /// Automatically zeros all bytes on drop via [`ZeroizeOnDrop`].
@@ -111,7 +115,7 @@ impl KeyManager {
     }
 
     pub fn retired_key(&self, version: u32) -> Option<&[u8; 32]> {
-        self.retired.get(&version).map(|k| k.as_bytes())
+        self.retired.get(&version).map(|k: &KeyMaterial| k.as_bytes())
     }
 
     /// Rotate: reads new key from CENTRA_NF_AES_KEY_NEW, retires current active.

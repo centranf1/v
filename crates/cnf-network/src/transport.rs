@@ -384,7 +384,7 @@ impl TcpTransport {
             .map_err(|e| CnfNetworkError::SendFailed(e.to_string()))?;
 
         match listener.accept() {
-            Ok((mut tcp_stream, _addr)) => {
+        Ok((tcp_stream, _addr)) => {
                 let mut channel: Box<dyn ReadWriteSend> = if let Some(ref tls_config) = self.tls_config {
                     let server_config = tls_config.server_config()?;
                     let conn = ServerConnection::new(server_config)
@@ -467,7 +467,7 @@ impl TcpTransport {
         addr: &str,
         config: &TransportConfig,
     ) -> Result<(), CnfNetworkError> {
-        let mut stream = TcpStream::connect(addr).map_err(|e| {
+        let stream = TcpStream::connect(addr).map_err(|e| {
             CnfNetworkError::ConnectionFailed(format!("Failed to connect to {}: {}", node_id, e))
         })?;
 

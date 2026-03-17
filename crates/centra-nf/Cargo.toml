@@ -32,6 +32,13 @@ cnf-storage = { path = "../cnf-storage" }
 cnf-governance = { path = "../cnf-governance" }
 cnf-verifier = { path = "../cnf-verifier" }
 
+# Python bindings (optional)
+pyo3 = { version = "0.20", features = ["extension-module", "abi3-py310"], optional = true }
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [features]
 default = ["full"]
 full = []
+python = ["pyo3"]

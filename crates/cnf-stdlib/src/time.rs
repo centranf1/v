@@ -9,7 +9,9 @@ pub fn now_timestamp() -> i64 {
 
 /// Format ISO 8601
 pub fn format_iso8601(ts: i64) -> String {
-    let dt = Utc.timestamp_opt(ts, 0).single().unwrap_or_else(|| Utc.timestamp_opt(0, 0).single().unwrap());
+    let dt = Utc.timestamp_opt(ts, 0).single()
+        .or_else(|| Utc.timestamp_opt(0, 0).single())
+        .unwrap_or_else(|| Utc::now()); // Final fallback to current time
     dt.to_rfc3339()
 }
 

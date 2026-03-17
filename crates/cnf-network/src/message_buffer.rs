@@ -4,6 +4,7 @@ use crate::vector_clock::NodeId;
 use crate::error::CnfNetworkError;
 
 
+#[allow(dead_code)]
 const DEFAULT_CAPACITY: usize = 1_024;
 
 

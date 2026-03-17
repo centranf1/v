@@ -57,6 +57,8 @@ pub mod stdlib {
     pub use cnf_stdlib::*;
 }
 
+pub mod ffi;
+
 pub mod security {
     //! Security layer: SHA-256, AES-256-GCM cryptographic operations
     pub use cnf_security::*;
@@ -103,6 +105,33 @@ pub use cnf_storage::Storage;
 pub use cnf_governance::CnfGovernanceError;
 pub use cnf_verifier::{CnfVerifierError, Verifier};
 pub use cobol_protocol_v154::{CsmError, CsmDictionary};
+
+/// FFI module for C/C++ bindings (already above in pub mod ffi)
+/// Python module exported below
+
+/// Python bindings via PyO3
+///
+/// When built with maturin, exposes CENTRA-NF as a Python module.
+/// Built via: `maturin develop --release` or `maturin build --release`
+///
+/// Example:
+/// ```python
+/// import centra_nf
+/// 
+/// # Compile program
+/// program = centra_nf.compile("IDENTIFICATION DIVISION...")
+/// 
+/// # Create runtime and execute
+/// runtime = centra_nf.Runtime()
+/// runtime.execute(program)
+/// 
+/// # Cryptography
+/// digest = centra_nf.sha256(b"data")
+/// encrypted = centra_nf.encrypt(b"secret")
+/// decrypted = centra_nf.decrypt(encrypted)
+/// ```
+#[cfg(feature = "python")]
+pub mod python;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

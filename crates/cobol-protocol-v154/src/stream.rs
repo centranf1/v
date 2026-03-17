@@ -70,7 +70,12 @@ fn preprocess_input<'a>(input: &'a [u8], options: &crate::CsmOptions) -> (Cow<'a
     if options.delta_encoding && input.len() % 8 == 0 && input.len() >= 16 {
         let values: Vec<i64> = input
             .chunks_exact(8)
-            .map(|c| i64::from_le_bytes(c.try_into().unwrap()))
+            .map(|c| {
+                // Safe: chunks_exact(8) guaranteed to yield 8-byte chunks
+                let chunk: [u8; 8] = c.try_into()
+                    .unwrap_or_else(|_| [0u8; 8]); // Defensive fallback
+                i64::from_le_bytes(chunk)
+            })
             .collect();
 
         let max_delta = values
@@ -222,7 +227,9 @@ pub fn compress_csm_stream(input: &[u8], dict: &CsmDictionary, options: &crate::
     // Encode tokens dengan BitWriter
     let mut bit_writer = crate::bitpack::BitWriter::new();
     for token in &tokens {
-        bit_writer.write_bits(*token as u64, bit_width).unwrap();
+        // Safe: write_bits only fails on invalid bit_width, which we ensure is 1-16
+        bit_writer.write_bits(*token as u64, bit_width)
+            .map_err(|_| CsmError::InvalidStream)?;
     }
     let packed = bit_writer.flush();
     out.extend_from_slice(&packed);

@@ -733,7 +733,8 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, String> {
 
 // ...existing code...
 
-// Keyword mapping for PROFILE DIVISION and related
+// Keyword mapping for PROFILE DIVISION and related (reserved for future use)
+#[allow(dead_code)]
 fn keyword_token(word: &str) -> Option<Token> {
     match word {
         "PROFILE" => Some(Token::ProfileDiv),

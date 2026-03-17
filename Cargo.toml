@@ -22,3 +22,60 @@ version = "1.0.0"
 edition = "2021"
 authors = ["CENTRA-NF Dev Team"]
 license = "Proprietary"
+
+# ============================================================================
+# MILITARY-GRADE OPTIMIZATION PROFILES
+# ============================================================================
+# 
+# These profiles are designed for production deployments with maximum
+# security, performance, and minimal binary size.
+# 
+# Usage:
+#   cargo build --release                    # Standard release (balanced)
+#   cargo build --profile release-lto        # Maximum optimization (LTO)
+#   cargo build --profile release-thin-lto   # Fast optimization (thin-LTO)
+#   cargo build --profile release-debug      # Release + debug symbols
+#
+
+[profile.release]
+# Standard release profile: balanced performance, optimization, and compile time
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+strip = true
+panic = "abort"
+debug = false
+
+[profile.release-lto]
+# Military-Grade: Maximum optimization, single-threaded codegen, full linking
+# WARNING: Very long compile time (5-15 minutes on large projects)
+# Use only for final release builds
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+debug = false
+
+[profile.release-thin-lto]
+# Fast optimization: Link-time optimization with parallel codegen
+# Balance between release-lto and release
+inherits = "release"
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
+debug = false
+
+[profile.release-debug]
+# Release build with debug symbols for profiling/debugging production binaries
+# Larger binary but enables stack traces with exact line numbers
+inherits = "release"
+opt-level = 3
+lto = "thin"
+strip = false
+debug = true
+debug-assertions = false
+panic = "abort"
